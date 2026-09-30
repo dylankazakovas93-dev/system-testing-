@@ -1,0 +1,180 @@
+{
+  "campaign_id": "C001",
+  "engine_version": "v1.0.0",
+  "event_hash": "44e06e221523aced82286d24445acbe7673293a6d4d9a5d2cfa5331167c97dd8",
+  "experiment_id": "EXP_0001",
+  "frozen_at": "2026-09-30T18:04:36Z",
+  "frozen_spec_hashes": {
+    "acceptance_rules_hash": "0476f09c7c1e2c17c2ebc419626fc8d247e56fbf1244d898be0293adfc3f18dd",
+    "feature_bank_hash": "300ce5991f52cad544bbf6b84652d739db8d92e12ab32bc1583ee9ac5282fc6a",
+    "model_bank_hash": "2c578364b2b07ac5eb1454911a3391a2796b03c097e5d9f8f28e8863ad17e569",
+    "target_bank_hash": "f80648bdf43fa0447a9475fc0a9c0a30000bc991a315ccea54f98753e7cd8025",
+    "trial_policy_hash": "819cb33531905086e0c3abc52c610b61389bdcf02067ce15507bee4c65079e23"
+  },
+  "hashes": {
+    "engine_code_hash": "c8ec108c0f666df24c182682ed83e2ce08df216b26b949a60b499639ae4fc46b",
+    "event_py": "8c8887ba8dedfeae90a6be6a2d67346700d35c45312cafb61b95c774d7e3c0d3",
+    "event_spec": "4fa8b763e9c662499f092a9b05daf6c34b847271631f3a55c374b73107ff7865",
+    "frozen_bundle_hash": "7031cf5137c90de9264ed12d953194f47d107f2651aaebdab6f88e6b2e2a7f9e",
+    "frozen_files": {
+      "frozen/v1/ACCEPTANCE_RULES.yaml": "0476f09c7c1e2c17c2ebc419626fc8d247e56fbf1244d898be0293adfc3f18dd",
+      "frozen/v1/FEATURE_BANK.yaml": "300ce5991f52cad544bbf6b84652d739db8d92e12ab32bc1583ee9ac5282fc6a",
+      "frozen/v1/MODEL_BANK.yaml": "2c578364b2b07ac5eb1454911a3391a2796b03c097e5d9f8f28e8863ad17e569",
+      "frozen/v1/TARGET_BANK.yaml": "f80648bdf43fa0447a9475fc0a9c0a30000bc991a315ccea54f98753e7cd8025",
+      "frozen/v1/TRIAL_POLICY.yaml": "819cb33531905086e0c3abc52c610b61389bdcf02067ce15507bee4c65079e23",
+      "frozen/v1/instruments/NQ_1m.yaml": "fe7bb6bc05cda0e2c4ed98ff26d82738725f067da569abd4886c3dc214b33273"
+    }
+  },
+  "informational_hashes": {
+    "HYPOTHESIS.md": "bc254e46b0a767ef6cfd9b5ffc5cda99d329ad916dc9c0e6027f3dfdfe7822d0",
+    "reference.pine": "08245a3ca8dc625b1a2513f5a3121cd7030ed464bf924ca1c8590765e56400f2"
+  },
+  "lockbox_start": "2020-01-01",
+  "manifest_hash": "901a6f965da083a360f146ea1247d4267b1d5ad878c34f5bef11b3df86ffb1d8",
+  "selection_trials": [
+    {
+      "model": "RIDGE",
+      "state": "UPPER_HALF",
+      "target": "DIR_RETURN_15",
+      "trial_id": "EXP_0001_T01"
+    },
+    {
+      "model": "RIDGE",
+      "state": "LOWER_HALF",
+      "target": "DIR_RETURN_15",
+      "trial_id": "EXP_0001_T02"
+    },
+    {
+      "model": "SPLINE",
+      "state": "UPPER_HALF",
+      "target": "DIR_RETURN_15",
+      "trial_id": "EXP_0001_T03"
+    },
+    {
+      "model": "SPLINE",
+      "state": "LOWER_HALF",
+      "target": "DIR_RETURN_15",
+      "trial_id": "EXP_0001_T04"
+    },
+    {
+      "model": "XGB",
+      "state": "UPPER_HALF",
+      "target": "DIR_RETURN_15",
+      "trial_id": "EXP_0001_T05"
+    },
+    {
+      "model": "XGB",
+      "state": "LOWER_HALF",
+      "target": "DIR_RETURN_15",
+      "trial_id": "EXP_0001_T06"
+    },
+    {
+      "model": "RIDGE",
+      "state": "UPPER_HALF",
+      "target": "DIR_RETURN_30",
+      "trial_id": "EXP_0001_T07"
+    },
+    {
+      "model": "RIDGE",
+      "state": "LOWER_HALF",
+      "target": "DIR_RETURN_30",
+      "trial_id": "EXP_0001_T08"
+    },
+    {
+      "model": "SPLINE",
+      "state": "UPPER_HALF",
+      "target": "DIR_RETURN_30",
+      "trial_id": "EXP_0001_T09"
+    },
+    {
+      "model": "SPLINE",
+      "state": "LOWER_HALF",
+      "target": "DIR_RETURN_30",
+      "trial_id": "EXP_0001_T10"
+    },
+    {
+      "model": "XGB",
+      "state": "UPPER_HALF",
+      "target": "DIR_RETURN_30",
+      "trial_id": "EXP_0001_T11"
+    },
+    {
+      "model": "XGB",
+      "state": "LOWER_HALF",
+      "target": "DIR_RETURN_30",
+      "trial_id": "EXP_0001_T12"
+    },
+    {
+      "model": "RIDGE",
+      "state": "UPPER_HALF",
+      "target": "DIR_RETURN_60",
+      "trial_id": "EXP_0001_T13"
+    },
+    {
+      "model": "RIDGE",
+      "state": "LOWER_HALF",
+      "target": "DIR_RETURN_60",
+      "trial_id": "EXP_0001_T14"
+    },
+    {
+      "model": "SPLINE",
+      "state": "UPPER_HALF",
+      "target": "DIR_RETURN_60",
+      "trial_id": "EXP_0001_T15"
+    },
+    {
+      "model": "SPLINE",
+      "state": "LOWER_HALF",
+      "target": "DIR_RETURN_60",
+      "trial_id": "EXP_0001_T16"
+    },
+    {
+      "model": "XGB",
+      "state": "UPPER_HALF",
+      "target": "DIR_RETURN_60",
+      "trial_id": "EXP_0001_T17"
+    },
+    {
+      "model": "XGB",
+      "state": "LOWER_HALF",
+      "target": "DIR_RETURN_60",
+      "trial_id": "EXP_0001_T18"
+    },
+    {
+      "model": "RIDGE",
+      "state": "UPPER_HALF",
+      "target": "DIR_PATH_SKEW_60",
+      "trial_id": "EXP_0001_T19"
+    },
+    {
+      "model": "RIDGE",
+      "state": "LOWER_HALF",
+      "target": "DIR_PATH_SKEW_60",
+      "trial_id": "EXP_0001_T20"
+    },
+    {
+      "model": "SPLINE",
+      "state": "UPPER_HALF",
+      "target": "DIR_PATH_SKEW_60",
+      "trial_id": "EXP_0001_T21"
+    },
+    {
+      "model": "SPLINE",
+      "state": "LOWER_HALF",
+      "target": "DIR_PATH_SKEW_60",
+      "trial_id": "EXP_0001_T22"
+    },
+    {
+      "model": "XGB",
+      "state": "UPPER_HALF",
+      "target": "DIR_PATH_SKEW_60",
+      "trial_id": "EXP_0001_T23"
+    },
+    {
+      "model": "XGB",
+      "state": "LOWER_HALF",
+      "target": "DIR_PATH_SKEW_60",
+      "trial_id": "EXP_0001_T24"
+    }
+  ]
+}

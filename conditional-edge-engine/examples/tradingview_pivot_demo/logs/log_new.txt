@@ -1,0 +1,2 @@
+created EXP_0001 in /tmp/final_demo2/ws/experiments/EXP_0001
+edit ONLY: HYPOTHESIS.md, EVENT_SPEC.yaml, event.py, reference.pine; then run scripts/freeze_experiment.py

@@ -16,7 +16,7 @@ Read `RESEARCH_RULES.md` first — it lists every frozen rule, my interpretation
 ## Install / test
 
 ```bash
-python -m pip install numpy pandas scikit-learn xgboost pyyaml pyarrow scipy pytest pytest-xdist
+python -m pip install -r requirements.txt
 python -m pytest            # add `-n 4 --dist loadscope` to parallelise the slow synthetic scenarios
 ```
 
@@ -56,3 +56,9 @@ Every report lists all 24 trials with parent/selected frequency, retention, pare
 uplift, block-bootstrap CI, raw p, `experiment_q`, `campaign_q`, year-by-year effects and the decision. Rejected and
 low-frequency results are never hidden. Score-decile plots are labelled *not selection trials*; they and all other
 diagnostics go to `observations.csv` and can only inspire a **new** experiment.
+
+## Evidence in this repository
+
+* `docs/SYNTHETIC_RESULTS.md` — the six planted-structure scenarios (no edge, linear, nonlinear, low-frequency, tail / frequency-destroying weak filter, unstable regime). Reproduce with `python scripts/synthetic_summary.py`.
+* `examples/tradingview_pivot_demo/` — a full CLI run of the TradingView template including strong-mode external verification.
+* `RESEARCH_RULES.md` §5 — spec issues found while building (one was acted on: XGB target standardization; please confirm).

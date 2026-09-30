@@ -1,0 +1,80 @@
+$ /usr/local/bin/python /home/user/dylankazakovas93-dev/engine-verification-/scripts/verify_research.py --adapter /tmp/final_demo2/ws/experiments/EXP_0001/verification/stage/adapter.py --source /tmp/final_demo2/ws/experiments/EXP_0001/verification/stage --data /tmp/final_demo2/NQ_synth.parquet --timestamp-col timestamp --bar-interval 1min --target DIR_RETURN_15 --target-horizon 15bars --lockbox-start 2020-01-01 --mode strong --seed 1729 --report-prefix /tmp/final_demo2/ws/experiments/EXP_0001/verification/reports/research_DIR_RETURN_15
+[UNVERIFIED] contract_provenance (mandatory)
+[PASS      ] data_audit (mandatory)
+[PASS      ] lockbox (mandatory)
+[PASS      ] ml_leakage (mandatory)
+[PASS      ] ml_static_scan (mandatory)
+[PASS      ] repository_health (mandatory)
+[PASS      ] research_causality (mandatory)
+[PASS      ] research_contract (mandatory)
+[UNVERIFIED] static_scan (heuristic)
+[PASS      ] walkforward (mandatory)
+LOCKBOX: {'lockbox_start': '2020-01-01T00:00:00+00:00', 'development_event_count': 4448, 'withheld_lockbox_event_count': 245, 'withheld_boundary_event_count': 0}
+VERDICT: INCOMPLETE / UNVERIFIED
+JSON: /tmp/final_demo2/ws/experiments/EXP_0001/verification/reports/research_DIR_RETURN_15.json
+MARKDOWN: /tmp/final_demo2/ws/experiments/EXP_0001/verification/reports/research_DIR_RETURN_15.md
+
+=> DIR_RETURN_15: exit=2 label=RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE (exit code 2 is NOT a pass)
+$ /usr/local/bin/python /home/user/dylankazakovas93-dev/engine-verification-/scripts/verify_research.py --adapter /tmp/final_demo2/ws/experiments/EXP_0001/verification/stage/adapter.py --source /tmp/final_demo2/ws/experiments/EXP_0001/verification/stage --data /tmp/final_demo2/NQ_synth.parquet --timestamp-col timestamp --bar-interval 1min --target DIR_RETURN_30 --target-horizon 30bars --lockbox-start 2020-01-01 --mode strong --seed 1729 --report-prefix /tmp/final_demo2/ws/experiments/EXP_0001/verification/reports/research_DIR_RETURN_30
+[UNVERIFIED] contract_provenance (mandatory)
+[PASS      ] data_audit (mandatory)
+[PASS      ] lockbox (mandatory)
+[PASS      ] ml_leakage (mandatory)
+[PASS      ] ml_static_scan (mandatory)
+[PASS      ] repository_health (mandatory)
+[PASS      ] research_causality (mandatory)
+[PASS      ] research_contract (mandatory)
+[UNVERIFIED] static_scan (heuristic)
+[PASS      ] walkforward (mandatory)
+LOCKBOX: {'lockbox_start': '2020-01-01T00:00:00+00:00', 'development_event_count': 4448, 'withheld_lockbox_event_count': 245, 'withheld_boundary_event_count': 0}
+VERDICT: INCOMPLETE / UNVERIFIED
+JSON: /tmp/final_demo2/ws/experiments/EXP_0001/verification/reports/research_DIR_RETURN_30.json
+MARKDOWN: /tmp/final_demo2/ws/experiments/EXP_0001/verification/reports/research_DIR_RETURN_30.md
+
+=> DIR_RETURN_30: exit=2 label=RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE (exit code 2 is NOT a pass)
+$ /usr/local/bin/python /home/user/dylankazakovas93-dev/engine-verification-/scripts/verify_research.py --adapter /tmp/final_demo2/ws/experiments/EXP_0001/verification/stage/adapter.py --source /tmp/final_demo2/ws/experiments/EXP_0001/verification/stage --data /tmp/final_demo2/NQ_synth.parquet --timestamp-col timestamp --bar-interval 1min --target DIR_RETURN_60 --target-horizon 60bars --lockbox-start 2020-01-01 --mode strong --seed 1729 --report-prefix /tmp/final_demo2/ws/experiments/EXP_0001/verification/reports/research_DIR_RETURN_60
+[UNVERIFIED] contract_provenance (mandatory)
+[PASS      ] data_audit (mandatory)
+[PASS      ] lockbox (mandatory)
+[PASS      ] ml_leakage (mandatory)
+[PASS      ] ml_static_scan (mandatory)
+[PASS      ] repository_health (mandatory)
+[PASS      ] research_causality (mandatory)
+[PASS      ] research_contract (mandatory)
+[UNVERIFIED] static_scan (heuristic)
+[PASS      ] walkforward (mandatory)
+LOCKBOX: {'lockbox_start': '2020-01-01T00:00:00+00:00', 'development_event_count': 4448, 'withheld_lockbox_event_count': 245, 'withheld_boundary_event_count': 0}
+VERDICT: INCOMPLETE / UNVERIFIED
+JSON: /tmp/final_demo2/ws/experiments/EXP_0001/verification/reports/research_DIR_RETURN_60.json
+MARKDOWN: /tmp/final_demo2/ws/experiments/EXP_0001/verification/reports/research_DIR_RETURN_60.md
+
+=> DIR_RETURN_60: exit=2 label=RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE (exit code 2 is NOT a pass)
+$ /usr/local/bin/python /home/user/dylankazakovas93-dev/engine-verification-/scripts/verify_research.py --adapter /tmp/final_demo2/ws/experiments/EXP_0001/verification/stage/adapter.py --source /tmp/final_demo2/ws/experiments/EXP_0001/verification/stage --data /tmp/final_demo2/NQ_synth.parquet --timestamp-col timestamp --bar-interval 1min --target DIR_PATH_SKEW_60 --target-horizon 60bars --lockbox-start 2020-01-01 --mode strong --seed 1729 --report-prefix /tmp/final_demo2/ws/experiments/EXP_0001/verification/reports/research_DIR_PATH_SKEW_60
+[UNVERIFIED] contract_provenance (mandatory)
+[PASS      ] data_audit (mandatory)
+[PASS      ] lockbox (mandatory)
+[PASS      ] ml_leakage (mandatory)
+[PASS      ] ml_static_scan (mandatory)
+[PASS      ] repository_health (mandatory)
+[PASS      ] research_causality (mandatory)
+[PASS      ] research_contract (mandatory)
+[UNVERIFIED] static_scan (heuristic)
+[PASS      ] walkforward (mandatory)
+LOCKBOX: {'lockbox_start': '2020-01-01T00:00:00+00:00', 'development_event_count': 4448, 'withheld_lockbox_event_count': 245, 'withheld_boundary_event_count': 0}
+VERDICT: INCOMPLETE / UNVERIFIED
+JSON: /tmp/final_demo2/ws/experiments/EXP_0001/verification/reports/research_DIR_PATH_SKEW_60.json
+MARKDOWN: /tmp/final_demo2/ws/experiments/EXP_0001/verification/reports/research_DIR_PATH_SKEW_60.md
+
+=> DIR_PATH_SKEW_60: exit=2 label=RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE (exit code 2 is NOT a pass)
+
+=== SUMMARY ===
+DIR_RETURN_15      label=RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE      global=INCOMPLETE / UNVERIFIED exit=2 research_families={"research_contract": "PASS", "research_causality": "PASS", "walkforward": "PASS", "ml_leakage": "PASS", "lockbox": "PASS"}
+                   other families: {"contract_provenance": "UNVERIFIED", "data_audit": "PASS", "ml_static_scan": "PASS", "repository_health": "PASS", "static_scan": "UNVERIFIED"}
+DIR_RETURN_30      label=RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE      global=INCOMPLETE / UNVERIFIED exit=2 research_families={"research_contract": "PASS", "research_causality": "PASS", "walkforward": "PASS", "ml_leakage": "PASS", "lockbox": "PASS"}
+                   other families: {"contract_provenance": "UNVERIFIED", "data_audit": "PASS", "ml_static_scan": "PASS", "repository_health": "PASS", "static_scan": "UNVERIFIED"}
+DIR_RETURN_60      label=RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE      global=INCOMPLETE / UNVERIFIED exit=2 research_families={"research_contract": "PASS", "research_causality": "PASS", "walkforward": "PASS", "ml_leakage": "PASS", "lockbox": "PASS"}
+                   other families: {"contract_provenance": "UNVERIFIED", "data_audit": "PASS", "ml_static_scan": "PASS", "repository_health": "PASS", "static_scan": "UNVERIFIED"}
+DIR_PATH_SKEW_60   label=RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE      global=INCOMPLETE / UNVERIFIED exit=2 research_families={"research_contract": "PASS", "research_causality": "PASS", "walkforward": "PASS", "ml_leakage": "PASS", "lockbox": "PASS"}
+                   other families: {"contract_provenance": "UNVERIFIED", "data_audit": "PASS", "ml_static_scan": "PASS", "repository_health": "PASS", "static_scan": "UNVERIFIED"}
+OVERALL: RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE
+VERIFY_EXIT=2

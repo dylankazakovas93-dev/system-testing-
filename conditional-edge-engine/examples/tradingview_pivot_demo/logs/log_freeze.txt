@@ -1,0 +1,3 @@
+frozen EXP_0001: manifest_hash=901a6f965da083a360f146ea1247d4267b1d5ad878c34f5bef11b3df86ffb1d8
+event_hash=44e06e221523aced82286d24445acbe7673293a6d4d9a5d2cfa5331167c97dd8
+pre-registered 24 selection trials (no API exists to add a 25th)
