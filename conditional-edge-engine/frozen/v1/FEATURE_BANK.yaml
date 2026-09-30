@@ -1,0 +1,39 @@
+# FROZEN FEATURE BANK v1 -- 56 features. Do not edit during an experiment.
+#
+# Conventions (exact):
+#   * Bars are open-stamped; a bar stamped s is fully known at s + 1 minute.
+#   * "t" is the LAST COMPLETED bar at event_time (open + 1min <= event_time).
+#   * Lookbacks are counted in bars as supplied (no gap filling).
+#   * "L returns" need L+1 closes: close_(t-L) .. close_t.
+#   * VR and HURST "window W" = the W most recent completed bars (W log-closes,
+#     hence W-1 one-bar returns). This is why mandatory warm-up is 480 bars.
+#   * VR q-bar returns are non-overlapping and ANCHORED AT t:
+#       x_t - x_(t-q), x_(t-q) - x_(t-2q), ... while the start index is inside the window.
+#     Variance is population variance (ddof=0). 1-bar variance uses all W-1 one-bar returns.
+#   * HURST: V(k)=mean((x_i - x_(i-k))^2) over all valid pairs in the window, x=log close;
+#     OLS log V(k) = a + b log k over lags 1,2,4,8,16; H=b/2; NaN if <4 positive V(k).
+#   * Session VWAP: cumulative sum(typical_price*volume)/sum(volume) over completed bars of
+#     the current ETH trading session (session starts 18:00 local on the previous calendar
+#     day); typical_price=(high+low+close)/3. distance = close_t/VWAP_t - 1.
+#   * RTH_return_from_open = log(close_t / open of the first bar stamped >= 09:30 local on
+#     the event's local date).
+#   * minutes_since_RTH_open = (event_time local - 09:30 local same date) in minutes.
+#   * day_of_week = local weekday of event_time, Monday=0 .. Sunday=6. It is categorical;
+#     models encode it with a FIXED one-hot over 0..6 (see MODEL_BANK).
+#   * A feature that is undefined only because history is too short is NaN inside its row.
+#     Rows are NEVER omitted. An event is model-eligible only when completed-bar count
+#     >= min_history_bars. A NaN in a model-eligible row is a DATA / FEATURE QUALITY FAILURE.
+version: v1
+expected_feature_count: 56
+min_history_bars: 480
+categorical_features: [day_of_week]
+families:
+  - {id: returns,        module: features.returns,    params: {lookbacks: [5, 15, 30, 60, 120, 240]}}
+  - {id: volatility,     module: features.volatility, params: {rv_lookbacks: [5, 15, 30, 60, 120, 240], vov_lookbacks: [30, 60, 120]}}
+  - {id: kaufman_er,     module: features.kaufman_er, params: {lookbacks: [15, 30, 60, 120, 240]}}
+  - {id: brownian,       module: features.brownian,   params: {disp_lookbacks: [15, 30, 60, 120, 240], vr_windows: [60, 120, 240], vr_lags: [2, 4, 8]}}
+  - {id: hurst,          module: features.hurst,      params: {windows: [120, 240, 480], lags: [1, 2, 4, 8, 16], min_valid_lags: 4}}
+  - {id: candles,        module: features.candles,    params: {lookbacks: [15, 30, 60]}}
+  - {id: range,          module: features.range,      params: {lookbacks: [15, 30, 60, 120]}}
+  - {id: volume,         module: features.volume,     params: {lookbacks: [15, 30, 60]}}
+  - {id: session,        module: features.session,    params: {}}

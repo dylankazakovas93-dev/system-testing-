@@ -1,0 +1,1 @@
+experiment_id,campaign_id,sequence_in_campaign,status,lineage_parent,created_at,frozen_at,revealed_at,event_hash,manifest_hash,engine_version,n_selection_trials,sensitivity_json,research_verification

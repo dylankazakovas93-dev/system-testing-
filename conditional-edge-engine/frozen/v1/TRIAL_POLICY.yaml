@@ -1,0 +1,28 @@
+# FROZEN TRIAL POLICY v1.
+# Selection trials per experiment = |primary targets| x |models| x |states| = 4 x 3 x 2 = 24.
+# There is NO generic MAX_TRIALS. There are exactly 24 predeclared selection opportunities.
+version: v1
+states: [UPPER_HALF, LOWER_HALF]
+expected_trials_per_experiment: 24
+max_experiments_per_campaign: 20
+max_selection_trials_per_campaign: 480
+seed: 1729
+bootstrap_repetitions: 2000
+permutation_repetitions: 2000
+ci_level: 0.95
+walkforward:
+  scheme: expanding_annual_utc_calendar_year
+  min_outer_train_events: 300      # an OOS year is skipped (and reported) below this
+  inner_blocks: 5                  # chronological inner OOF blocks for score calibration
+  min_inner_train_events: 50
+  min_inner_oof_events: 30
+state_definition:
+  threshold: median_of_inner_oof_scores   # training information only
+  upper_half: "score > threshold  -> candidate action = event direction, target y"
+  lower_half: "score < threshold  -> candidate action = opposite direction, target -y"
+  ties: excluded_from_both_states
+base_event_frequency_floor_per_week: 2.0
+sensitivity:
+  max_parameters: 2
+  multipliers: [0.75, 1.25]
+  max_probes: 4

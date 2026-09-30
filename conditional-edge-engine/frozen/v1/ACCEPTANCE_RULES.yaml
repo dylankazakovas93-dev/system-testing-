@@ -1,0 +1,21 @@
+# FROZEN ACCEPTANCE RULES v1.
+version: v1
+min_promotable_oos_frequency_per_week: 1.0
+min_standardized_uplift: 0.10
+bootstrap_ci_lower_bound_must_exceed: 0.0
+max_experiment_q: 0.05
+max_campaign_q: 0.05
+stability:
+  min_selected_events_for_eligible_year: 20
+  min_fraction_positive_years: 0.70
+model_agreement:
+  min_models_passing: 2
+sensitivity:
+  max_reversing_probes: 1      # FAIL if MORE than this many probes reverse the uplift sign
+  min_probe_frequency_per_week: 1.0
+  agreement_rule: probe_ok_if_at_least_2_of_3_models_satisfy   # mirrors model agreement
+decision_priority:
+  - REJECTED_LOW_FREQUENCY
+  - REJECTED_INSUFFICIENT_UPLIFT
+  - REJECTED_STATISTICAL
+  - REJECTED_INSTABILITY
