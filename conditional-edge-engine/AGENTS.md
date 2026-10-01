@@ -12,7 +12,7 @@ lockbox stays sealed.**
 ## You MUST NOT
 1. **Never create, edit or delete any file in `approvals/`.** The OOS approval is written by the HUMAN. Not "on the user's
    behalf", not as a convenience, not as a test fixture in production code. `show_approval_hashes.py` is read-only for a reason.
-2. Never run `run_oos.py` or `run_cpcv.py` unless the human explicitly asks AND the approval file exists. Never open the final
+2. Never run `freeze_campaign_oos.py`, `run_campaign_oos.py` or `run_cpcv.py` unless the human explicitly asks AND the human approval files exist (per experiment, and the campaign-open approval). Never create `approvals/CAMPAIGN_*_OOS_OPEN_APPROVAL.yaml` either. Never open the final
    lockbox (`confirm_lockbox.py` is a deliberate stub).
 3. Never modify `frozen/`, `engine/`, `features/` during an experiment, and never change `event.py` / `EVENT_SPEC.yaml` /
    partitions after `freeze`. Changing them after results were revealed = a NEW lineage (new experiment, 24 new trials).
@@ -30,5 +30,5 @@ lockbox stays sealed.**
 
 ## Lifecycle you must respect
 `DRAFT -> FROZEN -> IS run (stops) -> [IS_REJECTED | IS_PROVISIONAL_CANDIDATE | AWAITING_HUMAN_OOS_APPROVAL]
- -> human approval file -> OOS one-shot -> [OOS_REJECTED | OOS_CONFIRMED] -> CPCV -> [CPCV_REJECTED | CPCV_CONFIRMED -> AWAITING_FINAL_LOCKBOX]`
+ -> human approvals -> campaign OOS freeze (all IS experiments complete; campaign closed) -> human campaign-open approval -> ONE campaign-wide OOS opening -> [OOS_REJECTED | OOS_CONFIRMED] -> CPCV -> [CPCV_REJECTED | CPCV_CONFIRMED -> AWAITING_FINAL_LOCKBOX]`
 (`OOS_NOT_APPROVED`, `OOS_CONTAMINATED` are terminal.) Internal cross-validation is called `DEVELOPMENT_CV`, never OOS.

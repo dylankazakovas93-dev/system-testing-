@@ -19,7 +19,7 @@ from engine import trial_registry as reg
 from engine.common import CODE_ROOT, EngineError, load_frozen
 from engine.experiment_lifecycle import experiment_dir, verify_manifest
 from engine.is_report import NOT_ACCESSED, ReportSealedError, oos_status_label, write_is_report
-from engine.oos_stage import (ApprovalError, OOSContaminated, approval_hashes, approval_path, group_verdicts, mark_contamination_if_mutated,
+from engine.oos_stage import (ApprovalError, OOSContaminated, freeze_campaign_oos, approval_hashes, approval_path, group_verdicts, mark_contamination_if_mutated,
                               oos_confirmations, validate_approval)
 from engine.multiplicity import benjamini_hochberg
 from tests.scenario_helpers import (LIFE_PARTS, human_approval, lifecycle_workspace, run_cpcv_stage, slice_tables, spend_oos, top_group_ids)
@@ -84,10 +84,14 @@ class TestStableEffect:
         assert not approval_path(ws, exp).exists()
         with pytest.raises(ApprovalError, match="no human approval file"):
             validate_approval(ws, exp)
-        p = subprocess.run([sys.executable, str(CODE_ROOT / "scripts/run_oos.py"), "--experiment", exp, "--data", "/nonexistent.parquet",
+        cid = reg.experiment_row(ws, exp)["campaign_id"]
+        p = subprocess.run([sys.executable, str(CODE_ROOT / "scripts/run_campaign_oos.py"), "--campaign", cid, "--data", "/nonexistent.parquet",
                             "--workspace", str(ws.root)], capture_output=True, text=True)
-        assert p.returncode != 0 and "no human approval file" in (p.stderr + p.stdout)            # fails BEFORE reading any data
+        assert p.returncode != 0 and "must first be frozen" in (p.stderr + p.stdout)               # fails BEFORE reading any data
         assert not reg.oos_spent(ws, exp) and reg.read_oos_access(ws).empty
+        with pytest.raises(EngineError, match="nothing to freeze"):                                 # and a freeze needs a valid positive human approval
+            freeze_campaign_oos(ws, cid)
+        assert reg.campaign_row(ws, cid)["status"] == "OPEN"
 
     def test_the_scripts_do_not_generate_the_approval_file(self, life, tmp_path):
         ws = clone(life[0], tmp_path)
@@ -222,23 +226,22 @@ class TestStableEffect:
         assert r["status"] == "OOS_CONFIRMED" and reg.experiment_row(ws, exp)["status"] == "OOS_CONFIRMED"
         assert r["group_verdicts"][groups[0]]["confirmed"] and r["group_verdicts"][groups[0]]["models_passing"] == 3
         led = reg.read_oos_access(ws)
-        assert len(led) == 1 and led.iloc[0]["experiment_id"] == exp and reg.verify_oos_ledger(ws) == 1
+        assert len(led) == 1 and led.iloc[0]["campaign_id"] == "C001" and reg.verify_oos_ledger(ws) == 1
         row = led.iloc[0]
-        assert row["approved_target_side_groups"] == groups[0] and row["oos_start"] == "2020-01-01" and row["oos_end"] == "2021-01-01"
-        assert row["approval_file_hash"] == __import__("engine.common", fromlist=["x"]).sha256_file(approval_path(ws, exp))
-        h = approval_hashes(ws, exp)
-        assert row["IS_report_hash"] == h["is_report_sha256"] and row["manifest_hash"] == h["experiment_manifest_sha256"]
+        assert row["experiments"] == exp and row["approved_experiment_groups"] == f"{exp}:{groups[0]}" and row["n_oos_confirmations"] == "3"
+        assert row["oos_start"] == "2020-01-01" and row["oos_end"] == "2021-01-01"
+        assert row["freeze_hash"] == reg.campaign_row(ws, "C001")["oos_freeze_hash"] and reg.campaign_row(ws, "C001")["status"] == "OOS_SPENT"
         assert row["unlock_timestamp"] and len(row["code_hash"]) == 64
 
     def test_oos_can_only_be_unlocked_once(self, spent):
         ws, exp, groups, _ = spent
-        with pytest.raises(ApprovalError, match="OOS HAS BEEN SPENT"):
+        with pytest.raises(OOSContaminated, match="CAMPAIGN OOS HAS BEEN SPENT"):
             validate_approval(ws, exp)
         human_approval(ws, exp, groups)                                                                 # even a fresh human approval cannot re-open it
-        with pytest.raises(ApprovalError, match="OOS HAS BEEN SPENT"):
+        with pytest.raises(OOSContaminated, match="CAMPAIGN OOS HAS BEEN SPENT"):
             validate_approval(ws, exp)
-        with pytest.raises(EngineError, match="OOS HAS BEEN SPENT"):
-            reg.append_oos_access(ws, campaign_id="C001", experiment_id=exp)
+        with pytest.raises(EngineError, match="CAMPAIGN OOS HAS BEEN SPENT"):
+            reg.append_oos_access(ws, campaign_id="C001")
         assert len(reg.read_oos_access(ws)) == 1
 
     def test_is_report_is_sealed_and_cannot_claim_not_accessed_after_oos(self, spent):
@@ -261,9 +264,8 @@ class TestStableEffect:
 
     def test_lineage_child_cannot_claim_the_same_oos_untouched(self, spent):
         ws, exp, groups, _ = spent
-        child = reg.register_experiment(ws, reg.experiment_row(ws, exp)["campaign_id"], lineage_parent=exp)
-        with pytest.raises(OOSContaminated, match="OOS CONTAMINATED"):
-            validate_approval(ws, child)
+        with pytest.raises(OOSContaminated, match="CAMPAIGN OOS HAS BEEN SPENT"):
+            reg.register_experiment(ws, reg.experiment_row(ws, exp)["campaign_id"], lineage_parent=exp)
 
     def test_changing_the_experiment_after_oos_marks_it_contaminated(self, spent, tmp_path):
         ws = clone(spent[0], tmp_path)
@@ -290,7 +292,7 @@ class TestStableEffect:
         a, b = oos_view(bars, parts), oos_view(poisoned, parts)
         assert a.equals(b) and a.index.max() < parts.oos_end                                              # lockbox poison is invisible
         # both OOS-touching entry points cut the bars with oos_view BEFORE any table is built or any stage executes
-        for fn, later in ((oos_stage.run_oos, ("build_event_tables(", "execute_oos(")), (cpcv_mod.run_cpcv, ("build_event_tables(", "execute_cpcv(", "run_cpcv_tables("))):
+        for fn, later in ((oos_stage.run_campaign_oos, ("build_event_tables(", "execute_campaign_oos(")), (cpcv_mod.run_cpcv, ("build_event_tables(", "execute_cpcv(", "run_cpcv_tables("))):
             src = inspect.getsource(fn)
             cut = src.index("oos_view(bars")
             assert all(src.index(tok) > cut for tok in later if tok in src), fn.__name__

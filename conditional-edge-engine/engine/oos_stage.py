@@ -1,11 +1,16 @@
-"""One-shot CONFIRMATION OOS behind a manual HUMAN approval.
+"""CAMPAIGN-LEVEL one-shot CONFIRMATION OOS behind manual HUMAN approvals.
 
-Nothing in this module creates an approval file. ``validate_approval`` checks the human-written
-approvals/EXP_xxxx_OOS_APPROVAL.yaml against: the exact FROZEN_MANIFEST.json bytes, the exact IS_REPORT.json bytes (and the
-markdown / results hashes inside it), the current IS shortlist (re-derived under the CURRENT campaign universe), external
-verification of all three model paths of every approved group, the group cap (2) and the OOS ledger (one unlock ever).
-The unlock is appended to the append-only ledger BEFORE any OOS data is touched. Bars at/after oos_end (final lockbox)
-are removed before any computation.
+Process (nothing in this module creates a human file):
+  1. every experiment of the campaign finishes its IS stage (no DRAFT / FROZEN experiment may remain);
+  2. the human writes approvals/EXP_xxxx_OOS_APPROVAL.yaml for the experiments/groups he wants confirmed (<= 2 groups each);
+  3. ``freeze_campaign_oos`` CLOSES the campaign (no new experiments, verification or IS reports), re-validates every approval
+     and records all approved experiment/group pairs together with their hashes in one freeze document;
+  4. the human writes approvals/CAMPAIGN_xxxx_OOS_OPEN_APPROVAL.yaml citing the exact freeze hash;
+  5. ``run_campaign_oos`` opens the shared OOS partition EXACTLY ONCE for the whole campaign: the ledger row ("CAMPAIGN OOS HAS
+     BEEN SPENT") is written BEFORE any OOS data is touched; BH and Bonferroni run across every 3 x approved_group model
+     confirmation of the entire campaign; per-experiment OOS reports and statuses are preserved.
+Bars at/after oos_end (final lockbox) are removed before any computation. A spent campaign accepts no new experiment, and no
+campaign whose OOS interval overlaps a spent OOS partition can claim it as untouched confirmation.
 """
 from __future__ import annotations
 
@@ -30,6 +35,7 @@ from engine.score_calibration import UPPER, WFConfig, assign_state, calibrate_th
 from engine.statistics import evaluate_panel, week_key, weeks_in_intervals
 
 APPROVER = "HUMAN_USER"
+CAMPAIGN_APPROVAL_KEYS = ["campaign_id", "oos_freeze_sha256", "approved_by", "approved", "approval_note"]
 APPROVAL_KEYS = ["experiment_id", "campaign_id", "experiment_manifest_sha256", "is_report_sha256", "approved_by", "approved",
                  "approved_target_side_groups", "approval_note"]
 
@@ -38,8 +44,7 @@ class ApprovalError(EngineError):
     pass
 
 
-class OOSContaminated(EngineError):
-    pass
+OOSContaminated = reg.OOSContaminated
 
 
 def approval_path(ws: reg.Workspace, experiment_id: str) -> Path:
@@ -57,19 +62,6 @@ def approval_hashes(ws: reg.Workspace, experiment_id: str) -> dict:
     return out
 
 
-def check_lineage_clean(ws: reg.Workspace, experiment_id: str) -> None:
-    """A changed lineage cannot claim the same OOS was untouched: if an ancestor already spent this campaign's OOS, refuse."""
-    exps = reg.read_experiments(ws).set_index("experiment_id")
-    cur = exps.at[experiment_id, "lineage_parent"]
-    seen = set()
-    while cur and cur not in seen:
-        seen.add(cur)
-        if reg.oos_spent(ws, cur) and exps.at[cur, "campaign_id"] == exps.at[experiment_id, "campaign_id"]:
-            raise OOSContaminated(f"OOS CONTAMINATED: lineage ancestor {cur} already spent this campaign's confirmation OOS; "
-                                  f"{experiment_id} cannot claim it as untouched confirmation")
-        cur = exps.at[cur, "lineage_parent"] if cur in exps.index else ""
-
-
 def mark_contamination_if_mutated(ws: reg.Workspace, experiment_id: str) -> bool:
     """If OOS was spent and the frozen experiment was changed afterwards, mark it OOS_CONTAMINATED permanently."""
     if not reg.oos_spent(ws, experiment_id):
@@ -81,14 +73,26 @@ def mark_contamination_if_mutated(ws: reg.Workspace, experiment_id: str) -> bool
     return False
 
 
-def validate_approval(ws: reg.Workspace, experiment_id: str, frozen: Frozen | None = None) -> dict:
+def campaign_approval_path(ws: reg.Workspace, campaign_id: str) -> Path:
+    return ws.approvals / f"CAMPAIGN_{campaign_id}_OOS_OPEN_APPROVAL.yaml"
+
+
+def freeze_path(ws: reg.Workspace, campaign_id: str) -> Path:
+    return ws.root / "registry" / f"oos_freeze_{campaign_id}.json"
+
+
+def validate_approval(ws: reg.Workspace, experiment_id: str, frozen: Frozen | None = None, *, campaign_frozen: bool = False) -> dict:
+    """Validate the human's per-experiment approval. ``campaign_frozen=True`` is used when re-validating at campaign open."""
     frozen = frozen or load_frozen()
     exp = reg.experiment_row(ws, experiment_id)
     if exp["status"] == "OOS_CONTAMINATED":
         raise OOSContaminated(f"{experiment_id} is OOS_CONTAMINATED")
-    if reg.oos_spent(ws, experiment_id):
-        raise ApprovalError(f"OOS HAS BEEN SPENT for {experiment_id}; it can never be unlocked again")
-    check_lineage_clean(ws, experiment_id)
+    cid = exp["campaign_id"]
+    if reg.campaign_oos_spent(ws, cid):
+        raise OOSContaminated(f"CAMPAIGN OOS HAS BEEN SPENT ({cid}); {experiment_id} cannot claim the shared OOS partition as untouched confirmation")
+    if not campaign_frozen:
+        reg.assert_campaign_open(ws, cid, f"approve OOS for {experiment_id}")
+    reg.assert_oos_partition_untouched(ws, reg.campaign_partitions(ws, cid), exclude_campaign=cid)
     p = approval_path(ws, experiment_id)
     if not p.exists():
         raise ApprovalError(f"no human approval file: {p}. OOS stays sealed. (The approval must be written by the human; "
@@ -208,51 +212,143 @@ def group_verdicts(rows: list[dict], rule: dict) -> dict[str, dict]:
     return verdicts
 
 
-def run_oos(ws: reg.Workspace, experiment_id: str, bars: pd.DataFrame, *, verbose: bool = True) -> dict:
-    """The ONE-SHOT confirmation. Requires a valid human approval; spends the OOS permanently (ledger first)."""
+# ---------------------------------------------------------------------------- campaign freeze (closes the campaign)
+def freeze_campaign_oos(ws: reg.Workspace, campaign_id: str, frozen: Frozen | None = None) -> dict:
+    """HUMAN-run step: close the campaign and freeze every approved experiment/group pair together.
+
+    Requires every experiment of the campaign to have finished its IS stage. Experiments awaiting approval without a (positive)
+    human approval file are set to OOS_NOT_APPROVED. Any INVALID approval file aborts the freeze with nothing changed."""
+    frozen = frozen or load_frozen()
+    reg.assert_campaign_open(ws, campaign_id, "freeze its OOS")
+    parts = reg.campaign_partitions(ws, campaign_id)
+    reg.assert_oos_partition_untouched(ws, parts, exclude_campaign=campaign_id)
+    exps = reg.read_experiments(ws)
+    exps = exps[exps["campaign_id"] == campaign_id]
+    if exps.empty:
+        raise EngineError(f"campaign {campaign_id} has no experiments")
+    incomplete = sorted(exps[exps["status"].isin(["DRAFT", "FROZEN"])]["experiment_id"])
+    if incomplete:
+        raise EngineError(f"campaign {campaign_id} IS stage is incomplete: {incomplete} have not completed their IS run. "
+                          f"ALL IS experiments must be completed before the confirmation OOS can be frozen or opened")
+    included, excluded, to_decline = [], {}, []
+    for e, st in zip(exps["experiment_id"], exps["status"]):
+        if st != "AWAITING_HUMAN_OOS_APPROVAL":
+            excluded[e] = st
+            continue
+        p = approval_path(ws, e)
+        raw = yaml.safe_load(p.read_text()) if p.exists() else None
+        if raw is None:
+            excluded[e] = "NO_HUMAN_APPROVAL"
+            to_decline.append(e)
+        elif isinstance(raw, dict) and raw.get("approved") is False:
+            excluded[e] = "HUMAN_DECLINED"
+            to_decline.append(e)
+        else:
+            ap = validate_approval(ws, e, frozen)                      # raises on any problem: nothing is changed
+            d = experiment_dir(ws, e)
+            included.append({"experiment_id": e, "approved_target_side_groups": list(ap["approved_target_side_groups"]),
+                             "experiment_manifest_sha256": sha256_file(d / MANIFEST), "is_report_sha256": ap["is_report_sha256"],
+                             "approval_file_sha256": ap["_approval_file_sha256"],
+                             "verification_hash": hashlib.sha256((reg.experiment_row(ws, e)["verification_json"] or "{}").encode()).hexdigest()})
+    if not included:
+        raise EngineError(f"nothing to freeze for {campaign_id}: no experiment has a valid positive human approval")
+    n_groups = sum(len(i["approved_target_side_groups"]) for i in included)
+    doc = {"campaign_id": campaign_id, "partitions": parts, "frozen_at": now_utc_iso(), "experiments": included,
+           "experiments_not_included": excluded, "n_approved_groups": n_groups,
+           "n_oos_confirmations": 3 * n_groups, "code_hash": engine_code_hash(),
+           "note": "Campaign closed. Every approved group of every experiment is confirmed together in ONE OOS opening; "
+                   "BH and Bonferroni run over all n_oos_confirmations = 3 x n_approved_groups."}
+    path = freeze_path(ws, campaign_id)
+    path.write_text(json.dumps(doc, indent=2, sort_keys=True))
+    h = sha256_file(path)
+    for e in to_decline:
+        reg.set_status(ws, e, "OOS_NOT_APPROVED", f"not included in the campaign OOS freeze ({excluded[e]})")
+    reg.update_campaign(ws, campaign_id, status="OOS_FROZEN", oos_freeze_hash=h)
+    return {**doc, "freeze_sha256": h, "path": str(path)}
+
+
+def campaign_open_hashes(ws: reg.Workspace, campaign_id: str) -> dict:
+    """Read-only helper for the HUMAN: what the campaign-open approval must cite."""
+    c = reg.campaign_row(ws, campaign_id)
+    return {"campaign_id": campaign_id, "campaign_status": c["status"], "oos_freeze_sha256": c["oos_freeze_hash"] or None,
+            "freeze_file": str(freeze_path(ws, campaign_id))}
+
+
+def validate_campaign_open(ws: reg.Workspace, campaign_id: str, frozen: Frozen | None = None) -> tuple[dict, dict, dict]:
+    """Everything that must hold before the shared OOS partition may be opened (once) for the campaign."""
+    frozen = frozen or load_frozen()
+    c = reg.campaign_row(ws, campaign_id)
+    if c["status"] == "OOS_SPENT" or reg.campaign_oos_spent(ws, campaign_id):
+        raise OOSContaminated(f"CAMPAIGN OOS HAS BEEN SPENT ({campaign_id}); it can never be opened again")
+    if c["status"] != "OOS_FROZEN":
+        raise ApprovalError(f"campaign {campaign_id} is {c['status']}; its OOS must first be frozen with scripts/freeze_campaign_oos.py")
+    reg.assert_oos_partition_untouched(ws, reg.campaign_partitions(ws, campaign_id), exclude_campaign=campaign_id)
+    fp = freeze_path(ws, campaign_id)
+    if not fp.exists() or sha256_file(fp) != c["oos_freeze_hash"]:
+        raise ApprovalError("the campaign OOS freeze document is missing or was edited after the freeze")
+    doc = json.loads(fp.read_text())
+    p = campaign_approval_path(ws, campaign_id)
+    if not p.exists():
+        raise ApprovalError(f"no human campaign-open approval file: {p}. The shared OOS stays sealed. (Written by the human only; "
+                            f"cite the freeze hash from scripts/show_approval_hashes.py --campaign {campaign_id})")
+    cap = yaml.safe_load(p.read_text())
+    if not isinstance(cap, dict) or any(k not in cap for k in CAMPAIGN_APPROVAL_KEYS):
+        raise ApprovalError(f"campaign approval file must contain the keys {CAMPAIGN_APPROVAL_KEYS}")
+    errs = []
+    if cap["campaign_id"] != campaign_id:
+        errs.append("campaign_id mismatch")
+    if cap["approved_by"] != APPROVER:
+        errs.append(f"approved_by must be exactly {APPROVER}")
+    if cap["approved"] is not True:
+        errs.append("approved must be the boolean true")
+    if cap["oos_freeze_sha256"] != c["oos_freeze_hash"]:
+        errs.append("oos_freeze_sha256 does not match the exact campaign freeze document")
+    if not (isinstance(cap["approval_note"], str) and cap["approval_note"].strip()):
+        errs.append("approval_note must be non-empty")
+    if errs:
+        raise ApprovalError("; ".join(errs))
+    cap["_file_sha256"] = sha256_file(p)
+    aps = {}
+    for ent in doc["experiments"]:
+        e = ent["experiment_id"]
+        ap = validate_approval(ws, e, frozen, campaign_frozen=True)       # re-check every per-experiment approval and hash
+        for k, v in (("approval_file_sha256", ap["_approval_file_sha256"]), ("is_report_sha256", ap["is_report_sha256"]),
+                     ("approved_target_side_groups", list(ap["approved_target_side_groups"]))):
+            if ent[k] != v:
+                raise ApprovalError(f"{e}: {k} changed since the campaign freeze")
+        if ent["experiment_manifest_sha256"] != sha256_file(experiment_dir(ws, e) / MANIFEST):
+            raise ApprovalError(f"{e}: manifest changed since the campaign freeze")
+        aps[e] = ap
+    return doc, cap, aps
+
+
+def run_campaign_oos(ws: reg.Workspace, campaign_id: str, bars: pd.DataFrame, *, verbose: bool = True) -> dict:
+    """Open the campaign's shared confirmation OOS ONCE (ledger first). ``bars`` may extend past oos_end: that is cut first."""
     frozen = load_frozen()
-    ap = validate_approval(ws, experiment_id, frozen)              # raises unless the human approved the exact frozen state
-    d = experiment_dir(ws, experiment_id)
-    spec = load_spec(d / "EVENT_SPEC.yaml")
-    parts = parse_partitions(spec["partitions"])
+    doc, cap, aps = validate_campaign_open(ws, campaign_id, frozen)
+    parts = parse_partitions(reg.campaign_partitions(ws, campaign_id))
     bars_oos = oos_view(bars, parts)                                # final lockbox removed BEFORE any computation
     del bars
     assert bars_oos.index.tz_convert("UTC").max() < parts.oos_end
-    module = load_event_module(d / "event.py")
-    # the ledger entry is written first (inside execute_oos); tables are then built from dev+OOS bars only
-    tables = lambda: build_event_tables(module, spec, bars_oos, frozen)[:4]   # noqa: E731
+    items = []
+    for e, ap in aps.items():
+        d = experiment_dir(ws, e)
+        spec = load_spec(d / "EVENT_SPEC.yaml")
+        module = load_event_module(d / "event.py")
+        items.append((e, ap, (lambda module=module, spec=spec: build_event_tables(module, spec, bars_oos, frozen)[:4]), bars_oos.index))
     fp = bars_fingerprint(bars_oos[bars_oos.index.tz_convert("UTC") >= parts.development_end])
-    return execute_oos(ws, experiment_id, ap, tables, bars_oos.index, fp, verbose=verbose)
+    return execute_campaign_oos(ws, campaign_id, cap, items, fp, verbose=verbose)
 
 
-def execute_oos(ws: reg.Workspace, experiment_id: str, ap: dict, tables, calendar_index: pd.DatetimeIndex, oos_fingerprint: str,
-                *, verbose: bool = True) -> dict:
-    """Spend the OOS (ledger first), compute 3 x G model confirmations, correct for ALL of them, record, set status.
-
-    ``tables`` is a callable returning (events, features, eligible, targets) built from development + OOS rows only.
-    """
-    frozen = load_frozen()
-    log = (lambda *a: print(*a, flush=True)) if verbose else (lambda *a: None)
-    d = experiment_dir(ws, experiment_id)
-    exp = reg.experiment_row(ws, experiment_id)
-    spec = load_spec(d / "EVENT_SPEC.yaml")
-    parts = parse_partitions(spec["partitions"])
-    groups = ap["approved_target_side_groups"]
-    manifest_sha = sha256_file(d / MANIFEST)
-    # --- spend the OOS: permanent ledger entry written BEFORE any OOS data is analysed
-    reg.append_oos_access(ws, campaign_id=exp["campaign_id"], experiment_id=experiment_id, approval_file_hash=ap["_approval_file_sha256"],
-                          IS_report_hash=ap["is_report_sha256"], manifest_hash=manifest_sha, approved_target_side_groups=";".join(groups),
-                          oos_start=f"{parts.development_end:%Y-%m-%d}", oos_end=f"{parts.oos_end:%Y-%m-%d}",
-                          unlock_timestamp=now_utc_iso(), code_hash=engine_code_hash(),
-                          verification_summary_hash=hashlib.sha256((exp["verification_json"] or "{}").encode()).hexdigest())
-    log(f"[{experiment_id}] OOS UNLOCKED by human approval; ledger entry written; groups {groups}")
-    events, features, eligible, targets = tables()
+def _oos_raw_rows(experiment_id: str, groups: list[str], tables, calendar_index: pd.DatetimeIndex, parts, frozen: Frozen) -> list[dict]:
+    """3 x G raw OOS model results of ONE experiment (no multiplicity correction yet)."""
     cfg = WFConfig.from_policy(frozen.trial_policy)
     pol = frozen.trial_policy
     from engine.feature_engine import feature_names
     names = feature_names(frozen)
     dev_end_ns = int(parts.development_end.value)
     oos_end_ns = int(parts.oos_end.value)
+    events, features, eligible, targets = tables()
     ev = events.assign(_el=np.asarray(eligible, dtype=bool))
     ev = ev[ev["_el"]].sort_values(["event_time", "event_id"], kind="stable").reset_index(drop=True)
     feat = features.set_index("event_id")
@@ -274,7 +370,7 @@ def execute_oos(ws: reg.Workspace, experiment_id: str, ap: dict, tables, calenda
             thr = calibrate_threshold(fac, X, y, ev_ns, te_ns, train, cfg)[0] if len(train) >= cfg.min_outer_train_events else None
             for g in [g for g in groups if g.startswith(t + "|")]:
                 state = g.split("|")[1]
-                base = {"group_id": g, "target": t, "state": state, "model": mname}
+                base = {"experiment_id": experiment_id, "group_id": g, "target": t, "state": state, "model": mname, "oos_weeks": wk["total"]}
                 if thr is None or len(oos_idx) == 0:
                     raw_rows.append({**base, "n_parent": 0, "n_selected": 0, "raw_p": 1.0, "selected_frequency": float("nan"),
                                      "standardized_uplift": float("nan"), "selected_effect": float("nan"), "bootstrap_ci_low": float("nan"),
@@ -291,44 +387,82 @@ def execute_oos(ws: reg.Workspace, experiment_id: str, ap: dict, tables, calenda
                 raw_rows.append({**base, **{k: stats[k] for k in ("n_parent", "n_selected", "parent_frequency", "selected_frequency", "retention_ratio",
                                                                   "parent_effect", "selected_effect", "uplift", "standardized_uplift",
                                                                   "bootstrap_ci_low", "bootstrap_ci_high", "raw_p")}, "threshold": float(thr)})
+    return raw_rows
+
+
+def execute_campaign_oos(ws: reg.Workspace, campaign_id: str, cap: dict, items: list, oos_fingerprint: str, *, verbose: bool = True) -> dict:
+    """Spend the campaign OOS (ledger first), compute every approved experiment's 3 x G confirmations, correct for ALL of them
+    jointly (BH + Bonferroni over the whole campaign family), record per-experiment results and mark the campaign OOS_SPENT.
+
+    ``items`` = [(experiment_id, approval, tables_callable, calendar_index)]; each callable returns
+    (events, features, eligible, targets) built from development + OOS rows only."""
+    frozen = load_frozen()
+    log = (lambda *a: print(*a, flush=True)) if verbose else (lambda *a: None)
+    c = reg.campaign_row(ws, campaign_id)
+    parts = parse_partitions(reg.campaign_partitions(ws, campaign_id))
+    pairs = [(e, g) for e, ap, _, _ in items for g in ap["approved_target_side_groups"]]
+    # --- spend the OOS: ONE permanent ledger entry for the whole campaign, written BEFORE any OOS data is analysed
+    reg.append_oos_access(ws, campaign_id=campaign_id, freeze_hash=c["oos_freeze_hash"], open_approval_file_hash=cap["_file_sha256"],
+                          experiments=";".join(e for e, *_ in items), approved_experiment_groups=";".join(f"{e}:{g}" for e, g in pairs),
+                          n_oos_confirmations=3 * len(pairs), oos_start=f"{parts.development_end:%Y-%m-%d}",
+                          oos_end=f"{parts.oos_end:%Y-%m-%d}", unlock_timestamp=now_utc_iso(), code_hash=engine_code_hash())
+    reg.update_campaign(ws, campaign_id, status="OOS_SPENT", oos_spent_at=now_utc_iso())
+    log(f"[{campaign_id}] CAMPAIGN OOS OPENED ONCE by human approval; ledger entry written; {len(pairs)} approved groups -> {3 * len(pairs)} confirmations")
+    raw_rows: list[dict] = []
+    for e, ap, tables, cal in items:
+        raw_rows += _oos_raw_rows(e, list(ap["approved_target_side_groups"]), tables, cal, parts, frozen)
     rule = frozen.acceptance["oos_confirmation"]
-    conf = oos_confirmations(raw_rows, rule)
-    verdicts = group_verdicts(conf, rule)
+    conf = oos_confirmations(raw_rows, rule)                              # BH + Bonferroni over EVERY confirmation of the campaign
+    m = len(conf)
     now = now_utc_iso()
-    reg.append_table(ws, "oos_trials.csv", reg.OOS_TRIAL_COLS, [{
-        "campaign_id": exp["campaign_id"], "experiment_id": experiment_id, "oos_trial_id": f"{experiment_id}_OOS{i + 1:02d}",
-        "group_id": r["group_id"], "target": r["target"], "state": r["state"], "model": r["model"], "n_parent_events": r["n_parent"],
-        "n_selected_events": r["n_selected"], "parent_frequency": r["parent_frequency"], "selected_frequency": r["selected_frequency"],
-        "retention_ratio": r["retention_ratio"], "parent_effect": r["parent_effect"], "selected_effect": r["selected_effect"],
-        "uplift": r["uplift"], "standardized_uplift": r["standardized_uplift"], "bootstrap_ci_low": r["bootstrap_ci_low"],
-        "bootstrap_ci_high": r["bootstrap_ci_high"], "raw_p": r["raw_p"], "oos_q": r["oos_q"], "oos_bonferroni_p": r["oos_bonferroni_p"],
-        "oos_trials_in_family": r["oos_trials_in_family"], "gates_pass": r["gates_pass"],
-        "decision": ("OOS_MODEL_PASS" if r["gates_pass"] else "OOS_MODEL_FAIL"), "rejection_reason": r["rejection_reason"], "revealed_at": now}
-        for i, r in enumerate(conf)])
-    confirmed = [g for g, v in verdicts.items() if v["confirmed"]]
-    status = "OOS_CONFIRMED" if confirmed else "OOS_REJECTED"
-    reg.set_status(ws, experiment_id, status, f"OOS one-shot: confirmed groups {confirmed or 'none'}")
-    report = {"experiment_id": experiment_id, "campaign_id": exp["campaign_id"], "status": status, "approved_groups": groups,
-              "oos_period": [f"{parts.development_end:%Y-%m-%d}", f"{parts.oos_end:%Y-%m-%d}"],
-              "oos_bars_fingerprint": oos_fingerprint,
-              "oos_model_confirmations": 3 * len(groups), "family_size_for_multiple_testing": len(conf),
-              "formulas": {"oos_bonferroni_p": f"min(raw_p * {len(conf)}, 1)", "oos_q": f"BH over all {len(conf)} approved model confirmations"},
-              "group_verdicts": verdicts, "confirmations": conf, "oos_weeks": wk["total"],
-              "campaign_oos_unlocks_so_far": int((reg.read_oos_access(ws)["campaign_id"] == exp["campaign_id"]).sum()),
-              "approval_file_sha256": ap["_approval_file_sha256"], "is_report_sha256": ap["is_report_sha256"],
-              "manifest_sha256": manifest_sha, "note": "OOS is spent: no parameter, feature, model, filter, event, target or state change may follow."}
     from engine.experiment_runner import _clean
-    rdir = d / "results"
-    (rdir / "OOS_REPORT.json").write_text(json.dumps(_clean(report), indent=2, sort_keys=True))
-    (rdir / "OOS_REPORT.md").write_text(_oos_md(report))
-    log(f"[{experiment_id}] OOS result: {status}; group verdicts {json.dumps({g: v['confirmed'] for g, v in verdicts.items()})}")
-    return report
+    reports = {}
+    for e, ap, _, _ in items:
+        mine = [r for r in conf if r["experiment_id"] == e]
+        verdicts = group_verdicts(mine, rule)
+        reg.append_table(ws, "oos_trials.csv", reg.OOS_TRIAL_COLS, [{
+            "campaign_id": campaign_id, "experiment_id": e, "oos_trial_id": f"{e}_OOS{i + 1:02d}",
+            "group_id": r["group_id"], "target": r["target"], "state": r["state"], "model": r["model"], "n_parent_events": r["n_parent"],
+            "n_selected_events": r["n_selected"], "parent_frequency": r["parent_frequency"], "selected_frequency": r["selected_frequency"],
+            "retention_ratio": r["retention_ratio"], "parent_effect": r["parent_effect"], "selected_effect": r["selected_effect"],
+            "uplift": r["uplift"], "standardized_uplift": r["standardized_uplift"], "bootstrap_ci_low": r["bootstrap_ci_low"],
+            "bootstrap_ci_high": r["bootstrap_ci_high"], "raw_p": r["raw_p"], "oos_q": r["oos_q"], "oos_bonferroni_p": r["oos_bonferroni_p"],
+            "oos_trials_in_family": r["oos_trials_in_family"], "gates_pass": r["gates_pass"],
+            "decision": ("OOS_MODEL_PASS" if r["gates_pass"] else "OOS_MODEL_FAIL"), "rejection_reason": r["rejection_reason"], "revealed_at": now}
+            for i, r in enumerate(mine)])
+        confirmed = [g for g, v in verdicts.items() if v["confirmed"]]
+        status = "OOS_CONFIRMED" if confirmed else "OOS_REJECTED"
+        reg.set_status(ws, e, status, f"campaign OOS (one opening, family of {m}): confirmed groups {confirmed or 'none'}")
+        groups = list(ap["approved_target_side_groups"])
+        d = experiment_dir(ws, e)
+        report = {"experiment_id": e, "campaign_id": campaign_id, "status": status, "approved_groups": groups,
+                  "oos_period": [f"{parts.development_end:%Y-%m-%d}", f"{parts.oos_end:%Y-%m-%d}"],
+                  "oos_bars_fingerprint": oos_fingerprint,
+                  "oos_model_confirmations": 3 * len(groups), "family_size_for_multiple_testing": m,
+                  "campaign_experiments_in_family": [x[0] for x in items], "scope_of_multiplicity": "ENTIRE CAMPAIGN",
+                  "formulas": {"oos_bonferroni_p": f"min(raw_p * {m}, 1)", "oos_q": f"BH over all {m} approved model confirmations of the campaign"},
+                  "group_verdicts": verdicts, "confirmations": mine, "oos_weeks": mine[0]["oos_weeks"] if mine else 0,
+                  "campaign_oos_opened_once": True, "campaign_freeze_sha256": c["oos_freeze_hash"],
+                  "open_approval_file_sha256": cap["_file_sha256"], "approval_file_sha256": ap["_approval_file_sha256"],
+                  "is_report_sha256": ap["is_report_sha256"], "manifest_sha256": sha256_file(d / MANIFEST),
+                  "note": "The campaign OOS is spent: no parameter, feature, model, filter, event, target or state change may follow, "
+                          "and no later experiment may claim this partition as untouched confirmation."}
+        (d / "results" / "OOS_REPORT.json").write_text(json.dumps(_clean(report), indent=2, sort_keys=True))
+        (d / "results" / "OOS_REPORT.md").write_text(_oos_md(report))
+        reports[e] = report
+        log(f"[{e}] OOS result: {status}; group verdicts {json.dumps({g: v['confirmed'] for g, v in verdicts.items()})}")
+    camp_report = {"campaign_id": campaign_id, "campaign_status": "OOS_SPENT", "family_size": m,
+                   "experiments": {e: r["status"] for e, r in reports.items()},
+                   "confirmations": [{k: r[k] for k in ("experiment_id", "group_id", "model", "raw_p", "oos_q", "oos_bonferroni_p", "gates_pass")} for r in conf],
+                   "freeze_sha256": c["oos_freeze_hash"], "oos_bars_fingerprint": oos_fingerprint}
+    (ws.root / "registry" / f"oos_campaign_report_{campaign_id}.json").write_text(json.dumps(_clean(camp_report), indent=2, sort_keys=True))
+    return {**camp_report, "reports": reports}
 
 
 def _oos_md(r: dict) -> str:
     L = [f"# OOS REPORT — {r['experiment_id']}  ({r['status']})\n",
-         f"One-shot confirmation OOS {r['oos_period'][0]} … {r['oos_period'][1]} (final lockbox untouched). Approved groups: {r['approved_groups']}.",
-         f"OOS model confirmations: {r['oos_model_confirmations']} (= 3 × {len(r['approved_groups'])}); multiple-testing family = {r['family_size_for_multiple_testing']}: "
+         f"Campaign-level one-shot confirmation OOS {r['oos_period'][0]} … {r['oos_period'][1]} (final lockbox untouched). Approved groups of THIS experiment: {r['approved_groups']}.",
+         f"This experiment's OOS model confirmations: {r['oos_model_confirmations']} (= 3 × {len(r['approved_groups'])}). The multiple-testing family is the ENTIRE CAMPAIGN ({', '.join(r['campaign_experiments_in_family'])}): {r['family_size_for_multiple_testing']} confirmations: "
          f"`{r['formulas']['oos_bonferroni_p']}`; `{r['formulas']['oos_q']}`. All approved confirmations are listed, not only winners.\n",
          "| group | model | N sel | sel f/wk | parent effect | selected effect | uplift | std uplift | CI low | raw p | OOS q | OOS Bonf p | pass | reason |", "|" + "---|" * 14]
     for c in r["confirmations"]:
@@ -339,6 +473,6 @@ def _oos_md(r: dict) -> str:
     L.append("\n## Group verdicts (>= 2 of 3 models must satisfy the frozen OOS gates)\n")
     for g, v in r["group_verdicts"].items():
         L.append(f"* {g}: {'CONFIRMED' if v['confirmed'] else 'NOT CONFIRMED'} ({v['models_passing']}/3: {', '.join(v['models']) or '-'})")
-    L.append(f"\nCampaign OOS unlocks so far (informational; OOS is shared by the campaign's experiments and is not multiplicity-corrected across experiments): {r['campaign_oos_unlocks_so_far']}.")
+    L.append("\nThe shared OOS partition was opened exactly once for the whole campaign; BH and Bonferroni above cover every approved confirmation of every experiment in it.")
     L.append("\n" + r["note"] + "\n")
     return "\n".join(L)

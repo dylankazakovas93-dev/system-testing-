@@ -79,7 +79,7 @@ def test_required_repository_files_exist():
         need.append(f"engine/{e}.py")
     for f in ["returns", "volatility", "kaufman_er", "brownian", "hurst", "candles", "range", "volume", "session"]:
         need.append(f"features/{f}.py")
-    for s in ["new_experiment", "freeze_experiment", "run_experiment", "verify_experiment", "campaign_status", "run_oos",
+    for s in ["new_experiment", "freeze_experiment", "run_experiment", "verify_experiment", "campaign_status", "freeze_campaign_oos", "run_campaign_oos",
               "run_cpcv", "make_report", "show_approval_hashes", "log_observation", "confirm_lockbox"]:
         need.append(f"scripts/{s}.py")
     missing = [n for n in need if not (CODE_ROOT / n).exists()]
@@ -167,11 +167,13 @@ def test_scripts_and_engine_never_write_approval_files():
     assert "approval_path(ws, experiment_id).write" not in src and "def write_approval" not in src and "def create_approval" not in src
 
 
-def test_oos_requires_a_human_approval_gate_before_any_data_is_read():
-    src = (CODE_ROOT / "scripts/run_oos.py").read_text()
-    assert src.index("validate_approval") < src.index("load_bars_before")
+def test_campaign_oos_requires_human_approvals_before_any_data_is_read():
+    src = (CODE_ROOT / "scripts/run_campaign_oos.py").read_text()
+    assert src.index("validate_campaign_open") < src.index("load_bars_before")
     import inspect
-    assert inspect.signature(oos_stage.run_oos).parameters.keys() == {"ws", "experiment_id", "bars", "verbose"}      # no skip-approval flag
+    assert inspect.signature(oos_stage.run_campaign_oos).parameters.keys() == {"ws", "campaign_id", "bars", "verbose"}     # no skip-approval flag
+    assert not (CODE_ROOT / "scripts/run_oos.py").exists() and not hasattr(oos_stage, "run_oos")                           # no per-experiment OOS opening
+    assert not hasattr(oos_stage, "execute_oos")
 
 
 def test_seeds_are_fixed_everywhere_no_unseeded_randomness():

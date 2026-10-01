@@ -1,0 +1,7 @@
+# TEMPLATE for the HUMAN. Copy to approvals/CAMPAIGN_C001_OOS_OPEN_APPROVAL.yaml after reading the campaign freeze document
+# (registry/oos_freeze_C001.json). An LLM must never create this file. Opening spends the shared OOS for the WHOLE campaign, once.
+campaign_id: C001
+oos_freeze_sha256: "<sha256 printed by scripts/freeze_campaign_oos.py / scripts/show_approval_hashes.py --campaign C001>"
+approved_by: HUMAN_USER
+approved: true
+approval_note: "why I am spending the shared one-shot OOS for this campaign"

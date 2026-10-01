@@ -25,6 +25,7 @@ def main():
         print(f"  CAMPAIGN REVEALED SELECTION TRIALS    : {s['selection_trials_revealed']} / {s['selection_trials_max']}"
               f"   (registered: {s['selection_trials_registered']})")
         print(f"  statistical selection opportunities exposed so far: {s['statistical_selection_opportunities_exposed']}")
+        print(f"  campaign OOS status: {s['campaign_status']}  (spent: {s['campaign_oos_spent']})")
         print(f"  IS shortlist-eligible trials: {s['shortlist_eligible_trials']}; provisional: {s['provisional_trials']}; OOS unlocks: {s['oos_unlocks']}")
         for e in s["experiments"]:
             print(f"    {e['experiment_id']}  {e['status']:28s} is_status={e['is_status'] or '-':26s} lineage_of={e['lineage_parent'] or '-':9s} verification={e['research_verification']}")

@@ -7,7 +7,7 @@ the next 15–60 minutes — while making it impossible to fish for a result.
 ```
 EVENT -> FROZEN MARKET STATE (56 features) -> FROZEN SAME-SESSION TARGETS (4) -> 3 MODELS x 2 STATES = 24 SELECTION TRIALS
    -> DEVELOPMENT_CV (5 purged folds) -> IS REPORT  ==== STOP: human reads the entire IS selection history ====
-   -> human approval file -> ONE-SHOT CONFIRMATION OOS -> CPCV veto -> AWAITING_FINAL_LOCKBOX (lockbox stays sealed)
+   -> human approvals -> CAMPAIGN OOS freeze -> human open approval -> ONE campaign-wide OOS opening -> CPCV veto -> AWAITING_FINAL_LOCKBOX (lockbox stays sealed)
 ```
 
 This is the **research engine** (untrusted). It is separate from the frozen verification repo `engine-verification-`, which is never
@@ -35,13 +35,17 @@ python scripts/run_experiment.py    --experiment EXP_0001 --data /path/NQ_1m.par
 python scripts/verify_experiment.py --verifier-repo ../engine-verification- --experiment EXP_0001 --data /path/NQ_1m.parquet   # all 3 model paths
 python scripts/show_approval_hashes.py --experiment EXP_0001     # read-only: the hashes a human approval must cite
 #   --- HUMAN reads IS_REPORT.md and, if desired, writes approvals/EXP_0001_OOS_APPROVAL.yaml (never a script / LLM) ---
-python scripts/run_oos.py  --experiment EXP_0001 --data /path/NQ_1m.parquet    # refuses without a valid approval; ONE shot
+#   (repeat new/freeze/run/verify for EVERY experiment of the campaign; all IS stages must be complete)
+python scripts/freeze_campaign_oos.py --campaign C001           # HUMAN-run: closes the campaign, freezes all approved groups together
+python scripts/show_approval_hashes.py --campaign C001          # read-only: the freeze hash the campaign-open approval must cite
+#   --- HUMAN writes approvals/CAMPAIGN_C001_OOS_OPEN_APPROVAL.yaml ---
+python scripts/run_campaign_oos.py --campaign C001 --data /path/NQ_1m.parquet   # opens the shared OOS ONCE; BH/Bonferroni over the whole campaign
 python scripts/run_cpcv.py --experiment EXP_0001 --data /path/NQ_1m.parquet    # only after OOS_CONFIRMED; veto only
 python scripts/campaign_status.py                                # counters, lifecycle statuses, OOS ledger, integrity check
 ```
 
 `--data` = CSV/Parquet with `timestamp, open, high, low, close, volume` (1-minute, **open-stamped**). `run_experiment.py` loads only rows before
-`development_end`; `run_oos.py` only rows before `oos_end`; nothing loads the lockbox.
+`development_end`; `run_campaign_oos.py` only rows before `oos_end`; nothing loads the lockbox.
 
 If `event.py` or the spec must change after results were revealed: `new_experiment.py --campaign C001 --lineage-of EXP_0001`.
 
@@ -67,7 +71,7 @@ If `event.py` or the spec must change after results were revealed: `new_experime
 retention, effects, uplift, bootstrap CI, raw p, experiment/campaign Bonferroni and BH q, every calendar year, all five
 **DEVELOPMENT_CV** folds (labelled as internal CV, never OOS), feature diagnostics (*DIAGNOSTIC ONLY — NOT A SELECTION TRIAL*), the
 filter ladder, sensitivity, the deterministic top-5 TARGET|SIDE groups, why each shortlisted configuration emerged and why every
-other one was rejected, exact hashes, and the OOS status (`NOT ACCESSED` until the ledger says otherwise).
+other one was rejected, exact hashes, and the OOS status (`NOT ACCESSED` until the campaign OOS is opened).
 Rejected and low-frequency results are never hidden.
 
 ## Evidence in this repository

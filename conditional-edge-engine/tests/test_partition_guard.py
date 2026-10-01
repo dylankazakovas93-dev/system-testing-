@@ -195,6 +195,6 @@ def test_is_runner_has_no_oos_code_path():
             names.update(a.name for a in n.names)
         elif isinstance(n, ast.Import):
             names.update(a.name for a in n.names)
-    assert not ({"oos_view", "oos_stage", "run_oos", "execute_oos", "validate_approval", "approval_path", "cpcv", "run_cpcv"} & names)
+    assert not ({"oos_view", "oos_stage", "run_campaign_oos", "execute_campaign_oos", "validate_approval", "approval_path", "cpcv", "run_cpcv"} & names)
     assert "development_view" in names
     assert "oos" not in " ".join(inspect.signature(runner.run_experiment).parameters).lower()

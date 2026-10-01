@@ -2,7 +2,7 @@
 """Run the IS (development) stage of a frozen experiment, then STOP.
 
 Only DEVELOPMENT rows are ever loaded (bars at/after development_end are discarded as the file is read). There is no OOS or
-lockbox option here: confirmation OOS needs a manual human approval file and scripts/run_oos.py."""
+lockbox option here: the campaign-level confirmation OOS needs human approval files and scripts/freeze_campaign_oos.py + run_campaign_oos.py."""
 import argparse
 
 from _common import workspace

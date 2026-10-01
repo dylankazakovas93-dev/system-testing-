@@ -18,4 +18,12 @@ The approval is valid only for the EXACT frozen state it references:
 
 Changing event.py, EVENT_SPEC.yaml, frozen specs, partitions, the IS results or regenerating the IS report invalidates the
 approval. The groups must still be IS-shortlist-eligible under the campaign universe at unlock time, all three model paths must be
-externally verified (strong mode), and the experiment must not already appear in `registry/oos_access.csv` (OOS is one-shot).
+externally verified (strong mode), and the campaign must not already appear in `registry/oos_access.csv` (the shared OOS is opened once per campaign).
+
+## Campaign-level opening
+
+`approvals/CAMPAIGN_<id>_OOS_OPEN_APPROVAL.yaml` (template `templates/approval/CAMPAIGN_OOS_OPEN_APPROVAL.template.yaml`) is a second human file.
+It is written after `scripts/freeze_campaign_oos.py` has closed the campaign and printed the freeze hash (also `show_approval_hashes.py --campaign <id>`):
+keys `campaign_id`, `oos_freeze_sha256`, `approved_by: HUMAN_USER`, `approved: true`, `approval_note`. All per-experiment approvals are re-checked
+against the freeze at opening; changing any of them, or any experiment, after the freeze refuses the opening. The opening happens exactly once per
+campaign; afterwards no experiment can claim the shared OOS partition as untouched confirmation.

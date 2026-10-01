@@ -22,7 +22,7 @@ from engine.experiment_lifecycle import MutationDetected, create_experiment, exp
 from engine.experiment_runner import run_experiment
 from engine.oos_stage import ApprovalError, validate_approval
 from engine.synthetic import make_bars
-from tests.scenario_helpers import human_approval, prepare_for_approval, top_group_ids
+from tests.scenario_helpers import campaign_open_approval, human_approval, prepare_for_approval, top_group_ids
 
 F = load_frozen()
 PARTS = {"development_end": "2018-01-01", "oos_end": "2018-07-01", "lockbox_start": "2018-10-01"}
@@ -107,9 +107,9 @@ def test_rerun_of_revealed_experiment_is_refused(golden):
     assert p.returncode != 0 and "already revealed" in (p.stderr + p.stdout)
 
 
-def test_run_oos_refuses_without_a_human_approval_and_spends_nothing(golden):
-    p = cli("scripts/run_oos.py", "--experiment", "EXP_0001", "--data", golden["data"], "--workspace", golden["ws"], check=False)
-    assert p.returncode != 0 and "approval" in (p.stderr + p.stdout).lower()
+def test_run_campaign_oos_refuses_without_a_human_approval_and_spends_nothing(golden):
+    p = cli("scripts/run_campaign_oos.py", "--campaign", "C001", "--data", golden["data"], "--workspace", golden["ws"], check=False)
+    assert p.returncode != 0 and "frozen" in (p.stderr + p.stdout).lower()
     ws = reg.Workspace(golden["ws"])
     assert len(reg.read_oos_access(ws)) == 0 and not list(Path(golden["ws"], "approvals").glob("*.yaml"))
     c = cli("scripts/run_cpcv.py", "--experiment", "EXP_0001", "--data", golden["data"], "--workspace", golden["ws"], check=False)
@@ -296,7 +296,9 @@ def approve_and_spend_oos(planted, name, data):
     assert row["status"] == "AWAITING_HUMAN_OOS_APPROVAL"
     groups = top_group_ids(ws, exp)[:1]
     human_approval(ws, exp, groups)                           # TEST CODE PLAYING THE HUMAN
-    run = cli("scripts/run_oos.py", "--experiment", exp, "--data", data, "--workspace", ws_dir)
+    cli("scripts/freeze_campaign_oos.py", "--campaign", "C001", "--workspace", ws_dir)          # closes the campaign (human-run step)
+    campaign_open_approval(ws, "C001")                        # TEST CODE PLAYING THE HUMAN (second, campaign-level approval)
+    run = cli("scripts/run_campaign_oos.py", "--campaign", "C001", "--data", data, "--workspace", ws_dir)
     return {"ws_dir": ws_dir, "ws": ws, "exp": exp, "groups": groups, "stdout": run.stdout, "data": data}
 
 
@@ -324,9 +326,9 @@ def after_oos_poisoned_lockbox(planted):
 
 def test_after_human_approval_the_bar_level_oos_runs_exactly_once(after_oos):
     ws, exp = after_oos["ws"], after_oos["exp"]
-    assert "OOS is now SPENT" in after_oos["stdout"]
+    assert "OOS is now SPENT" in after_oos["stdout"] and "family of 3" in after_oos["stdout"]
     ledger = reg.read_oos_access(ws)
-    assert len(ledger) == 1 and ledger["experiment_id"].iloc[0] == exp and reg.verify_oos_ledger(ws) == 1
+    assert len(ledger) == 1 and ledger["campaign_id"].iloc[0] == "C001" and ledger["experiments"].iloc[0] == exp and reg.verify_oos_ledger(ws) == 1
     rep = json.loads((experiment_dir(ws, exp) / "results/OOS_REPORT.json").read_text())
     assert rep["status"] == reg.experiment_row(ws, exp)["status"] == "OOS_CONFIRMED"           # the planted momentum persists in the OOS period
     oos_rows = reg.read_oos_trials(ws)
@@ -337,7 +339,7 @@ def test_after_human_approval_the_bar_level_oos_runs_exactly_once(after_oos):
 def test_second_oos_unlock_and_is_report_regeneration_are_refused_afterwards(after_oos):
     from engine.is_report import NOT_ACCESSED, oos_status_label
     ws, exp = after_oos["ws"], after_oos["exp"]
-    p = cli("scripts/run_oos.py", "--experiment", exp, "--data", after_oos["data"], "--workspace", after_oos["ws_dir"], check=False)
+    p = cli("scripts/run_campaign_oos.py", "--campaign", "C001", "--data", after_oos["data"], "--workspace", after_oos["ws_dir"], check=False)
     assert p.returncode != 0 and "SPENT" in (p.stderr + p.stdout) and len(reg.read_oos_access(ws)) == 1
     m = cli("scripts/make_report.py", "--experiment", exp, "--workspace", after_oos["ws_dir"], check=False)
     assert m.returncode != 0 and "OOS SPENT" in (m.stderr + m.stdout)                          # 'NOT ACCESSED' can no longer be printed

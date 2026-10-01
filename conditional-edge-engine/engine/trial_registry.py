@@ -31,7 +31,9 @@ from engine.common import (CODE_ROOT, EngineError, Frozen, canonical_json, load_
 from engine.multiplicity import benjamini_hochberg
 from engine.partitions import parse_partitions
 
-CAMPAIGN_COLS = ["campaign_id", "development_end", "oos_end", "lockbox_start", "max_experiments", "created_at", "status"]
+CAMPAIGN_COLS = ["campaign_id", "development_end", "oos_end", "lockbox_start", "max_experiments", "created_at", "status",
+                 "oos_freeze_hash", "oos_spent_at"]
+CAMPAIGN_STATUSES = ("OPEN", "OOS_FROZEN", "OOS_SPENT")      # OPEN -> (human) freeze -> OOS_FROZEN -> (human) open once -> OOS_SPENT
 EXPERIMENT_COLS = ["experiment_id", "campaign_id", "sequence_in_campaign", "status", "is_status", "lineage_parent",
                    "created_at", "frozen_at", "revealed_at", "event_hash", "manifest_hash", "manifest_sha256",
                    "engine_version", "n_selection_trials", "cumulative_campaign_selection_trials", "trial_ledger_hash",
@@ -47,9 +49,9 @@ TRIAL_COLS = ["campaign_id", "experiment_id", "trial_id", "target", "model", "st
               "decision", "rejection_reason", "status", "registered_at", "revealed_at", "target_sd", "n_cv_weeks"]
 OBS_COLS = ["observation_id", "campaign_id", "experiment_id", "created_at", "category", "description",
             "metric_name", "metric_value", "eligible_for_promotion", "diagnostic_label", "note"]
-OOS_ACCESS_COLS = ["campaign_id", "experiment_id", "approval_file_hash", "IS_report_hash", "manifest_hash",
-                   "approved_target_side_groups", "oos_start", "oos_end", "unlock_timestamp", "code_hash",
-                   "verification_summary_hash", "prev_row_hash", "row_hash"]
+# ONE row per campaign: the shared confirmation OOS partition is opened exactly once for the whole campaign.
+OOS_ACCESS_COLS = ["campaign_id", "freeze_hash", "open_approval_file_hash", "experiments", "approved_experiment_groups",
+                   "n_oos_confirmations", "oos_start", "oos_end", "unlock_timestamp", "code_hash", "prev_row_hash", "row_hash"]
 OOS_TRIAL_COLS = ["campaign_id", "experiment_id", "oos_trial_id", "group_id", "target", "state", "model", "n_parent_events",
                   "n_selected_events", "parent_frequency", "selected_frequency", "retention_ratio", "parent_effect",
                   "selected_effect", "uplift", "standardized_uplift", "bootstrap_ci_low", "bootstrap_ci_high", "raw_p",
@@ -78,6 +80,14 @@ LIFECYCLE = ["DRAFT", "FROZEN", "IS_REJECTED", "IS_PROVISIONAL_CANDIDATE", "AWAI
 IS_STAGE = ("IS_REJECTED", "IS_PROVISIONAL_CANDIDATE", "AWAITING_HUMAN_OOS_APPROVAL")
 OBS_NOTE = "DIAGNOSTIC - CANNOT INFLUENCE PROMOTION IN THE GENERATING EXPERIMENT; lead for a NEW experiment only"
 DIAG_LABEL = "DIAGNOSTIC ONLY — NOT A SELECTION TRIAL"
+
+
+class OOSContaminated(EngineError):
+    """The shared confirmation OOS partition was already spent (by this campaign or an overlapping one)."""
+
+
+class CampaignClosed(EngineError):
+    """The campaign's OOS is frozen or spent: no new experiment, verification or IS report may change it."""
 
 
 class CampaignLimitExceeded(EngineError):
@@ -210,9 +220,10 @@ def create_campaign(ws: Workspace, campaign_id: str, partitions: dict, frozen: F
     df = read_campaigns(ws)
     if campaign_id in set(df["campaign_id"]):
         raise EngineError(f"campaign {campaign_id} already exists")
+    assert_oos_partition_untouched(ws, p.as_dict())
     d = p.as_dict()
     row = {"campaign_id": campaign_id, **d, "max_experiments": str(frozen.trial_policy["max_experiments_per_campaign"]),
-           "created_at": now_utc_iso(), "status": "OPEN"}
+           "created_at": now_utc_iso(), "status": "OPEN", "oos_freeze_hash": "", "oos_spent_at": ""}
     _write(ws.path("campaigns.csv"), pd.concat([df, pd.DataFrame([row])], ignore_index=True), CAMPAIGN_COLS)
 
 
@@ -222,6 +233,44 @@ def campaign_row(ws: Workspace, campaign_id: str) -> dict:
     if hit.empty:
         raise EngineError(f"unknown campaign {campaign_id}; create it explicitly with --new-campaign")
     return hit.iloc[0].to_dict()
+
+
+def update_campaign(ws: Workspace, campaign_id: str, **fields) -> None:
+    df = read_campaigns(ws)
+    i = df.index[df["campaign_id"] == campaign_id]
+    if len(i) != 1:
+        raise EngineError(f"unknown campaign {campaign_id}")
+    for k, v in fields.items():
+        if k == "status" and v not in CAMPAIGN_STATUSES:
+            raise EngineError(f"unknown campaign status {v}")
+        df.loc[i[0], k] = str(v)
+    _write(ws.path("campaigns.csv"), df, CAMPAIGN_COLS)
+
+
+def assert_campaign_open(ws: Workspace, campaign_id: str, action: str) -> None:
+    """Campaign-level OOS accounting: once the campaign's OOS is frozen or spent nothing in the campaign may change."""
+    st = campaign_row(ws, campaign_id)["status"]
+    if st == "OOS_SPENT":
+        raise OOSContaminated(f"CAMPAIGN OOS HAS BEEN SPENT ({campaign_id}): cannot {action}. The shared confirmation OOS partition is "
+                              f"no longer untouched; new research needs a NEW campaign with a new, non-overlapping OOS partition")
+    if st != "OPEN":
+        raise CampaignClosed(f"campaign {campaign_id} is {st}: cannot {action}")
+
+
+def _intervals_overlap(a: dict, b: dict) -> bool:
+    import pandas as _pd
+    a0, a1 = _pd.Timestamp(a["development_end"]), _pd.Timestamp(a["oos_end"])
+    b0, b1 = _pd.Timestamp(b["development_end"]), _pd.Timestamp(b["oos_end"])
+    return a0 < b1 and b0 < a1                                 # half-open [development_end, oos_end)
+
+
+def assert_oos_partition_untouched(ws: Workspace, partitions: dict, exclude_campaign: str = "") -> None:
+    """Refuse any campaign whose confirmation-OOS interval overlaps the OOS interval of an already SPENT campaign."""
+    for _, c in read_campaigns(ws).iterrows():
+        if c["campaign_id"] != exclude_campaign and c["status"] == "OOS_SPENT" and _intervals_overlap(c.to_dict(), partitions):
+            raise OOSContaminated(
+                f"OOS CONTAMINATED: confirmation OOS [{partitions['development_end']}, {partitions['oos_end']}) overlaps the OOS partition "
+                f"[{c['development_end']}, {c['oos_end']}) already spent by campaign {c['campaign_id']}; it cannot be claimed as untouched confirmation")
 
 
 def campaign_partitions(ws: Workspace, campaign_id: str) -> dict:
@@ -234,6 +283,7 @@ def register_experiment(ws: Workspace, campaign_id: str, lineage_parent: str = "
     """Allocate the next experiment id inside a campaign. Fails on the 21st experiment of a campaign."""
     frozen = frozen or load_frozen()
     campaign_row(ws, campaign_id)
+    assert_campaign_open(ws, campaign_id, "register a new experiment")
     limit = int(frozen.trial_policy["max_experiments_per_campaign"])
     exps = read_experiments(ws)
     used = int((exps["campaign_id"] == campaign_id).sum())
@@ -371,6 +421,7 @@ def reveal_experiment(ws: Workspace, experiment_id: str, results: dict[str, dict
     """Fill the pre-registered rows with IS results (keyed by trial_id), compute experiment BH + Bonferroni over ALL 24,
     seal the ledger, then recompute the whole campaign. Refuses unknown/missing trial ids and double reveals."""
     frozen = frozen or load_frozen()
+    assert_campaign_open(ws, experiment_row(ws, experiment_id)["campaign_id"], f"reveal IS results of {experiment_id}")
     trials = read_trials(ws)
     m = trials["experiment_id"] == experiment_id
     mine = trials[m]
@@ -439,6 +490,7 @@ def set_sensitivity(ws: Workspace, experiment_id: str, status_by_group: dict[str
                     frozen: Frozen | None = None) -> pd.DataFrame:
     frozen = frozen or load_frozen()
     exp = experiment_row(ws, experiment_id)
+    assert_campaign_open(ws, exp["campaign_id"], "change a sensitivity verdict")
     cur = json.loads(exp["sensitivity_json"] or "{}")
     cur.update(status_by_group)
     update_experiment(ws, experiment_id, sensitivity_json=json.dumps(cur, sort_keys=True))
@@ -450,6 +502,7 @@ def set_verification(ws: Workspace, experiment_id: str, paths: dict[str, dict], 
     """Record external-verifier results per model path ('TARGET|MODEL' -> {label, mode}) and re-decide the campaign."""
     frozen = frozen or load_frozen()
     exp = experiment_row(ws, experiment_id)
+    assert_campaign_open(ws, exp["campaign_id"], "record external verification")
     cur = json.loads(exp["verification_json"] or "{}")
     cur.update(paths)
     fields = {"verification_json": json.dumps(cur, sort_keys=True)}
@@ -497,16 +550,21 @@ def _row_hash(prev: str, row: dict) -> str:
     return hashlib.sha256((prev + canonical_json(body)).encode()).hexdigest()
 
 
-def oos_spent(ws: Workspace, experiment_id: str) -> bool:
+def campaign_oos_spent(ws: Workspace, campaign_id: str) -> bool:
     df = read_oos_access(ws)
-    return bool((df["experiment_id"] == experiment_id).any())
+    return bool((df["campaign_id"] == campaign_id).any())
+
+
+def oos_spent(ws: Workspace, experiment_id: str) -> bool:
+    """True iff the experiment's CAMPAIGN has spent the shared confirmation OOS (accounting is campaign-wide)."""
+    return campaign_oos_spent(ws, experiment_row(ws, experiment_id)["campaign_id"])
 
 
 def append_oos_access(ws: Workspace, **fields) -> dict:
-    """Append one unlock record. Refuses a second unlock of the same experiment ('OOS HAS BEEN SPENT')."""
+    """Append the campaign's single unlock record. Refuses a second unlock of the same campaign ('OOS HAS BEEN SPENT')."""
     df = read_oos_access(ws)
-    if (df["experiment_id"] == fields["experiment_id"]).any():
-        raise EngineError(f"OOS HAS BEEN SPENT for {fields['experiment_id']} (see registry/oos_access.csv); it cannot be unlocked again")
+    if (df["campaign_id"] == fields["campaign_id"]).any():
+        raise OOSContaminated(f"CAMPAIGN OOS HAS BEEN SPENT for {fields['campaign_id']} (see registry/oos_access.csv); it cannot be opened again")
     row = {k: str(fields.get(k, "")) for k in OOS_ACCESS_COLS if k not in ("prev_row_hash", "row_hash")}
     prev = df["row_hash"].iloc[-1] if len(df) else "GENESIS"
     row["prev_row_hash"] = prev
@@ -523,9 +581,9 @@ def verify_oos_ledger(ws: Workspace) -> int:
         row = r.to_dict()
         if row["prev_row_hash"] != prev or row["row_hash"] != _row_hash(prev, row):
             raise RegistryIntegrityError("registry/oos_access.csv was edited, reordered or truncated (hash chain broken)")
-        if row["experiment_id"] in seen:
-            raise RegistryIntegrityError(f"OOS unlocked twice for {row['experiment_id']}")
-        seen.add(row["experiment_id"])
+        if row["campaign_id"] in seen:
+            raise RegistryIntegrityError(f"campaign OOS opened twice for {row['campaign_id']}")
+        seen.add(row["campaign_id"])
         prev = row["row_hash"]
     return len(df)
 
@@ -575,9 +633,13 @@ def integrity_check(ws: Workspace, frozen: Frozen | None = None) -> dict:
     if (obs["eligible_for_promotion"] != "False").any():
         raise RegistryIntegrityError("observations can never be eligible for promotion")
     n_oos = verify_oos_ledger(ws)
-    bad = set(read_oos_access(ws)["experiment_id"]) - known
-    if bad:
-        raise RegistryIntegrityError(f"oos_access.csv references unknown experiments {bad}")
+    camps = read_campaigns(ws)
+    ledger = set(read_oos_access(ws)["campaign_id"])
+    if ledger - set(camps["campaign_id"]):
+        raise RegistryIntegrityError(f"oos_access.csv references unknown campaigns {ledger - set(camps['campaign_id'])}")
+    spent = set(camps[camps["status"] == "OOS_SPENT"]["campaign_id"])
+    if spent != ledger:
+        raise RegistryIntegrityError(f"campaign status and OOS ledger disagree: OOS_SPENT campaigns {sorted(spent)} vs ledger {sorted(ledger)}")
     return {"experiments": int(len(exps)), "selection_trials": int(len(trials)),
             "revealed_trials": int(len(revealed)), "observations": int(len(obs)), "oos_unlocks": n_oos}
 
@@ -599,4 +661,5 @@ def campaign_summary(ws: Workspace, campaign_id: str, frozen: Frozen | None = No
             "shortlist_eligible_trials": int((trials["decision"] == SHORTLIST).sum()),
             "provisional_trials": int((trials["decision"] == PROVISIONAL).sum()),
             "oos_unlocks": int((read_oos_access(ws)["campaign_id"] == campaign_id).sum()),
+            "campaign_status": camp["status"], "campaign_oos_spent": campaign_oos_spent(ws, campaign_id),
             "experiments": exps[["experiment_id", "status", "is_status", "lineage_parent", "research_verification"]].to_dict("records")}

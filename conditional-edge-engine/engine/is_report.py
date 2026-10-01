@@ -98,6 +98,9 @@ def build_is_report(ws: reg.Workspace, experiment_id: str, bundle: dict, trials:
     status = oos_status_label(ws, experiment_id)
     if status != NOT_ACCESSED:
         raise ReportSealedError(f"{experiment_id}: {status}. The IS report can no longer be (re)generated.")
+    cstat = reg.campaign_row(ws, reg.experiment_row(ws, experiment_id)["campaign_id"])["status"]
+    if cstat != "OPEN":
+        raise ReportSealedError(f"{experiment_id}: the campaign OOS is {cstat}; IS reports are frozen with the campaign")
     d = experiment_dir(ws, experiment_id)
     exp = reg.experiment_row(ws, experiment_id)
     summ = reg.campaign_summary(ws, exp["campaign_id"], frozen)
@@ -342,7 +345,7 @@ def build_is_report(ws: reg.Workspace, experiment_id: str, bundle: dict, trials:
     L.append(_table(["item", "sha256"], [[k, v] for k, v in J["X_hashes"].items()]))
     L.append("## Y. OOS status\n")
     L.append(f"**OOS status = {status}**\n")
-    L.append("OOS requires a manual human approval file. Compute the hashes to reference with `python scripts/show_approval_hashes.py --experiment "
+    L.append("The campaign-level OOS requires manual human approval files (per experiment, then the campaign-open approval after `freeze_campaign_oos.py`). Compute the hashes to reference with `python scripts/show_approval_hashes.py --experiment "
              f"{experiment_id}`. The LLM / scripts never create `approvals/{experiment_id}_OOS_APPROVAL.yaml`; at most 2 TARGET|SIDE groups from the "
              "top-5 list may be approved and every approved group runs all three frozen models.\n")
     md = "\n".join(L) + "\n"

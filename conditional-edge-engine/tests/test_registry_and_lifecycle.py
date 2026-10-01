@@ -342,18 +342,20 @@ def test_ledger_detects_missing_duplicate_extra_changed_and_edited_trials(ws):
 
 
 def test_oos_access_ledger_is_append_only_and_integrity_checked(ws):
-    e1 = new_frozen_experiment(ws); e2 = new_frozen_experiment(ws)
-    kw = dict(campaign_id="C001", approval_file_hash="a", IS_report_hash="b", manifest_hash="c", approved_target_side_groups="G",
+    e1 = new_frozen_experiment(ws, "C001"); e2 = new_frozen_experiment(ws, "C001")
+    reg.create_campaign(ws, "C002", {"development_end": "2024-01-01", "oos_end": "2025-01-01", "lockbox_start": "2025-01-01"})
+    kw = dict(freeze_hash="a", open_approval_file_hash="b", experiments="E", approved_experiment_groups="E:G", n_oos_confirmations=3,
               oos_start="2023-01-01", oos_end="2024-01-01", unlock_timestamp="t", code_hash="h")
-    r1 = reg.append_oos_access(ws, experiment_id=e1, **kw)
-    assert r1["prev_row_hash"] == "GENESIS" and reg.oos_spent(ws, e1) and not reg.oos_spent(ws, e2)
-    with pytest.raises(EngineError, match="OOS HAS BEEN SPENT"):
-        reg.append_oos_access(ws, experiment_id=e1, **kw)                               # one unlock per experiment, ever
-    r2 = reg.append_oos_access(ws, experiment_id=e2, **kw)
+    r1 = reg.append_oos_access(ws, campaign_id="C001", **kw)
+    assert r1["prev_row_hash"] == "GENESIS" and reg.oos_spent(ws, e1) and reg.oos_spent(ws, e2)    # accounting is campaign-wide
+    with pytest.raises(EngineError, match="CAMPAIGN OOS HAS BEEN SPENT"):
+        reg.append_oos_access(ws, campaign_id="C001", **kw)                             # ONE opening per campaign, ever
+    r2 = reg.append_oos_access(ws, campaign_id="C002", **kw)
     assert r2["prev_row_hash"] == r1["row_hash"] and reg.verify_oos_ledger(ws) == 2
+    reg.update_campaign(ws, "C001", status="OOS_SPENT"); reg.update_campaign(ws, "C002", status="OOS_SPENT")
     good = reg.read_oos_access(ws)
     path = ws.path("oos_access.csv")
-    for mut in (lambda d: d.loc[d.index[0], "IS_report_hash"].__class__ and d.__setitem__("IS_report_hash", ["x", "y"]),   # edited row
+    for mut in (lambda d: d.loc[d.index[0], "freeze_hash"].__class__ and d.__setitem__("freeze_hash", ["x", "y"]),   # edited row
                 lambda d: d.drop(index=d.index[0], inplace=True),                                                            # removed row
                 lambda d: d.iloc[::-1].reset_index(drop=True).pipe(lambda x: [d.__setitem__(c, x[c].to_numpy()) for c in d.columns])):  # reordered
         df = good.copy(); mut(df)

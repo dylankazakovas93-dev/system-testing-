@@ -22,3 +22,5 @@ python scripts/freeze_experiment.py --experiment EXP_0001 --workspace WS
 python scripts/run_experiment.py    --experiment EXP_0001 --data NQ_planted.parquet --workspace WS
 python scripts/verify_experiment.py --verifier-repo ../engine-verification- --experiment EXP_0001 --data NQ_planted.parquet --workspace WS
 ```
+
+> Snapshot taken before the campaign-level OOS change (engine v1.1.0 at that time): its `registry/oos_access.csv` header and manifest engine hash predate it. The IS/verification content is unaffected.

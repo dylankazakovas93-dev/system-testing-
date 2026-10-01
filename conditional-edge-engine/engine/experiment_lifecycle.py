@@ -100,6 +100,7 @@ def _hash_bundle(ws: reg.Workspace, experiment_id: str) -> dict:
 def freeze(ws: reg.Workspace, experiment_id: str) -> dict:
     frozen = load_frozen()
     exp = reg.experiment_row(ws, experiment_id)
+    reg.assert_campaign_open(ws, exp["campaign_id"], f"freeze {experiment_id}")
     if exp["status"] != "DRAFT":
         raise EngineError(f"{experiment_id} is {exp['status']}: it cannot be frozen again. Changing event.py or the "
                           f"spec after freezing requires a NEW experiment (scripts/new_experiment.py --lineage-of)")
