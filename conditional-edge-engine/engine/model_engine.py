@@ -91,6 +91,13 @@ class FrozenModel:
         raw = np.asarray(self.est.predict(design), dtype="float64")
         return raw * self.y_sd + self.y_mean                               # back to raw target units
 
+    def feature_coefficients(self) -> dict[str, float]:
+        """DIAGNOSTIC ONLY: signed standardized Ridge coefficients (None for non-Ridge models)."""
+        if self.spec["kind"] != "ridge":
+            return {}
+        w = self.est.coef_
+        return dict(zip(self.cont + [DOW], list(w[:len(self.cont)]) + [float(np.abs(w[len(self.cont):]).sum())]))
+
     def feature_importance(self) -> dict[str, float]:
         """DIAGNOSTIC ONLY (never used for selection or feature subsetting)."""
         ncat = len(self.categories)

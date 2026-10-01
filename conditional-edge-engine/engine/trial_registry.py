@@ -1,14 +1,19 @@
-"""Registry of campaigns, experiments, selection trials and observations (CSV, append-only by API).
+"""Registry of campaigns, experiments, selection trials, observations, the OOS access ledger and confirmation results.
 
-The registry is what makes the number of selection opportunities auditable:
-  * a campaign holds at most ``max_experiments_per_campaign`` (20) experiments;
-  * every experiment holds EXACTLY 24 selection trials (4 targets x 3 models x 2 states),
-    pre-registered at freeze time, BEFORE any result exists;
-  * there is no function that creates a 25th trial; ``integrity_check`` detects hand-edited CSVs.
+What it proves:
+  * a campaign holds at most 20 experiments => at most 480 selection trials (campaign universe = 24 x E revealed);
+  * every experiment holds EXACTLY 24 pre-registered selection trials (4 targets x 3 models x 2 states), each with a
+    selection_opportunity_number, written at freeze BEFORE any result exists; there is no API for a 25th;
+  * the 24 result rows of a revealed experiment are hash-sealed (trial_ledger_hash); only the retroactive campaign-level
+    adjusted values and decisions may legitimately change afterwards;
+  * campaign_q / campaign_bonferroni_p are recomputed over EVERY revealed trial of the campaign after each reveal and all
+    earlier experiments are re-evaluated (an earlier candidate can lose eligibility);
+  * oos_access.csv is an append-only hash chain: an experiment present there has SPENT its OOS.
 """
 from __future__ import annotations
 
 import csv
+import hashlib
 import itertools
 import json
 import os
@@ -19,29 +24,60 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from engine.acceptance import decide_experiment
-from engine.common import (CODE_ROOT, EngineError, Frozen, load_frozen, model_names, now_utc_iso,
+from engine.acceptance import (NO_CANDIDATE, PROVISIONAL, SHORTLIST, decide_experiment, is_status_of,
+                               lifecycle_from_is_status)
+from engine.common import (CODE_ROOT, EngineError, Frozen, canonical_json, load_frozen, model_names, now_utc_iso,
                            primary_target_names)
 from engine.multiplicity import benjamini_hochberg
+from engine.partitions import parse_partitions
 
-CAMPAIGN_COLS = ["campaign_id", "lockbox_start", "max_experiments", "created_at", "status"]
-EXPERIMENT_COLS = ["experiment_id", "campaign_id", "sequence_in_campaign", "status", "lineage_parent",
-                   "created_at", "frozen_at", "revealed_at", "event_hash", "manifest_hash", "engine_version",
-                   "n_selection_trials", "sensitivity_json", "research_verification"]
-TRIAL_COLS = ["campaign_id", "experiment_id", "trial_id", "target", "model", "state", "event_hash",
-              "feature_bank_hash", "target_bank_hash", "model_bank_hash", "trial_policy_hash", "train_period",
-              "oos_period", "n_parent_events", "n_selected_events", "parent_frequency", "selected_frequency",
-              "retention_ratio", "parent_effect", "selected_effect", "uplift", "standardized_uplift",
-              "bootstrap_ci_low", "bootstrap_ci_high", "raw_p", "experiment_q", "campaign_q", "positive_years",
-              "eligible_years", "decision", "rejection_reason",
-              "status", "registered_at", "revealed_at", "target_sd", "n_oos_weeks"]
+CAMPAIGN_COLS = ["campaign_id", "development_end", "oos_end", "lockbox_start", "max_experiments", "created_at", "status"]
+EXPERIMENT_COLS = ["experiment_id", "campaign_id", "sequence_in_campaign", "status", "is_status", "lineage_parent",
+                   "created_at", "frozen_at", "revealed_at", "event_hash", "manifest_hash", "manifest_sha256",
+                   "engine_version", "n_selection_trials", "cumulative_campaign_selection_trials", "trial_ledger_hash",
+                   "sensitivity_json", "verification_json", "research_verification", "is_report_sha256", "status_history"]
+TRIAL_COLS = ["campaign_id", "experiment_id", "trial_id", "target", "model", "state", "manifest_hash", "event_hash",
+              "feature_bank_hash", "target_bank_hash", "model_bank_hash", "trial_policy_hash", "is_data_hash",
+              "train_period", "validation_period", "selection_opportunity_number", "cumulative_campaign_selection_trials",
+              "n_parent_events", "n_selected_events", "parent_frequency", "selected_frequency", "retention_ratio",
+              "parent_effect", "selected_effect", "uplift", "standardized_uplift", "bootstrap_ci_low", "bootstrap_ci_high",
+              "raw_p", "experiment_q", "experiment_bonferroni_p", "campaign_q", "campaign_bonferroni_p",
+              "positive_years", "positive_uplift_years", "eligible_years", "folds_evaluated", "positive_effect_folds",
+              "positive_uplift_folds", "year_concentration_share", "year_concentration_warning",
+              "decision", "rejection_reason", "status", "registered_at", "revealed_at", "target_sd", "n_cv_weeks"]
 OBS_COLS = ["observation_id", "campaign_id", "experiment_id", "created_at", "category", "description",
-            "metric_name", "metric_value", "eligible_for_promotion", "note"]
-NUMERIC_TRIAL_COLS = ["n_parent_events", "n_selected_events", "parent_frequency", "selected_frequency",
-                      "retention_ratio", "parent_effect", "selected_effect", "uplift", "standardized_uplift",
-                      "bootstrap_ci_low", "bootstrap_ci_high", "raw_p", "experiment_q", "campaign_q",
-                      "positive_years", "eligible_years", "target_sd", "n_oos_weeks"]
+            "metric_name", "metric_value", "eligible_for_promotion", "diagnostic_label", "note"]
+OOS_ACCESS_COLS = ["campaign_id", "experiment_id", "approval_file_hash", "IS_report_hash", "manifest_hash",
+                   "approved_target_side_groups", "oos_start", "oos_end", "unlock_timestamp", "code_hash",
+                   "verification_summary_hash", "prev_row_hash", "row_hash"]
+OOS_TRIAL_COLS = ["campaign_id", "experiment_id", "oos_trial_id", "group_id", "target", "state", "model", "n_parent_events",
+                  "n_selected_events", "parent_frequency", "selected_frequency", "retention_ratio", "parent_effect",
+                  "selected_effect", "uplift", "standardized_uplift", "bootstrap_ci_low", "bootstrap_ci_high", "raw_p",
+                  "oos_q", "oos_bonferroni_p", "oos_trials_in_family", "gates_pass", "decision", "rejection_reason", "revealed_at"]
+CPCV_COLS = ["campaign_id", "experiment_id", "group_id", "target", "state", "model", "n_valid_splits", "median_effect",
+             "median_uplift", "p10_uplift", "p90_uplift", "fraction_effect_positive", "fraction_uplift_positive",
+             "worst_split", "best_split", "cpcv_pass", "group_cpcv_pass", "pbo_diagnostic", "revealed_at"]
+NUMERIC_TRIAL_COLS = ["selection_opportunity_number", "cumulative_campaign_selection_trials", "n_parent_events",
+                      "n_selected_events", "parent_frequency", "selected_frequency", "retention_ratio", "parent_effect",
+                      "selected_effect", "uplift", "standardized_uplift", "bootstrap_ci_low", "bootstrap_ci_high", "raw_p",
+                      "experiment_q", "experiment_bonferroni_p", "campaign_q", "campaign_bonferroni_p", "positive_years",
+                      "positive_uplift_years", "eligible_years", "folds_evaluated", "positive_effect_folds",
+                      "positive_uplift_folds", "year_concentration_share", "target_sd", "n_cv_weeks"]
+# fields sealed by trial_ledger_hash at reveal (campaign-adjusted values and decisions are retroactive by design)
+SEALED_TRIAL_FIELDS = ["campaign_id", "experiment_id", "trial_id", "target", "model", "state", "manifest_hash", "event_hash",
+                       "feature_bank_hash", "target_bank_hash", "model_bank_hash", "trial_policy_hash", "is_data_hash",
+                       "train_period", "validation_period", "selection_opportunity_number",
+                       "cumulative_campaign_selection_trials", "n_parent_events", "n_selected_events", "parent_frequency",
+                       "selected_frequency", "retention_ratio", "parent_effect", "selected_effect", "uplift",
+                       "standardized_uplift", "bootstrap_ci_low", "bootstrap_ci_high", "raw_p", "experiment_q",
+                       "experiment_bonferroni_p", "positive_years", "positive_uplift_years", "eligible_years",
+                       "folds_evaluated", "positive_effect_folds", "positive_uplift_folds", "year_concentration_share",
+                       "year_concentration_warning", "revealed_at", "target_sd", "n_cv_weeks"]
+LIFECYCLE = ["DRAFT", "FROZEN", "IS_REJECTED", "IS_PROVISIONAL_CANDIDATE", "AWAITING_HUMAN_OOS_APPROVAL", "OOS_NOT_APPROVED",
+             "OOS_REJECTED", "OOS_CONFIRMED", "CPCV_REJECTED", "CPCV_CONFIRMED", "AWAITING_FINAL_LOCKBOX", "OOS_CONTAMINATED"]
+IS_STAGE = ("IS_REJECTED", "IS_PROVISIONAL_CANDIDATE", "AWAITING_HUMAN_OOS_APPROVAL")
 OBS_NOTE = "DIAGNOSTIC - CANNOT INFLUENCE PROMOTION IN THE GENERATING EXPERIMENT; lead for a NEW experiment only"
+DIAG_LABEL = "DIAGNOSTIC ONLY — NOT A SELECTION TRIAL"
 
 
 class CampaignLimitExceeded(EngineError):
@@ -54,7 +90,7 @@ class RegistryIntegrityError(EngineError):
 
 @dataclass
 class Workspace:
-    """Where registry/ and experiments/ live. Frozen specs and engine code always come from CODE_ROOT."""
+    """Where registry/, experiments/ and approvals/ live. Frozen specs and engine code always come from CODE_ROOT."""
     root: Path
 
     def __post_init__(self):
@@ -68,14 +104,21 @@ class Workspace:
     def experiments(self) -> Path:
         return self.root / "experiments"
 
+    @property
+    def approvals(self) -> Path:
+        return self.root / "approvals"
+
     def path(self, name: str) -> Path:
         return self.registry / name
 
     def init(self) -> "Workspace":
         self.registry.mkdir(parents=True, exist_ok=True)
         self.experiments.mkdir(parents=True, exist_ok=True)
+        self.approvals.mkdir(parents=True, exist_ok=True)
         for name, cols in (("campaigns.csv", CAMPAIGN_COLS), ("experiments.csv", EXPERIMENT_COLS),
-                           ("selection_trials.csv", TRIAL_COLS), ("observations.csv", OBS_COLS)):
+                           ("selection_trials.csv", TRIAL_COLS), ("observations.csv", OBS_COLS),
+                           ("oos_access.csv", OOS_ACCESS_COLS), ("oos_trials.csv", OOS_TRIAL_COLS),
+                           ("cpcv_results.csv", CPCV_COLS)):
             p = self.path(name)
             if not p.exists():
                 _write(p, pd.DataFrame(columns=cols), cols)
@@ -118,10 +161,23 @@ def read_observations(ws: Workspace) -> pd.DataFrame:
     return _read(ws.path("observations.csv"), OBS_COLS)
 
 
+def read_oos_access(ws: Workspace) -> pd.DataFrame:
+    return _read(ws.path("oos_access.csv"), OOS_ACCESS_COLS)
+
+
+def read_oos_trials(ws: Workspace) -> pd.DataFrame:
+    return _read(ws.path("oos_trials.csv"), OOS_TRIAL_COLS)
+
+
+def read_cpcv(ws: Workspace) -> pd.DataFrame:
+    return _read(ws.path("cpcv_results.csv"), CPCV_COLS)
+
+
 def numeric_trials(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     for c in NUMERIC_TRIAL_COLS:
         df[c] = pd.to_numeric(df[c], errors="coerce")
+    df["year_concentration_warning"] = df["year_concentration_warning"].astype(str).str.lower() == "true"
     return df
 
 
@@ -142,15 +198,20 @@ def trial_id(experiment_id: str, index: int) -> str:
     return f"{experiment_id}_T{index + 1:02d}"
 
 
+def group_id(target: str, state: str) -> str:
+    return f"{target}|{state}"
+
+
 # ---------------------------------------------------------------------------- campaigns / experiments
-def create_campaign(ws: Workspace, campaign_id: str, lockbox_start: str, frozen: Frozen | None = None) -> None:
+def create_campaign(ws: Workspace, campaign_id: str, partitions: dict, frozen: Frozen | None = None) -> None:
+    """Open a campaign = one development / confirmation-OOS / final-lockbox generation with frozen partition dates."""
     frozen = frozen or load_frozen()
-    pd.Timestamp(lockbox_start)                               # validates the date
+    p = parse_partitions(partitions)                          # validates chronology and non-overlap
     df = read_campaigns(ws)
     if campaign_id in set(df["campaign_id"]):
         raise EngineError(f"campaign {campaign_id} already exists")
-    row = {"campaign_id": campaign_id, "lockbox_start": lockbox_start,
-           "max_experiments": str(frozen.trial_policy["max_experiments_per_campaign"]),
+    d = p.as_dict()
+    row = {"campaign_id": campaign_id, **d, "max_experiments": str(frozen.trial_policy["max_experiments_per_campaign"]),
            "created_at": now_utc_iso(), "status": "OPEN"}
     _write(ws.path("campaigns.csv"), pd.concat([df, pd.DataFrame([row])], ignore_index=True), CAMPAIGN_COLS)
 
@@ -163,11 +224,16 @@ def campaign_row(ws: Workspace, campaign_id: str) -> dict:
     return hit.iloc[0].to_dict()
 
 
+def campaign_partitions(ws: Workspace, campaign_id: str) -> dict:
+    c = campaign_row(ws, campaign_id)
+    return {k: c[k] for k in ("development_end", "oos_end", "lockbox_start")}
+
+
 def register_experiment(ws: Workspace, campaign_id: str, lineage_parent: str = "",
                         frozen: Frozen | None = None) -> str:
     """Allocate the next experiment id inside a campaign. Fails on the 21st experiment of a campaign."""
     frozen = frozen or load_frozen()
-    camp = campaign_row(ws, campaign_id)
+    campaign_row(ws, campaign_id)
     limit = int(frozen.trial_policy["max_experiments_per_campaign"])
     exps = read_experiments(ws)
     used = int((exps["campaign_id"] == campaign_id).sum())
@@ -180,9 +246,10 @@ def register_experiment(ws: Workspace, campaign_id: str, lineage_parent: str = "
     nums = [int(e.split("_")[1]) for e in exps["experiment_id"]] or [0]
     exp_id = f"EXP_{max(nums) + 1:04d}"
     row = {"experiment_id": exp_id, "campaign_id": campaign_id, "sequence_in_campaign": str(used + 1),
-           "status": "DRAFT", "lineage_parent": lineage_parent, "created_at": now_utc_iso(),
+           "status": "DRAFT", "is_status": "", "lineage_parent": lineage_parent, "created_at": now_utc_iso(),
            "engine_version": (CODE_ROOT / "ENGINE_VERSION").read_text().strip(), "n_selection_trials": "0",
-           "sensitivity_json": "{}", "research_verification": "NOT_RUN"}
+           "sensitivity_json": "{}", "verification_json": "{}", "research_verification": "NOT_RUN",
+           "status_history": json.dumps([["DRAFT", now_utc_iso(), "created"]])}
     _write(ws.path("experiments.csv"), pd.concat([exps, pd.DataFrame([row])], ignore_index=True), EXPERIMENT_COLS)
     return exp_id
 
@@ -207,8 +274,23 @@ def update_experiment(ws: Workspace, experiment_id: str, **fields) -> None:
     _write(ws.path("experiments.csv"), df, EXPERIMENT_COLS)
 
 
+def set_status(ws: Workspace, experiment_id: str, status: str, note: str = "") -> None:
+    """Move an experiment along its lifecycle (history is appended, never rewritten)."""
+    if status not in LIFECYCLE:
+        raise EngineError(f"unknown lifecycle status {status}")
+    exp = experiment_row(ws, experiment_id)
+    hist = json.loads(exp["status_history"] or "[]")
+    if exp["status"] != status:
+        hist.append([status, now_utc_iso(), note])
+    update_experiment(ws, experiment_id, status=status, status_history=json.dumps(hist))
+
+
+def is_revealed(exp: dict) -> bool:
+    return bool(exp["revealed_at"])
+
+
 # ---------------------------------------------------------------------------- pre-registration
-def preregister_trials(ws: Workspace, experiment_id: str, *, event_hash: str, manifest_hash: str,
+def preregister_trials(ws: Workspace, experiment_id: str, *, event_hash: str, manifest_hash: str, manifest_sha256: str = "",
                        hashes: dict[str, str], frozen: Frozen | None = None) -> list[str]:
     """Write the complete 24-trial set BEFORE any result exists. Callable exactly once per experiment."""
     frozen = frozen or load_frozen()
@@ -219,19 +301,23 @@ def preregister_trials(ws: Workspace, experiment_id: str, *, event_hash: str, ma
     if (trials["experiment_id"] == experiment_id).any():
         raise EngineError(f"{experiment_id} already has registered trials; there is no API to add more")
     now = now_utc_iso()
+    seq = int(exp["sequence_in_campaign"])
+    n_tr = frozen.trial_policy["expected_trials_per_experiment"]
     rows = []
     for i, spec in enumerate(trial_specs(frozen)):
         rows.append({"campaign_id": exp["campaign_id"], "experiment_id": experiment_id,
-                     "trial_id": trial_id(experiment_id, i), **spec, "event_hash": event_hash,
-                     "feature_bank_hash": hashes["feature_bank_hash"], "target_bank_hash": hashes["target_bank_hash"],
-                     "model_bank_hash": hashes["model_bank_hash"], "trial_policy_hash": hashes["trial_policy_hash"],
-                     "decision": "PENDING", "rejection_reason": "", "status": "PREREGISTERED",
-                     "registered_at": now})
+                     "trial_id": trial_id(experiment_id, i), **spec, "manifest_hash": manifest_hash,
+                     "event_hash": event_hash, "feature_bank_hash": hashes["feature_bank_hash"],
+                     "target_bank_hash": hashes["target_bank_hash"], "model_bank_hash": hashes["model_bank_hash"],
+                     "trial_policy_hash": hashes["trial_policy_hash"],
+                     "selection_opportunity_number": str(n_tr * (seq - 1) + i + 1),
+                     "decision": "PENDING", "rejection_reason": "", "status": "PREREGISTERED", "registered_at": now})
     new = pd.concat([trials, pd.DataFrame(rows)], ignore_index=True)
     _assert_trial_set(new, frozen)
     _write(ws.path("selection_trials.csv"), new, TRIAL_COLS)
-    update_experiment(ws, experiment_id, status="FROZEN", frozen_at=now, event_hash=event_hash,
-                      manifest_hash=manifest_hash, n_selection_trials=len(rows))
+    update_experiment(ws, experiment_id, event_hash=event_hash, manifest_hash=manifest_hash,
+                      manifest_sha256=manifest_sha256, frozen_at=now, n_selection_trials=len(rows))
+    set_status(ws, experiment_id, "FROZEN", "frozen; 24 selection trials pre-registered")
     return [r["trial_id"] for r in rows]
 
 
@@ -246,50 +332,82 @@ def _assert_trial_set(trials: pd.DataFrame, frozen: Frozen) -> None:
             raise RegistryIntegrityError(f"{exp_id}: trial ids are not T01..T24 in frozen order")
     if trials["trial_id"].duplicated().any():
         raise RegistryIntegrityError("duplicate trial_id in registry")
+    opp = pd.to_numeric(trials["selection_opportunity_number"], errors="coerce")
+    if opp.isna().any() or opp.duplicated().any():
+        # opportunity numbers are only unique within a campaign
+        for c, g in trials.groupby("campaign_id"):
+            o = pd.to_numeric(g["selection_opportunity_number"], errors="coerce")
+            if o.isna().any() or o.duplicated().any():
+                raise RegistryIntegrityError(f"campaign {c}: selection_opportunity_number missing or duplicated")
+
+
+def trial_ledger_hash(trial_rows: pd.DataFrame) -> str:
+    """Hash of the sealed (result) fields of one experiment's 24 trials, in trial_id order."""
+    g = trial_rows.sort_values("trial_id")
+    payload = [{k: str(r[k]) for k in SEALED_TRIAL_FIELDS} for _, r in g.iterrows()]
+    return hashlib.sha256(canonical_json(payload).encode()).hexdigest()
 
 
 # ---------------------------------------------------------------------------- reveal
-def reveal_experiment(ws: Workspace, experiment_id: str, results: dict[str, dict], *, train_period: str,
-                      oos_period: str, frozen: Frozen | None = None) -> pd.DataFrame:
-    """Fill the pre-registered rows with results (keyed by trial_id), then recompute q-values and decisions.
+_RESULT_MAP = [("n_parent", "n_parent_events"), ("n_selected", "n_selected_events"), ("parent_frequency", "parent_frequency"),
+               ("selected_frequency", "selected_frequency"), ("retention_ratio", "retention_ratio"),
+               ("parent_effect", "parent_effect"), ("selected_effect", "selected_effect"), ("uplift", "uplift"),
+               ("standardized_uplift", "standardized_uplift"), ("bootstrap_ci_low", "bootstrap_ci_low"),
+               ("bootstrap_ci_high", "bootstrap_ci_high"), ("raw_p", "raw_p"), ("positive_years", "positive_years"),
+               ("positive_uplift_years", "positive_uplift_years"), ("eligible_years", "eligible_years"),
+               ("folds_evaluated", "folds_evaluated"), ("positive_effect_folds", "positive_effect_folds"),
+               ("positive_uplift_folds", "positive_uplift_folds"), ("year_concentration_share", "year_concentration_share"),
+               ("target_sd", "target_sd"), ("n_cv_weeks", "n_cv_weeks")]
 
-    Refuses unknown trial ids, missing trials, or already revealed experiments.
-    """
+
+def _fmt(v) -> str:
+    if isinstance(v, (int, np.integer)) and not isinstance(v, bool):
+        return str(int(v))
+    return repr(float(v))
+
+
+def reveal_experiment(ws: Workspace, experiment_id: str, results: dict[str, dict], *, train_period: str,
+                      validation_period: str, is_data_hash: str = "", frozen: Frozen | None = None) -> pd.DataFrame:
+    """Fill the pre-registered rows with IS results (keyed by trial_id), compute experiment BH + Bonferroni over ALL 24,
+    seal the ledger, then recompute the whole campaign. Refuses unknown/missing trial ids and double reveals."""
     frozen = frozen or load_frozen()
     trials = read_trials(ws)
     m = trials["experiment_id"] == experiment_id
     mine = trials[m]
-    if len(mine) != frozen.trial_policy["expected_trials_per_experiment"]:
-        raise RegistryIntegrityError(f"{experiment_id} has {len(mine)} registered trials, not 24")
+    n_tr = frozen.trial_policy["expected_trials_per_experiment"]
+    if len(mine) != n_tr:
+        raise RegistryIntegrityError(f"{experiment_id} has {len(mine)} registered trials, not {n_tr}")
     if set(results) != set(mine["trial_id"]):
         raise RegistryIntegrityError("results must be supplied for exactly the 24 pre-registered trials")
     if (mine["status"] != "PREREGISTERED").any():
         raise EngineError(f"{experiment_id} results were already revealed")
+    camp = mine["campaign_id"].iloc[0]
+    already = int((trials[(trials["campaign_id"] == camp)]["status"] == "REVEALED").sum())
     now = now_utc_iso()
     trials = trials.copy()
     for idx in trials.index[m]:
         r = results[trials.at[idx, "trial_id"]]
-        trials.at[idx, "train_period"], trials.at[idx, "oos_period"] = train_period, oos_period
-        for src, dst in (("n_parent", "n_parent_events"), ("n_selected", "n_selected_events"),
-                         ("parent_frequency", "parent_frequency"), ("selected_frequency", "selected_frequency"),
-                         ("retention_ratio", "retention_ratio"), ("parent_effect", "parent_effect"),
-                         ("selected_effect", "selected_effect"), ("uplift", "uplift"),
-                         ("standardized_uplift", "standardized_uplift"), ("bootstrap_ci_low", "bootstrap_ci_low"),
-                         ("bootstrap_ci_high", "bootstrap_ci_high"), ("raw_p", "raw_p"),
-                         ("positive_years", "positive_years"), ("eligible_years", "eligible_years"),
-                         ("target_sd", "target_sd"), ("n_oos_weeks", "n_oos_weeks")):
-            trials.at[idx, dst] = repr(float(r[src])) if not isinstance(r[src], (int, np.integer)) else str(int(r[src]))
+        trials.at[idx, "train_period"], trials.at[idx, "validation_period"] = train_period, validation_period
+        trials.at[idx, "is_data_hash"] = is_data_hash
+        for src, dst in _RESULT_MAP:
+            trials.at[idx, dst] = _fmt(r[src])
+        trials.at[idx, "year_concentration_warning"] = str(bool(r.get("year_concentration_warning", False)))
+        trials.at[idx, "cumulative_campaign_selection_trials"] = str(already + n_tr)
         trials.at[idx, "status"], trials.at[idx, "revealed_at"] = "REVEALED", now
-    # experiment-level BH over ALL 24 trials (never only the winners)
     p = pd.to_numeric(trials.loc[m, "raw_p"]).to_numpy()
     trials.loc[m, "experiment_q"] = [repr(float(q)) for q in benjamini_hochberg(p)]
+    trials.loc[m, "experiment_bonferroni_p"] = [repr(float(min(x * n_tr, 1.0))) for x in p]
+    ledger = trial_ledger_hash(trials[m])
     _write(ws.path("selection_trials.csv"), trials, TRIAL_COLS)
-    update_experiment(ws, experiment_id, status="REVEALED", revealed_at=now)
-    return recompute_campaign(ws, mine["campaign_id"].iloc[0], frozen)[lambda d: d["experiment_id"] == experiment_id]
+    update_experiment(ws, experiment_id, revealed_at=now, trial_ledger_hash=ledger,
+                      cumulative_campaign_selection_trials=already + n_tr)
+    return recompute_campaign(ws, camp, frozen)[lambda d: d["experiment_id"] == experiment_id]
 
 
 def recompute_campaign(ws: Workspace, campaign_id: str, frozen: Frozen | None = None) -> pd.DataFrame:
-    """campaign_q = BH over EVERY revealed selection trial of the campaign; then re-decide all its experiments."""
+    """RETROACTIVE campaign adjustment: reload every revealed trial of the campaign, recompute campaign BH and campaign
+    Bonferroni (universe = all revealed trials = 24 x E), rewrite every historical adjusted value and re-evaluate the status
+    of every experiment still at the IS stage. Earlier candidates may lose (or gain) eligibility."""
     frozen = frozen or load_frozen()
     trials = read_trials(ws)
     exps = read_experiments(ws).set_index("experiment_id")
@@ -297,20 +415,28 @@ def recompute_campaign(ws: Workspace, campaign_id: str, frozen: Frozen | None = 
     if rev.any():
         p = pd.to_numeric(trials.loc[rev, "raw_p"]).to_numpy()
         trials.loc[rev, "campaign_q"] = [repr(float(q)) for q in benjamini_hochberg(p)]
+        trials.loc[rev, "campaign_bonferroni_p"] = [repr(float(min(x * len(p), 1.0))) for x in p]
+    status_updates = {}
     for exp_id in trials.loc[rev, "experiment_id"].unique():
         mm = (trials["experiment_id"] == exp_id) & rev
         rows = numeric_trials(trials[mm]).to_dict("records")
         sens = json.loads(exps.at[exp_id, "sensitivity_json"] or "{}")
-        decided = decide_experiment(rows, frozen.acceptance, sens)
+        ver = json.loads(exps.at[exp_id, "verification_json"] or "{}")
+        decided = decide_experiment(rows, frozen.acceptance, sens, ver)
         trials.loc[mm, "decision"] = [d["decision"] for d in decided]
         trials.loc[mm, "rejection_reason"] = [d["rejection_reason"] for d in decided]
+        status_updates[exp_id] = is_status_of(d["decision"] for d in decided)
     _write(ws.path("selection_trials.csv"), trials, TRIAL_COLS)
+    for exp_id, st in status_updates.items():
+        update_experiment(ws, exp_id, is_status=st)
+        if experiment_row(ws, exp_id)["status"] in IS_STAGE + ("FROZEN",):
+            set_status(ws, exp_id, lifecycle_from_is_status(st), f"IS status {st} at campaign universe "
+                       f"{int(rev.sum())} revealed trials")
     return numeric_trials(read_trials(ws))[lambda d: d["campaign_id"] == campaign_id]
 
 
 def set_sensitivity(ws: Workspace, experiment_id: str, status_by_group: dict[str, str],
                     frozen: Frozen | None = None) -> pd.DataFrame:
-    """Store sensitivity verdicts (per 'TARGET|STATE' candidate group) and re-decide the campaign."""
     frozen = frozen or load_frozen()
     exp = experiment_row(ws, experiment_id)
     cur = json.loads(exp["sensitivity_json"] or "{}")
@@ -319,12 +445,28 @@ def set_sensitivity(ws: Workspace, experiment_id: str, status_by_group: dict[str
     return recompute_campaign(ws, exp["campaign_id"], frozen)
 
 
+def set_verification(ws: Workspace, experiment_id: str, paths: dict[str, dict], overall: str = "",
+                     frozen: Frozen | None = None) -> pd.DataFrame:
+    """Record external-verifier results per model path ('TARGET|MODEL' -> {label, mode}) and re-decide the campaign."""
+    frozen = frozen or load_frozen()
+    exp = experiment_row(ws, experiment_id)
+    cur = json.loads(exp["verification_json"] or "{}")
+    cur.update(paths)
+    fields = {"verification_json": json.dumps(cur, sort_keys=True)}
+    if overall:
+        fields["research_verification"] = overall
+    update_experiment(ws, experiment_id, **fields)
+    if is_revealed(exp):
+        return recompute_campaign(ws, exp["campaign_id"], frozen)
+    return pd.DataFrame()
+
+
 def experiment_trials(ws: Workspace, experiment_id: str) -> pd.DataFrame:
     df = numeric_trials(read_trials(ws))
     return df[df["experiment_id"] == experiment_id].reset_index(drop=True)
 
 
-# ---------------------------------------------------------------------------- observations
+# ---------------------------------------------------------------------------- observations (diagnostics)
 def add_observation(ws: Workspace, experiment_id: str, category: str, description: str,
                     metric_name: str = "", metric_value: float | str = "") -> str:
     """Diagnostics are stored separately from selection trials and can never promote anything."""
@@ -334,14 +476,71 @@ def add_observation(ws: Workspace, experiment_id: str, category: str, descriptio
     row = {"observation_id": oid, "campaign_id": exp["campaign_id"], "experiment_id": experiment_id,
            "created_at": now_utc_iso(), "category": category, "description": description,
            "metric_name": metric_name, "metric_value": str(metric_value), "eligible_for_promotion": "False",
-           "note": OBS_NOTE}
+           "diagnostic_label": DIAG_LABEL, "note": OBS_NOTE}
     _write(ws.path("observations.csv"), pd.concat([df, pd.DataFrame([row])], ignore_index=True), OBS_COLS)
     return oid
 
 
+def log_exploratory_observation(ws: Workspace, experiment_id: str, description: str, *, diagnostic_only: bool,
+                                category: str = "exploratory", metric_name: str = "", metric_value=""):
+    """The ONLY sanctioned way to record an unexpected exploratory analysis. It must declare diagnostic_only=True and is
+    technically unable to alter any trial row, decision or lifecycle status of the current experiment."""
+    if diagnostic_only is not True:
+        raise EngineError("exploratory analyses are allowed only with diagnostic_only=True. If the result can influence "
+                          "which configuration is selected it is a SELECTION OPPORTUNITY and needs a NEW pre-registered experiment")
+    return add_observation(ws, experiment_id, category, description, metric_name, metric_value)
+
+
+# ---------------------------------------------------------------------------- OOS access ledger (append-only hash chain)
+def _row_hash(prev: str, row: dict) -> str:
+    body = {k: row[k] for k in OOS_ACCESS_COLS if k not in ("prev_row_hash", "row_hash")}
+    return hashlib.sha256((prev + canonical_json(body)).encode()).hexdigest()
+
+
+def oos_spent(ws: Workspace, experiment_id: str) -> bool:
+    df = read_oos_access(ws)
+    return bool((df["experiment_id"] == experiment_id).any())
+
+
+def append_oos_access(ws: Workspace, **fields) -> dict:
+    """Append one unlock record. Refuses a second unlock of the same experiment ('OOS HAS BEEN SPENT')."""
+    df = read_oos_access(ws)
+    if (df["experiment_id"] == fields["experiment_id"]).any():
+        raise EngineError(f"OOS HAS BEEN SPENT for {fields['experiment_id']} (see registry/oos_access.csv); it cannot be unlocked again")
+    row = {k: str(fields.get(k, "")) for k in OOS_ACCESS_COLS if k not in ("prev_row_hash", "row_hash")}
+    prev = df["row_hash"].iloc[-1] if len(df) else "GENESIS"
+    row["prev_row_hash"] = prev
+    row["row_hash"] = _row_hash(prev, row)
+    _write(ws.path("oos_access.csv"), pd.concat([df, pd.DataFrame([row])], ignore_index=True), OOS_ACCESS_COLS)
+    return row
+
+
+def verify_oos_ledger(ws: Workspace) -> int:
+    df = read_oos_access(ws)
+    prev = "GENESIS"
+    seen = set()
+    for _, r in df.iterrows():
+        row = r.to_dict()
+        if row["prev_row_hash"] != prev or row["row_hash"] != _row_hash(prev, row):
+            raise RegistryIntegrityError("registry/oos_access.csv was edited, reordered or truncated (hash chain broken)")
+        if row["experiment_id"] in seen:
+            raise RegistryIntegrityError(f"OOS unlocked twice for {row['experiment_id']}")
+        seen.add(row["experiment_id"])
+        prev = row["row_hash"]
+    return len(df)
+
+
+def append_table(ws: Workspace, name: str, cols: list[str], rows: list[dict]) -> None:
+    """Append-only helper for oos_trials.csv / cpcv_results.csv."""
+    df = _read(ws.path(name), cols)
+    _write(ws.path(name), pd.concat([df, pd.DataFrame([{k: str(v) for k, v in r.items()} for r in rows])],
+                                    ignore_index=True), cols)
+
+
 # ---------------------------------------------------------------------------- integrity / summary
 def integrity_check(ws: Workspace, frozen: Frozen | None = None) -> dict:
-    """Raises RegistryIntegrityError if the registry does not satisfy the frozen opportunity accounting."""
+    """Raises RegistryIntegrityError if the registry violates the frozen opportunity accounting. Catches: missing trial,
+    duplicate trial, trial 25, changed trial spec, edited historical result (ledger hash), broken OOS ledger chain."""
     frozen = frozen or load_frozen()
     exps, trials, obs = read_experiments(ws), read_trials(ws), read_observations(ws)
     limit = int(frozen.trial_policy["max_experiments_per_campaign"])
@@ -354,8 +553,9 @@ def integrity_check(ws: Workspace, frozen: Frozen | None = None) -> dict:
     if not set(trials["experiment_id"]) <= known:
         raise RegistryIntegrityError("selection trials reference unknown experiments")
     _assert_trial_set(trials, frozen)
+    n_tr = frozen.trial_policy["expected_trials_per_experiment"]
     per_exp = trials.groupby("experiment_id").size()
-    if (per_exp != frozen.trial_policy["expected_trials_per_experiment"]).any():
+    if (per_exp != n_tr).any():
         raise RegistryIntegrityError("an experiment does not have exactly 24 selection trials")
     cap = frozen.trial_policy["max_selection_trials_per_campaign"]
     if (trials.groupby("campaign_id").size() > cap).any():
@@ -363,12 +563,23 @@ def integrity_check(ws: Workspace, frozen: Frozen | None = None) -> dict:
     revealed = trials[trials["status"] == "REVEALED"]
     if (pd.to_numeric(revealed["raw_p"], errors="coerce").isna()).any():
         raise RegistryIntegrityError("revealed trial without raw_p")
+    for exp_id, g in revealed.groupby("experiment_id"):
+        sealed = exps.set_index("experiment_id").at[exp_id, "trial_ledger_hash"]
+        if len(g) != n_tr or trial_ledger_hash(g) != sealed:
+            raise RegistryIntegrityError(f"{exp_id}: historical IS result rows were edited (trial_ledger_hash mismatch)")
+    for c, g in revealed.groupby("campaign_id"):
+        if len(g) % n_tr:
+            raise RegistryIntegrityError(f"campaign {c}: revealed trials are not a multiple of 24")
     if not set(obs["experiment_id"]) <= known:
         raise RegistryIntegrityError("observation references an unknown experiment")
     if (obs["eligible_for_promotion"] != "False").any():
         raise RegistryIntegrityError("observations can never be eligible for promotion")
+    n_oos = verify_oos_ledger(ws)
+    bad = set(read_oos_access(ws)["experiment_id"]) - known
+    if bad:
+        raise RegistryIntegrityError(f"oos_access.csv references unknown experiments {bad}")
     return {"experiments": int(len(exps)), "selection_trials": int(len(trials)),
-            "revealed_trials": int(len(revealed)), "observations": int(len(obs))}
+            "revealed_trials": int(len(revealed)), "observations": int(len(obs)), "oos_unlocks": n_oos}
 
 
 def campaign_summary(ws: Workspace, campaign_id: str, frozen: Frozen | None = None) -> dict:
@@ -379,11 +590,13 @@ def campaign_summary(ws: Workspace, campaign_id: str, frozen: Frozen | None = No
     trials = numeric_trials(read_trials(ws))
     trials = trials[trials["campaign_id"] == campaign_id]
     limit = int(frozen.trial_policy["max_experiments_per_campaign"])
-    return {"campaign_id": campaign_id, "lockbox_start": camp["lockbox_start"],
+    revealed = int((trials["status"] == "REVEALED").sum())
+    return {"campaign_id": campaign_id, "partitions": {k: camp[k] for k in ("development_end", "oos_end", "lockbox_start")},
             "experiments_used": int(len(exps)), "experiments_max": limit,
             "selection_trials_registered": int(len(trials)),
             "selection_trials_max": int(frozen.trial_policy["max_selection_trials_per_campaign"]),
-            "selection_trials_revealed": int((trials["status"] == "REVEALED").sum()),
-            "promotable_trials": int((trials["decision"] == "PROMOTABLE").sum()),
-            "pending_sensitivity": int((trials["decision"] == "PROMOTABLE_PENDING_SENSITIVITY").sum()),
-            "experiments": exps[["experiment_id", "status", "lineage_parent", "research_verification"]].to_dict("records")}
+            "selection_trials_revealed": revealed, "statistical_selection_opportunities_exposed": revealed,
+            "shortlist_eligible_trials": int((trials["decision"] == SHORTLIST).sum()),
+            "provisional_trials": int((trials["decision"] == PROVISIONAL).sum()),
+            "oos_unlocks": int((read_oos_access(ws)["campaign_id"] == campaign_id).sum()),
+            "experiments": exps[["experiment_id", "status", "is_status", "lineage_parent", "research_verification"]].to_dict("records")}

@@ -6,7 +6,8 @@ from engine.common import load_frozen
 from engine.feature_engine import feature_names
 from engine.model_engine import FrozenModel, make_model_factory
 from engine.score_calibration import UPPER, LOWER, WFConfig, assign_state, calibrate_threshold, inner_oof_predictions
-from engine.walkforward import run_walkforward
+from tests import helpers as H
+from engine.walkforward import development_folds, run_walkforward
 
 F = load_frozen()
 NAMES = feature_names(F)
@@ -32,7 +33,7 @@ CFG = WFConfig(min_outer_train_events=300, inner_blocks=5, min_inner_train_event
 
 
 class LinearProbe:
-    """Deterministic fake: prediction = ridge-free OLS slope on ER_60 only (fast, transparent)."""
+    """Deterministic fake: prediction = OLS slope on ER_60 only (fast, transparent)."""
 
     def __init__(self):
         self.fit_labels = None
@@ -46,6 +47,26 @@ class LinearProbe:
 
     def predict(self, X):
         return self.m + self.b * X["ER_60"].to_numpy()
+
+
+class SpyFactory:
+    """Records the exact training rows (their y values) every fit sees."""
+
+    def __init__(self):
+        self.fits = []
+
+    def __call__(self):
+        outer = self
+
+        class M(LinearProbe):
+            def fit(self, X, y):
+                outer.fits.append(np.asarray(y).copy())
+                return super().fit(X, y)
+        return M()
+
+
+def folds_for(t):
+    return development_folds(t, 5, "America/New_York")
 
 
 def test_three_frozen_models_fit_and_predict_deterministically():
@@ -105,7 +126,6 @@ def test_score_median_comes_from_inner_oof_training_scores_only():
     ev = t.asi8; tend = te.asi8
     train = np.flatnonzero(t < pd.Timestamp("2018-01-01", tz="UTC"))
     thr, pos, pred = calibrate_threshold(LinearProbe, X, y, ev, tend, train, CFG)
-    # recompute independently: blocks of the ordered training set, purge by target_end
     order = train[np.argsort(ev[train], kind="stable")]
     segs = np.array_split(order, 5)
     manual = []
@@ -115,54 +135,104 @@ def test_score_median_comes_from_inner_oof_training_scores_only():
         manual.append(mdl.predict(X.iloc[segs[j]]))
     assert thr == pytest.approx(float(np.median(np.concatenate(manual))))
     assert len(pred) == sum(len(s) for s in segs[1:])            # first block is never predicted
-    # validation-year scores have a different median -> threshold is NOT derived from them
     val = np.flatnonzero(t >= pd.Timestamp("2018-01-01", tz="UTC"))
     full = LinearProbe().fit(X.iloc[train], y[train])
     assert thr != pytest.approx(float(np.median(full.predict(X.iloc[val]))), abs=1e-12)
 
 
-def test_changing_outer_validation_labels_cannot_alter_thresholds_or_models():
-    X, y, t, te = synth(400, slope=0.8, seed=7)
-    base = run_walkforward(LinearProbe, X, y, t, te, CFG)
-    target_year = 2019
-    y2 = y.copy()
-    idx = np.flatnonzero(t.year == target_year)
-    y2[idx] = np.random.default_rng(99).normal(size=len(idx)) * 50 + 1000   # wreck validation-year labels
-    alt = run_walkforward(LinearProbe, X, y2, t, te, CFG)
-    for yr in (2017, 2018, 2019):       # folds whose training never contains the altered labels
-        a = base.oos[base.oos.year == yr].reset_index(drop=True)
-        b = alt.oos[alt.oos.year == yr].reset_index(drop=True)
-        pd.testing.assert_frame_equal(a, b)
-    assert [f.get("threshold") for f in base.folds if f["year"] <= 2019] == \
-           [f.get("threshold") for f in alt.folds if f["year"] <= 2019]
-
-
-def test_purged_events_and_future_labels_never_reach_the_model():
-    X, y, t, te = synth(400, slope=0.8, seed=8, horizon_min=60 * 24 * 40)    # 40-day target windows
-    base = run_walkforward(LinearProbe, X, y, t, te, CFG)
-    vs = pd.Timestamp("2019-01-01", tz="UTC")
-    forbidden = (te >= vs)                                                    # purged + validation + future
-    y2 = y.copy(); y2[np.asarray(forbidden)] = 9999.0
-    alt = run_walkforward(LinearProbe, X, y2, t, te, CFG)
-    a = base.oos[base.oos.year == 2019].reset_index(drop=True)
-    b = alt.oos[alt.oos.year == 2019].reset_index(drop=True)
-    pd.testing.assert_frame_equal(a, b)
-    # and: some training events really were purged (windows crossing the boundary)
-    crossing = np.asarray((t < vs) & (te >= vs)).sum()
-    assert crossing > 0
-
-
-def test_walkforward_is_chronological_expanding_and_skips_short_history():
+# ------------------------------- DEVELOPMENT_CV: exactly K=5 purged chronological expanding folds -------------------------
+def test_development_cv_is_exactly_five_chronological_expanding_folds():
     X, y, t, te = synth(400, slope=0.0, seed=9)
-    res = run_walkforward(LinearProbe, X, y, t, te, CFG)
-    status = {f["year"]: f["status"] for f in res.folds}
-    assert status[2016].startswith("SKIPPED")                  # no history at all
-    assert status[2017] == "OK"                                # 400 >= 300
+    folds = folds_for(t)
+    assert len(folds) == 5 == F.trial_policy["development_cv"]["K"]
+    starts = [f.val_start_ns for f in folds]
+    assert starts == sorted(starts) and len(set(starts)) == 5
+    for a, b in zip(folds[:-1], folds[1:]):
+        assert a.val_end_ns == b.val_start_ns                     # consecutive blocks, no gap, no overlap
+    res = run_walkforward(LinearProbe, X, y, t, te, CFG, folds)
+    assert [f["status"] for f in res.folds] == ["OK"] * 5
     ntr = [f["n_train"] for f in res.folds]
-    assert ntr == sorted(ntr)                                  # expanding
-    assert set(res.oos.year.unique()) == {2017, 2018, 2019, 2020}
-    for yr, g in res.oos.groupby("year"):
-        assert (t[g["pos"].to_numpy()].year == yr).all()       # OOS rows only from their own year
+    assert ntr == sorted(ntr) and len(set(ntr)) == 5              # expanding
+    ev = t.asi8
+    for f, fd in zip(res.folds, folds):                           # validation rows only from their own block (no shuffling)
+        pos = res.validation[res.validation["fold"] == f["fold"]]["pos"].to_numpy()
+        assert ((ev[pos] >= fd.val_start_ns) & (ev[pos] < fd.val_end_ns)).all()
+    assert set(res.validation["fold"]) == {1, 2, 3, 4, 5}
+    assert not any(res.validation["fold"].diff().dropna() < 0)    # chronological
+
+
+def test_fold_boundaries_use_timestamps_only_and_snap_to_local_trading_day_start():
+    X, y, t, te = synth(300, slope=0.0, seed=10)
+    f1 = folds_for(t)
+    f2 = folds_for(t)
+    assert [f.val_start_ns for f in f1] == [f.val_start_ns for f in f2]
+    for f in f1:
+        local = pd.Timestamp(f.val_start_ns, tz="UTC").tz_convert("America/New_York")
+        assert (local.hour, local.minute, local.second) == (0, 0, 0)       # whole trading days stay together
+    other = folds_for(t)                                                     # labels never enter the boundaries
+    assert [f.val_start_ns for f in other] == [f.val_start_ns for f in f1]
+
+
+def test_training_events_are_purged_by_effective_target_end():
+    X, y, t, te = synth(400, slope=0.0, seed=11, horizon_min=60 * 24 * 30)      # 30-day label windows
+    spy = SpyFactory()
+    folds = folds_for(t)
+    res = run_walkforward(spy, X, y, t, te, CFG, folds)
+    ev, tend = t.asi8, te.asi8
+    for f, fd in zip(res.folds, folds):
+        legal = (ev < fd.val_start_ns) & (tend < fd.val_start_ns)
+        crossing = (ev < fd.val_start_ns) & (tend >= fd.val_start_ns)
+        assert f["n_train"] == int(legal.sum())                                 # exactly the legal set
+        assert crossing.sum() > 0                                               # overlapping events existed and were removed
+    # the final fit of every fold used ONLY legal rows: poison y of the overlapping/validation/future rows
+    y2 = y.copy()
+    fd = folds[2]
+    bad = ~((ev < fd.val_start_ns) & (tend < fd.val_start_ns))
+    y2[bad] = 9999.0
+    a = run_walkforward(LinearProbe, X, y, t, te, CFG, folds).validation
+    b = run_walkforward(LinearProbe, X, y2, t, te, CFG, folds).validation
+    pd.testing.assert_frame_equal(a[a.fold == 3].reset_index(drop=True), b[b.fold == 3].reset_index(drop=True))
+
+
+def test_effective_target_end_is_max_of_claimed_and_declared():
+    """A candidate that UNDERSTATES its target_end cannot shorten the purge: the effective end is max(claimed, declared)."""
+    from engine.target_engine import compute_primary_targets, declared_resolution_times
+    bars = H.random_bars(300, seed=2)
+    ev = H.events_at(bars, [50, 100])
+    tg = compute_primary_targets(bars, ev, F)["DIR_RETURN_30"]
+    declared = declared_resolution_times(bars.index, ev["event_time"], 30, pd.Timedelta("1min"))
+    assert (pd.DatetimeIndex(tg["effective_target_end"]) >= pd.DatetimeIndex(tg["target_end"])).all()
+    assert (pd.DatetimeIndex(tg["effective_target_end"]) == declared).all()
+    understated = pd.DatetimeIndex(tg["target_end"]) - pd.Timedelta("20min")                       # a lying claim
+    eff = pd.DatetimeIndex(np.maximum(understated.asi8, declared.asi8)).tz_localize("UTC")
+    assert (eff == declared).all() and (eff > understated).all()
+
+
+def test_folds_below_frozen_minimums_are_skipped_never_relaxed():
+    X, y, t, te = synth(60, (2016, 2017, 2018, 2019, 2020), seed=12)             # 300 events -> blocks of 50: fold 1 trains on 50
+    res = run_walkforward(LinearProbe, X, y, t, te, CFG, folds_for(t))
+    assert res.folds[0]["status"].startswith("SKIPPED_INSUFFICIENT_DATA")
+    assert all(f["status"].startswith("SKIPPED_INSUFFICIENT_DATA") for f in res.folds)      # none reaches 300 training events
+    assert CFG.min_outer_train_events == 300 == F.trial_policy["development_cv"]["min_outer_train_events"]
+    assert (F.trial_policy["development_cv"]["inner_blocks"], F.trial_policy["development_cv"]["min_inner_train_events"],
+            F.trial_policy["development_cv"]["min_inner_oof_events"]) == (5, 50, 30)
+    assert len(res.validation) == 0
+
+
+def test_changing_validation_labels_cannot_alter_thresholds_or_models():
+    X, y, t, te = synth(400, slope=0.8, seed=7)
+    folds = folds_for(t)
+    base = run_walkforward(LinearProbe, X, y, t, te, CFG, folds)
+    fd = folds[1]                                                       # alter fold 2's VALIDATION block labels
+    idx = np.flatnonzero((t.asi8 >= fd.val_start_ns) & (t.asi8 < fd.val_end_ns))
+    y2 = y.copy()
+    y2[idx] = np.random.default_rng(99).normal(size=len(idx)) * 50 + 1000
+    alt = run_walkforward(LinearProbe, X, y2, t, te, CFG, folds)
+    for k in (1, 2):                                                    # folds whose training never contains those labels
+        a = base.validation[base.validation.fold == k].reset_index(drop=True)
+        b = alt.validation[alt.validation.fold == k].reset_index(drop=True)
+        pd.testing.assert_frame_equal(a, b)
+    assert [f.get("threshold") for f in base.folds[:2]] == [f.get("threshold") for f in alt.folds[:2]]
 
 
 def test_states_are_halves_with_ties_excluded():
@@ -171,12 +241,12 @@ def test_states_are_halves_with_ties_excluded():
     assert st.tolist() == [LOWER, LOWER, "TIE", "TIE", UPPER, UPPER]
 
 
-def test_oos_state_share_is_roughly_half_when_model_has_signal():
+def test_validation_state_share_is_roughly_half_when_model_has_signal():
     X, y, t, te = synth(400, slope=1.0, seed=10)
-    res = run_walkforward(make_model_factory("RIDGE", F), X, y, t, te, CFG)
-    share = (res.oos["state"] == UPPER).mean()
+    res = run_walkforward(make_model_factory("RIDGE", F), X, y, t, te, CFG, folds_for(t))
+    share = (res.validation["state"] == UPPER).mean()
     assert 0.35 < share < 0.65
-    assert len(res.importances) == len(res.oos.year.unique())
+    assert len(res.importances) == 5 and len(res.coefficients) == 5            # Ridge diagnostics per fold
 
 
 def test_target_transform_makes_xgb_scale_invariant_and_leaves_linear_models_unchanged():

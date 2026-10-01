@@ -20,7 +20,8 @@ TEMPLATE_EVENT = CODE_ROOT / "templates/experiment/event.py"
 def spec(**kw):
     s = {"experiment_id": "EXP_T", "campaign_id": "C001", "eligible_session": {"start": "09:31", "end": "16:00"},
          "deduplication_rule": "drop_conflicting_same_time", "cooldown": {"bars": 0},
-         "base_parameters": {"pivot_left": 3, "pivot_right": 2}}
+         "direction_definition": {"rule": "long", "values": [1]},
+         "base_parameters": {"pivot_left": 3, "pivot_right": 2, "direction": 1}}
     s.update(kw)
     return s
 
@@ -76,7 +77,7 @@ def pivot_bars():
 def test_pivot_event_time_is_confirmation_not_plotted_pivot_time():
     bars = pivot_bars()
     mod = load_event_module(TEMPLATE_EVENT)
-    ev, _ = raw_events(mod, bars, {"pivot_left": 3, "pivot_right": 5}, F)
+    ev, _ = raw_events(mod, bars, {"pivot_left": 3, "pivot_right": 5, "direction": 1}, F)
     lows = ev[ev["direction"] == 1]
     assert len(lows) == 1
     pivot_bar = bars.index[7]                                   # where TradingView plots the triangle (offset=-right)
@@ -91,21 +92,24 @@ def test_pivot_not_visible_before_right_hand_bars_exist():
     bars = pivot_bars()
     mod = load_event_module(TEMPLATE_EVENT)
     for n_avail in (8, 9, 10, 11):                               # bars up to index 7+right-1 or earlier
-        ev, _ = raw_events(mod, bars.iloc[:n_avail], {"pivot_left": 3, "pivot_right": 5}, F)
+        ev, _ = raw_events(mod, bars.iloc[:n_avail], {"pivot_left": 3, "pivot_right": 5, "direction": 1}, F)
         assert (ev["direction"] == 1).sum() == 0, n_avail
-    ev, _ = raw_events(mod, bars.iloc[:13], {"pivot_left": 3, "pivot_right": 5}, F)   # index 12 = 5th right bar
+    ev, _ = raw_events(mod, bars.iloc[:13], {"pivot_left": 3, "pivot_right": 5, "direction": 1}, F)   # index 12 = 5th right bar
     assert (ev["direction"] == 1).sum() == 1
 
 
-def test_pivot_direction_high_is_short():
+def test_pivot_direction_high_is_the_separate_short_experiment():
     bars = H.make_bars([100 - abs(i - 7) for i in range(16)])
-    ev, _ = raw_events(load_event_module(TEMPLATE_EVENT), bars, {"pivot_left": 3, "pivot_right": 5}, F)
-    assert set(ev["direction"]) == {-1}
+    mod = load_event_module(TEMPLATE_EVENT)
+    short, _ = raw_events(mod, bars, {"pivot_left": 3, "pivot_right": 5, "direction": -1}, F)
+    assert set(short["direction"]) == {-1} and len(short) == 1
+    long_, _ = raw_events(mod, bars, {"pivot_left": 3, "pivot_right": 5, "direction": 1}, F)
+    assert len(long_) == 0                        # the same bars yield NO long event: LONG and SHORT never mix in one experiment
 
 
 def test_template_event_passes_truncation_and_future_mutation_check():
     bars = make_bars(n_days=20, seed=3)
-    s = spec(base_parameters={"pivot_left": 30, "pivot_right": 15}, cooldown={"bars": 60})
+    s = spec(base_parameters={"pivot_left": 30, "pivot_right": 15, "direction": 1}, cooldown={"bars": 60})
     info = check_event_causality(load_event_module(TEMPLATE_EVENT), bars, s, F)
     assert info["cutoffs"] >= 4
 
@@ -200,7 +204,7 @@ def test_cooldown_is_sequential_and_causal():
 
 def test_generate_events_applies_rules_to_template_output():
     bars = make_bars(n_days=15, seed=9)
-    s = spec(base_parameters={"pivot_left": 30, "pivot_right": 15}, cooldown={"bars": 60},
+    s = spec(base_parameters={"pivot_left": 30, "pivot_right": 15, "direction": 1}, cooldown={"bars": 60},
              eligible_session={"start": "09:31", "end": "15:00"})
     ev, sp = generate_events(load_event_module(TEMPLATE_EVENT), bars, s, F)
     assert len(ev) > 20 and sp.unused() == []
@@ -213,7 +217,7 @@ def test_generate_events_applies_rules_to_template_output():
 # ---- TradingView export translation -----------------------------------------------------------
 def test_tradingview_export_translation_applies_confirmation_delay():
     bars = make_bars(n_days=15, seed=9)
-    s = spec(base_parameters={"pivot_left": 30, "pivot_right": 15}, cooldown={"bars": 0}, deduplication_rule="keep_first_per_event_time")
+    s = spec(base_parameters={"pivot_left": 30, "pivot_right": 15, "direction": 1}, cooldown={"bars": 0}, deduplication_rule="keep_first_per_event_time")
     ev, _ = generate_events(load_event_module(TEMPLATE_EVENT), bars, s, F)
     # build a fake "TradingView export": PLOTTED pivot bars (open times) = event bar - right bars
     pos = bars.index.get_indexer(ev["event_time"] - pd.Timedelta("1min")) - 15
@@ -236,14 +240,122 @@ def test_tradingview_export_translation_applies_confirmation_delay():
 def test_template_rolling_implementation_equals_brute_force_definition():
     bars = make_bars(n_days=6, seed=21)
     left, right = 7, 4
-    ev, _ = raw_events(load_event_module(TEMPLATE_EVENT), bars, {"pivot_left": left, "pivot_right": right}, F)
     low, high, n = bars["low"].to_numpy(), bars["high"].to_numpy(), len(bars)
-    expected = set()
-    for i in range(left, n - right):
-        t = bars.index[i + right] + pd.Timedelta("1min")
-        if low[i] < low[i - left:i].min() and low[i] <= low[i + 1:i + right + 1].min():
-            expected.add((t, 1))
-        if high[i] > high[i - left:i].max() and high[i] >= high[i + 1:i + right + 1].max():
-            expected.add((t, -1))
-    assert len(expected) > 100
-    assert set(zip(ev["event_time"], ev["direction"])) == expected
+    mod = load_event_module(TEMPLATE_EVENT)
+    for side in (1, -1):
+        ev, _ = raw_events(mod, bars, {"pivot_left": left, "pivot_right": right, "direction": side}, F)
+        expected = set()
+        for i in range(left, n - right):
+            t = bars.index[i + right] + pd.Timedelta("1min")
+            if side == 1 and low[i] < low[i - left:i].min() and low[i] <= low[i + 1:i + right + 1].min():
+                expected.add((t, 1))
+            if side == -1 and high[i] > high[i - left:i].max() and high[i] >= high[i + 1:i + right + 1].max():
+                expected.add((t, -1))
+        assert len(expected) > 50
+        assert set(zip(ev["event_time"], ev["direction"])) == expected
+
+
+# ================================= v1 single-direction rule =============================================
+def test_mixed_direction_events_hard_fail_the_event_contract(tmp_path):
+    mod = module_from(tmp_path, '''
+        import pandas as pd
+        def detect_events(bars, params):
+            t = bars.index[[100, 200, 300]] + pd.Timedelta("1min")
+            return pd.DataFrame({"event_time": t, "direction": [1, -1, 1]})
+    ''')
+    bars = make_bars(n_days=3)
+    with pytest.raises(EventContractError, match="FAIL EVENT CONTRACT.*mixed-direction"):
+        raw_events(mod, bars, {}, F)
+    with pytest.raises(EventContractError, match="FAIL EVENT CONTRACT"):
+        generate_events(mod, bars, spec(), F)                                   # through the full engine path too
+    only_short = module_from(tmp_path, '''
+        import pandas as pd
+        def detect_events(bars, params):
+            return pd.DataFrame({"event_time": bars.index[[100, 200]] + pd.Timedelta("1min"), "direction": [-1, -1]})
+    ''', "short.py")
+    with pytest.raises(EventContractError, match="declares\\s+direction_definition|direction_definition"):
+        generate_events(only_short, bars, spec(), F)                            # spec says long, events are short
+    ok, _ = generate_events(only_short, bars, spec(direction_definition={"rule": "short", "values": [-1]}), F)
+    assert set(ok["direction"]) == {-1}
+
+
+def test_target_timestamp_ineligible_events_are_removed_by_timestamp_rule_only(tmp_path):
+    """60-bar window must end inside the RTH session: event at 14:59 NY is eligible, 15:01 is TARGET_TIMESTAMP_INELIGIBLE."""
+    mod = module_from(tmp_path, '''
+        import numpy as np, pandas as pd
+        def detect_events(bars, params):
+            interval = pd.Timedelta(bars.attrs["bar_interval"])
+            local = bars.index.tz_convert("America/New_York")
+            minute = local.hour * 60 + local.minute
+            keep = np.isin(minute, [int(params["m1"]), int(params["m2"]), int(params["m3"])])
+            return pd.DataFrame({"event_time": bars.index[keep] + interval, "direction": np.ones(int(keep.sum()), dtype=int)})
+    ''')
+    bars = make_bars(n_days=2, seed=2)
+    s = spec(base_parameters={"m1": 14 * 60 + 58, "m2": 14 * 60 + 59, "m3": 15 * 60 + 1}, eligible_session={"start": "09:31", "end": "16:00"})
+    ev, _ = generate_events(mod, bars, s, F)
+    local = ev["event_time"].dt.tz_convert("America/New_York")
+    got = sorted(set((local.dt.hour * 60 + local.dt.minute).tolist()))
+    assert got == [14 * 60 + 59, 15 * 60]                         # signal 14:58 -> event 14:59 ; signal 14:59 -> event 15:00 (window ends 16:00)
+    assert ev.attrs["target_timestamp_ineligible"] == 2           # the 15:01 signal (event 15:02) on both days
+    assert len(ev.attrs["target_ineligible_ids"] if "target_ineligible_ids" in ev.attrs else ev.attrs["target_timestamp_ineligible_ids"]) == 2
+
+
+# ================================= frozen filter ladder =================================================
+LADDER_EVENT = '''
+    import numpy as np, pandas as pd
+
+    def _base(bars, params):
+        interval = pd.Timedelta(bars.attrs["bar_interval"])
+        step = int(params["step"])
+        pos = np.arange(len(bars))
+        keep = (pos % step == 0) & (pos > 0)
+        return pos, keep, interval
+
+    def detect_events(bars, params):
+        pos, keep, interval = _base(bars, params)
+        c = bars["close"].to_numpy()
+        up = np.zeros(len(bars), dtype=bool)
+        up[1:] = c[1:] > c[:-1]
+        m = keep & up
+        return pd.DataFrame({"event_time": bars.index[m] + interval, "direction": np.ones(int(m.sum()), dtype=int)})
+
+    def detect_events_ladder(bars, params):
+        pos, keep, interval = _base(bars, params)
+        c = bars["close"].to_numpy()
+        up = np.zeros(len(bars), dtype=bool)
+        up[1:] = c[1:] > c[:-1]
+        def ev(mask):
+            return pd.DataFrame({"event_time": bars.index[mask] + interval, "direction": np.ones(int(mask.sum()), dtype=int)})
+        return {"BASE_TRIGGER": ev(keep), "CONDITION_1": ev(keep & up), "FINAL_EVENT": ev(keep & up)}
+'''
+
+
+def test_frozen_ladder_is_evaluated_in_order_and_final_step_equals_the_event_set(tmp_path):
+    from engine.event_contract import ladder_event_sets
+    mod = module_from(tmp_path, LADDER_EVENT)
+    bars = make_bars(n_days=8, seed=3)
+    s = spec(base_parameters={"step": 41}, filter_ladder=["BASE_TRIGGER", "CONDITION_1", "FINAL_EVENT"])
+    sets = ladder_event_sets(mod, bars, s, F)
+    assert list(sets) == ["BASE_TRIGGER", "CONDITION_1", "FINAL_EVENT"]
+    assert len(sets["BASE_TRIGGER"]) > len(sets["CONDITION_1"]) == len(sets["FINAL_EVENT"]) > 0
+    main, _ = generate_events(mod, bars, s, F)
+    assert (sets["FINAL_EVENT"]["event_time"].to_numpy() == main["event_time"].to_numpy()).all()
+
+
+def test_engine_rejects_reordered_removed_added_or_inconsistent_ladders(tmp_path):
+    from engine.event_contract import ladder_event_sets
+    mod = module_from(tmp_path, LADDER_EVENT)
+    bars = make_bars(n_days=4, seed=3)
+    base = {"step": 41}
+    for frozen_order in (["BASE_TRIGGER", "FINAL_EVENT", "CONDITION_1"],                 # reordered
+                         ["BASE_TRIGGER", "FINAL_EVENT"],                                 # step removed
+                         ["BASE_TRIGGER", "CONDITION_1", "CONDITION_2", "FINAL_EVENT"]):  # step added
+        with pytest.raises(EventContractError, match="exactly the frozen steps"):
+            ladder_event_sets(mod, bars, spec(base_parameters=base, filter_ladder=frozen_order), F)
+    bad = module_from(tmp_path, LADDER_EVENT.replace('"FINAL_EVENT": ev(keep & up)', '"FINAL_EVENT": ev(keep)'), "bad.py")
+    with pytest.raises(EventContractError, match="FINAL_EVENT"):
+        ladder_event_sets(bad, bars, spec(base_parameters=base, filter_ladder=["BASE_TRIGGER", "CONDITION_1", "FINAL_EVENT"]), F)
+    nolad = module_from(tmp_path, "import pandas as pd\ndef detect_events(bars, params):\n    return None\n", "nolad.py")
+    with pytest.raises(EventContractError, match="detect_events_ladder"):
+        ladder_event_sets(nolad, bars, spec(base_parameters=base, filter_ladder=["BASE_TRIGGER", "FINAL_EVENT"]), F)
+    assert ladder_event_sets(mod, bars, spec(base_parameters=base), F) == {}              # no ladder declared -> nothing evaluated

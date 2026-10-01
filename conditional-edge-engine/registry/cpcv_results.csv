@@ -1,0 +1,1 @@
+campaign_id,experiment_id,group_id,target,state,model,n_valid_splits,median_effect,median_uplift,p10_uplift,p90_uplift,fraction_effect_positive,fraction_uplift_positive,worst_split,best_split,cpcv_pass,group_cpcv_pass,pbo_diagnostic,revealed_at

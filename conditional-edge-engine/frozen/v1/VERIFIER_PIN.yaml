@@ -1,0 +1,15 @@
+# The external research verifier is pinned to an exact commit. The bridge refuses any other checkout.
+# (engine-verification- has no tags; this is the commit that introduced scripts/verify_research.py. Human: confirm or replace.)
+repository: https://github.com/dylankazakovas93-dev/engine-verification-
+commit: 624c8b7f0502abf6c5d453d501e96e3172367035
+branch_at_pin_time: claude/relaxed-lamport-119uli
+script: scripts/verify_research.py
+required_models: [RIDGE, SPLINE, XGB]
+required_mode: strong
+# The verifier's lockbox audit is UNVERIFIED unless at least one event lies at/after the --lockbox-start it is given.
+# Because the verifier is never handed rows beyond the stage partition, a HOLDOUT inside the staged data plays that role:
+# the last `stage_holdout_fraction` of the staged calendar span (floored to a UTC date, at least `stage_holdout_min_days`
+# days) is passed as --lockbox-start, so the verifier withholds those rows from modelling and demonstrates isolation.
+# Interpretation choice of the engine (not a research gate): the verifier then covers the first ~90% of the staged span.
+stage_holdout_fraction: 0.10
+stage_holdout_min_days: 14

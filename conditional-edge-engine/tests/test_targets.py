@@ -140,3 +140,54 @@ def test_window_span_violation_counter():
                         index=pd.DatetimeIndex(idx, tz="UTC"))
     ev = H.events_at(bars, [10])        # 60-bar window crosses the overnight gap
     assert window_span_violations(bars, ev, 60, pd.Timedelta("1min")) == 1
+
+
+# ================================= same-session primary targets =========================================
+def test_target_timestamp_ineligible_is_decided_from_clock_and_session_rules_only():
+    from engine.target_engine import (TargetSessionError, max_primary_horizon_bars, session_close_utc,
+                                      target_timestamp_ineligible)
+    assert max_primary_horizon_bars(F) == 60
+    # winter (EST): close 16:00 NY = 21:00 UTC ; summer (EDT): close = 20:00 UTC (DST-safe)
+    t = pd.DatetimeIndex(["2020-01-08 20:00", "2020-01-08 20:01", "2020-06-08 19:00", "2020-06-08 19:01"], tz="UTC")
+    assert target_timestamp_ineligible(t, F).tolist() == [False, True, False, True]
+    assert session_close_utc(t, F)[0] == pd.Timestamp("2020-01-08 21:00", tz="UTC")
+    assert session_close_utc(t, F)[2] == pd.Timestamp("2020-06-08 20:00", tz="UTC")
+    # eligibility never looks at outcomes: identical for any price path (function takes timestamps only)
+    import inspect
+    assert list(inspect.signature(target_timestamp_ineligible).parameters) == ["event_time", "frozen"]
+
+
+def test_primary_target_crossing_the_rth_close_is_refused_not_silently_truncated():
+    from engine.target_engine import TargetSessionError
+    # RTH-only bars: 09:30-16:00 NY on two days; an event at 15:30 NY has a 60-bar window that would run into the next day
+    idx = []
+    for day in ("2020-01-08", "2020-01-09"):
+        idx += list(pd.date_range(f"{day} 14:30", periods=390, freq="1min", tz="UTC"))
+    idx = pd.DatetimeIndex(idx)
+    closes = np.linspace(100, 120, len(idx))
+    bars = pd.DataFrame({"open": closes, "high": closes + 1, "low": closes - 1, "close": closes, "volume": 1.0}, index=idx)
+    late = pd.DataFrame({"event_id": ["L"], "event_time": [pd.Timestamp("2020-01-08 20:30", tz="UTC")], "direction": 1})   # 15:30 NY
+    with pytest.raises(TargetSessionError, match="TARGET_TIMESTAMP_INELIGIBLE"):
+        compute_primary_targets(bars, late, F)
+    ok = pd.DataFrame({"event_id": ["O"], "event_time": [pd.Timestamp("2020-01-08 19:59", tz="UTC")], "direction": 1})      # 14:59 NY
+    t = compute_primary_targets(bars, ok, F)
+    assert (pd.DatetimeIndex(t["DIR_RETURN_60"]["target_end"]) <= pd.Timestamp("2020-01-08 21:00", tz="UTC")).all()
+    # a gap INSIDE the session that pushes the 60th bar past the close is also refused
+    idx3 = pd.DatetimeIndex(list(idx) + list(pd.date_range("2020-01-10 14:30", periods=390, freq="1min", tz="UTC")))
+    c3 = np.linspace(100, 130, len(idx3))
+    bars3 = pd.DataFrame({"open": c3, "high": c3 + 1, "low": c3 - 1, "close": c3, "volume": 1.0}, index=idx3)
+    gap = bars3.drop(bars3.index[390 + 340:390 + 351])                     # 11 bars missing at 15:10-15:20 NY on day 2
+    inside = pd.DataFrame({"event_id": ["G"], "event_time": [pd.Timestamp("2020-01-09 20:00", tz="UTC")], "direction": 1})
+    with pytest.raises(TargetSessionError):
+        compute_primary_targets(gap, inside, F)
+
+
+def test_diagnostic_windows_do_not_cross_the_session_either():
+    idx = pd.date_range("2020-01-08 14:30", periods=390, freq="1min", tz="UTC")
+    closes = np.linspace(100, 120, len(idx))
+    bars = pd.DataFrame({"open": closes, "high": closes + 1, "low": closes - 1, "close": closes, "volume": 1.0}, index=idx)
+    ev = pd.DataFrame({"event_id": ["a", "b"], "event_time": [pd.Timestamp("2020-01-08 15:00", tz="UTC"), pd.Timestamp("2020-01-08 19:30", tz="UTC")],
+                       "direction": 1})
+    d = compute_diagnostic_targets(bars, ev, F, np.array([0.001, 0.001]))
+    assert np.isfinite(d["DIAG_RET_120"].iloc[0]) and np.isnan(d["DIAG_RET_120"].iloc[1])      # 14:30 NY + 120m crosses the close
+    assert np.isfinite(d["DIAG_RET_5"].iloc[1])

@@ -4,29 +4,37 @@ campaign_id: C_XXXX              # filled in by scripts/new_experiment.py
 hypothesis: >-
   TODO: one or two sentences. Example: after a confirmed 30/15 pivot low or pivot high on NQ 1-minute
   bars the market state at confirmation contains information about the next 15-60 minutes.
+partitions:                      # frozen in the manifest BEFORE any result; must equal the campaign's partitions
+  development_end: "DEV_END_XXXX"    # DEVELOPMENT / IS = bars opening before this date (the only data the IS stage receives)
+  oos_end: "OOS_END_XXXX"            # CONFIRMATION OOS = [development_end, oos_end), human unlock only
+  lockbox_start: "LOCKBOX_XXXX"      # FINAL LOCKBOX = bars from this date on (sealed)
 instrument: NQ_1m
 data_interval: 1min
 eligible_session:                # exchange-local time; event_time must fall in [start, end)
   start: "09:31"
   end: "15:00"
 direction_definition:
-  rule: "confirmed pivot LOW -> +1 (long); confirmed pivot HIGH -> -1 (short)"
-  values: [1, -1]
+  rule: "confirmed pivot LOW -> +1 (long). The SHORT mirror (pivot HIGH, direction -1) is a SEPARATE experiment."
+  values: [1]
 event_condition:
   description: >-
     A bar is a pivot low if its low is strictly below the lows of pivot_left bars before it and not
-    above the lows of pivot_right bars after it (mirror image for pivot high).
-  parameters_used: [pivot_left, pivot_right]
+    above the lows of pivot_right bars after it (mirror image for pivot high, i.e. the SHORT experiment).
+  parameters_used: [pivot_left, pivot_right, direction]
 deduplication_rule: drop_conflicting_same_time   # or keep_first_per_event_time
 cooldown:
   bars: 60
 base_parameters:
   pivot_left: 30
   pivot_right: 15
+  direction: 1                     # +1 long / -1 short: one direction per experiment
 sensitivity_parameters: [pivot_left, pivot_right]   # at most 2; robustness only, never discovery
 expected_information_time:
   rule: "event_time = completion time of the pivot_right-th bar AFTER the pivot bar (not the plotted pivot bar)"
   confirmation_delay_bars: pivot_right
+# OPTIONAL frozen filter ladder (order frozen BEFORE results; explanatory development-only diagnostics, never extra trials).
+# Requires detect_events_ladder() in event.py returning exactly these steps in this order.
+# filter_ladder: [BASE_TRIGGER, CONDITION_1, FINAL_EVENT]
 tradingview:
   reference_pine: true
   exported_timestamps_csv: null     # optional path to a TradingView export for the translation test
@@ -36,7 +44,7 @@ indicator:
   inputs:                           # indicator inputs and their FROZEN values
     pivot_left: 30
     pivot_right: 15
-  signal_direction_rule: "pivot low -> long, pivot high -> short"
+  signal_direction_rule: "pivot low -> long (this experiment); pivot high -> short is a separate experiment"
   bar_close_confirmation: "signal is evaluated on COMPLETED bars only; alert fires on the close of the confirming bar"
   repainting_pivot_delay_bars: pivot_right
   tie_rule: "left side strict, right side non-strict (to be validated against an exported TradingView timestamp list)"

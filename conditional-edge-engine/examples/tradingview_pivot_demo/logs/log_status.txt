@@ -1,7 +1,0 @@
-registry integrity: {"experiments": 1, "selection_trials": 24, "revealed_trials": 24, "observations": 28}
-
-campaign C001 (lockbox starts 2020-01-01)
-  experiments used      : 1 / 20
-  selection trials      : 24 registered / 480 max; 24 revealed
-  promotable trials     : 0 (pending sensitivity: 0)
-    EXP_0001  REVEALED  lineage_of=-         verification=NOT_RUN

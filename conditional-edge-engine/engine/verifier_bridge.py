@@ -4,9 +4,13 @@ The research engine is untrusted. After an experiment is frozen this module
   1. stages a self-contained copy of exactly what runs (engine/, features/, frozen/v1/, event.py,
      EVENT_SPEC.yaml) and checks the copies against FROZEN_MANIFEST hashes;
   2. generates the adapter the verifier expects (events / features / targets / fit_predict_fold);
-  3. invokes <verifier>/scripts/verify_research.py once per primary target with the correct
-     --bar-interval --target --target-horizon --lockbox-start --mode flags;
-  4. reports research-family status SEPARATELY from the global verdict. Exit code 2 is never a pass.
+  3. invokes <verifier>/scripts/verify_research.py once per (primary target x model) path - RIDGE, SPLINE and XGB, strong
+     mode - with the correct --bar-interval --target --target-horizon --lockbox-start --mode flags;
+  4. reports research-family status SEPARATELY from the global verdict. Exit code 2 is never a pass;
+  5. refuses any verifier checkout that is not the commit pinned in frozen/v1/VERIFIER_PIN.yaml;
+  6. never hands the verifier OOS/lockbox rows: the data it receives is cut to the stage's partition (IS: rows before
+     development_end; OOS-stage: rows before oos_end). The verifier's lockbox audit needs rows to withhold, so the last
+     ``stage_holdout_fraction`` of the staged span (frozen in VERIFIER_PIN.yaml) is passed as --lockbox-start.
 """
 from __future__ import annotations
 
@@ -18,7 +22,9 @@ import sys
 from pathlib import Path
 
 from engine import trial_registry as reg
-from engine.common import CODE_ROOT, EngineError, load_frozen, primary_target_names, sha256_file
+from engine.common import CODE_ROOT, EngineError, load_frozen, load_yaml, model_names, primary_target_names, sha256_file
+from engine.event_contract import load_spec
+from engine.partitions import load_bars_before, parse_partitions
 from engine.experiment_lifecycle import MANIFEST, experiment_dir, verify_manifest
 
 RESEARCH_FAMILIES = ("research_contract", "research_causality", "walkforward", "ml_leakage", "lockbox")
@@ -90,8 +96,55 @@ def fit_predict_fold(features, targets, train_ids, validation_ids, target_name):
 '''
 
 
-def stage_verification_dir(ws: reg.Workspace, experiment_id: str, model: str = "RIDGE") -> Path:
-    """Copy the code that will run into experiments/<id>/verification/stage and check it against the manifest."""
+def verifier_pin() -> dict:
+    return load_yaml(CODE_ROOT / "frozen" / "v1" / "VERIFIER_PIN.yaml")
+
+
+def stage_holdout_start(first_bar, cutoff, pin: dict | None = None) -> str:
+    """UTC date (YYYY-MM-DD) passed to the verifier as --lockbox-start for a stage whose data ends before ``cutoff``.
+
+    The verifier never receives rows at/after the stage partition, yet its lockbox audit is UNVERIFIED when it has no events to
+    withhold. A frozen holdout inside the staged span (the last ``stage_holdout_fraction``, >= ``stage_holdout_min_days``) solves
+    that without handing it any OOS/lockbox row. Deterministic: depends only on the first staged bar and the partition date."""
+    import pandas as pd
+    pin = pin or verifier_pin()
+    first = pd.Timestamp(first_bar).tz_convert("UTC").normalize()
+    cut = pd.Timestamp(cutoff).tz_convert("UTC")
+    span = cut - first
+    hold = max(pd.Timedelta(days=int(pin["stage_holdout_min_days"])), span * float(pin["stage_holdout_fraction"]))
+    start = (cut - hold).floor("D")
+    if start <= first:
+        raise EngineError(f"staged span {first:%Y-%m-%d}..{cut:%Y-%m-%d} is too short for a verifier holdout")
+    return f"{start:%Y-%m-%d}"
+
+
+def calendar_years_before(index, holdout_start: str) -> list[int]:
+    """UTC calendar years that have staged bars before the verifier holdout. The verifier's folds are UTC calendar years; with fewer
+    than 3 of them no audited fold has later (non-holdout) rows, so its future-poisoning checks are 'not applicable' (UNVERIFIED)."""
+    import pandas as pd
+    idx = pd.DatetimeIndex(index).tz_convert("UTC")
+    return sorted({int(y) for y in idx[idx < pd.Timestamp(holdout_start, tz="UTC")].year.unique()})
+
+
+def check_verifier_pin(verifier_repo: Path) -> str:
+    """The external verifier must be exactly the pinned commit (never an arbitrary main)."""
+    pin = verifier_pin()
+    try:
+        head = subprocess.run(["git", "-C", str(verifier_repo), "rev-parse", "HEAD"], capture_output=True, text=True, check=True).stdout.strip()
+    except Exception as e:  # noqa: BLE001
+        raise EngineError(f"cannot read the verifier checkout's commit ({verifier_repo}): {e}") from e
+    if head != pin["commit"]:
+        raise EngineError(f"verifier checkout is at {head}, but frozen/v1/VERIFIER_PIN.yaml pins {pin['commit']}. "
+                          f"Check out the pinned commit; this engine never invokes an unpinned verifier.")
+    dirty = subprocess.run(["git", "-C", str(verifier_repo), "status", "--porcelain"], capture_output=True, text=True).stdout.strip()
+    if dirty:
+        raise EngineError("the pinned verifier checkout has local modifications; refusing to run a modified verifier")
+    return head
+
+
+def stage_verification_dir(ws: reg.Workspace, experiment_id: str, models: list[str] | None = None) -> Path:
+    """Copy the code that will run into experiments/<id>/verification/stage, check it against the manifest, and write one
+    adapter per frozen model (adapter_RIDGE.py, adapter_SPLINE.py, adapter_XGB.py)."""
     verify_manifest(ws, experiment_id)                         # raises if mutated
     d = experiment_dir(ws, experiment_id)
     manifest = json.loads((d / MANIFEST).read_text())
@@ -113,7 +166,8 @@ def stage_verification_dir(ws: reg.Workspace, experiment_id: str, model: str = "
     for rel, h in manifest["hashes"]["frozen_files"].items():
         if sha256_file(stage / rel) != h:
             raise EngineError(f"staged frozen file differs from manifest: {rel}")
-    (stage / "adapter.py").write_text(ADAPTER_SOURCE.format(experiment_id=experiment_id, model=model))
+    for m in (models or model_names(load_frozen())):
+        (stage / f"adapter_{m}.py").write_text(ADAPTER_SOURCE.format(experiment_id=experiment_id, model=m))
     return stage
 
 
@@ -147,11 +201,11 @@ def classify(exit_code: int, parsed: dict) -> dict:
             "research_results_valid": label in ("VERIFIED", "RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE")}
 
 
-def verifier_command(verifier_repo: Path, stage: Path, data: str, *, target: str, horizon_bars: int,
+def verifier_command(verifier_repo: Path, adapter: Path, source: Path, data: str, *, target: str, horizon_bars: int,
                      lockbox_start: str, mode: str, bar_interval: str, timestamp_col: str,
                      report_prefix: Path, skip_tests: bool = False, seed: int = 1729) -> list[str]:
     cmd = [sys.executable, str(Path(verifier_repo) / "scripts" / "verify_research.py"),
-           "--adapter", str(stage / "adapter.py"), "--source", str(stage), "--data", str(data),
+           "--adapter", str(adapter), "--source", str(source), "--data", str(data),
            "--timestamp-col", timestamp_col, "--bar-interval", bar_interval, "--target", target,
            "--target-horizon", f"{horizon_bars}bars", "--lockbox-start", lockbox_start, "--mode", mode,
            "--seed", str(seed), "--report-prefix", str(report_prefix)]
@@ -170,9 +224,17 @@ def overall_label(results: list[dict]) -> str:
     return "RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE"
 
 
+def candidate_targets(ws: reg.Workspace, experiment_id: str) -> list[str]:
+    """Targets of every group capable of promotion (provisional or shortlist-eligible)."""
+    t = reg.experiment_trials(ws, experiment_id)
+    return sorted(set(t[t["decision"].isin(["IS_PROVISIONAL_CANDIDATE", "IS_SHORTLIST_ELIGIBLE"])]["target"]))
+
+
 def run_verification(ws: reg.Workspace, experiment_id: str, verifier_repo: str | Path, data: str, *,
-                     mode: str = "strong", model: str = "RIDGE", timestamp_col: str = "timestamp",
-                     targets: list[str] | None = None, skip_verifier_tests: bool = False, verbose: bool = True) -> dict:
+                     stage_name: str = "IS", mode: str = "strong", models: list[str] | None = None,
+                     timestamp_col: str = "timestamp", targets: list[str] | None = None,
+                     skip_verifier_tests: bool = False, record: bool = True, verbose: bool = True) -> dict:
+    """Verify every (target x model) path capable of promotion: RIDGE, SPLINE and XGB (default), strong mode."""
     frozen = load_frozen()
     vr = Path(verifier_repo).resolve()
     script = vr / "scripts" / "verify_research.py"
@@ -181,33 +243,66 @@ def run_verification(ws: reg.Workspace, experiment_id: str, verifier_repo: str |
             f"{script} not found. The research verification layer must be present in the verifier checkout "
             f"(it is on branch claude/relaxed-lamport-119uli of engine-verification-, not on main at the time of writing). "
             f"This engine does not modify or copy the verifier.")
+    check_verifier_pin(vr)
     exp = reg.experiment_row(ws, experiment_id)
-    if exp["status"] not in ("FROZEN", "REVEALED"):
+    if exp["status"] == "DRAFT":
         raise EngineError(f"{experiment_id} must be frozen before verification")
-    camp = reg.campaign_row(ws, exp["campaign_id"])
-    stage = stage_verification_dir(ws, experiment_id, model)
+    if stage_name not in ("IS", "OOS"):
+        raise EngineError("stage must be IS or OOS")
+    d = experiment_dir(ws, experiment_id)
+    spec = load_spec(d / "EVENT_SPEC.yaml")
+    parts = parse_partitions(spec["partitions"])
+    cutoff = parts.development_end if stage_name == "IS" else parts.oos_end
+    if stage_name == "OOS" and not reg.oos_spent(ws, experiment_id):
+        raise EngineError("OOS-stage verification is only available after the human-approved OOS has been spent")
+    models = models or model_names(frozen)
+    targets = targets or (candidate_targets(ws, experiment_id) if reg.is_revealed(exp) else primary_target_names(frozen))
+    if not targets:
+        raise EngineError("no candidate target paths to verify (pass --targets explicitly to override)")
+    stage = stage_verification_dir(ws, experiment_id, models)
+    # the verifier never sees rows beyond this stage's partition
+    vdir = d / "verification"
+    bars = load_bars_before(data, cutoff, timestamp_col)
+    stage_data = vdir / f"data_{stage_name}.parquet"
+    holdout_start = stage_holdout_start(bars.index.min(), cutoff)
+    years = calendar_years_before(bars.index, holdout_start)
+    warnings = []
+    if len(years) < 3:
+        warnings.append(f"only {len(years)} UTC calendar year(s) {years} of staged data precede the verifier holdout ({holdout_start}): the verifier's "
+                        "future_label/future_feature poisoning checks need a fold with later rows, so strong-mode verification is expected to be "
+                        "INCOMPLETE (UNVERIFIED), never a pass. Use a development window of at least 3 calendar years.")
+        if verbose:
+            print("WARNING:", warnings[-1], flush=True)
+    bars.reset_index().rename(columns={"index": "timestamp"}).to_parquet(stage_data)
     horizons = {t["name"]: t["horizon_bars"] for t in frozen.target_bank["primary_targets"]}
-    out_dir = experiment_dir(ws, experiment_id) / "verification" / "reports"
+    out_dir = vdir / "reports"
     out_dir.mkdir(parents=True, exist_ok=True)
-    results = []
-    for target in (targets or primary_target_names(frozen)):
-        cmd = verifier_command(vr, stage, data, target=target, horizon_bars=horizons[target],
-                               lockbox_start=camp["lockbox_start"], mode=mode, bar_interval=frozen.instrument["bar_interval"],
-                               timestamp_col=timestamp_col, report_prefix=out_dir / f"research_{target}",
-                               skip_tests=skip_verifier_tests)
-        if verbose:
-            print("$", " ".join(cmd), flush=True)
-        proc = subprocess.run(cmd, capture_output=True, text=True, cwd=str(vr))
-        parsed = parse_verifier_output(proc.stdout)
-        res = classify(proc.returncode, parsed)
-        res.update({"target": target, "command": cmd, "stdout_tail": proc.stdout[-3000:], "stderr_tail": proc.stderr[-1500:]})
-        results.append(res)
-        if verbose:
-            print(proc.stdout[-2500:], flush=True)
-            print(f"=> {target}: exit={proc.returncode} label={res['label']} (exit code 2 is NOT a pass)", flush=True)
-    summary = {"experiment_id": experiment_id, "verifier_repo": str(vr), "mode": mode, "model_verified": model,
-               "overall": overall_label(results), "results": results}
-    (experiment_dir(ws, experiment_id) / "verification" / "verification_summary.json").write_text(
-        json.dumps(summary, indent=2, default=str))
-    reg.update_experiment(ws, experiment_id, research_verification=summary["overall"])
+    results, first = [], True
+    for target in targets:
+        for model in models:
+            cmd = verifier_command(vr, stage / f"adapter_{model}.py", stage, str(stage_data), target=target,
+                                   horizon_bars=horizons[target], lockbox_start=holdout_start, mode=mode,
+                                   bar_interval=frozen.instrument["bar_interval"], timestamp_col="timestamp",
+                                   report_prefix=out_dir / f"research_{stage_name}_{target}_{model}",
+                                   skip_tests=skip_verifier_tests or not first)
+            first = False                                   # repository_health runs once; research families run for every path
+            if verbose:
+                print("$", " ".join(cmd), flush=True)
+            proc = subprocess.run(cmd, capture_output=True, text=True, cwd=str(vr))
+            res = classify(proc.returncode, parse_verifier_output(proc.stdout))
+            res.update({"target": target, "model": model, "mode": mode, "stage": stage_name, "command": cmd,
+                        "stdout_tail": proc.stdout[-2500:], "stderr_tail": proc.stderr[-1200:]})
+            results.append(res)
+            if verbose:
+                print(f"=> {target}|{model}: exit={proc.returncode} label={res['label']} (exit code 2 is NOT a pass)", flush=True)
+    summary = {"experiment_id": experiment_id, "stage": stage_name, "verifier_repo": str(vr), "verifier_commit": verifier_pin()["commit"],
+               "mode": mode, "stage_cutoff": f"{cutoff:%Y-%m-%d}", "verifier_holdout_start": holdout_start, "warnings": warnings, "models_verified": models, "targets_verified": targets, "overall": overall_label(results), "results": results}
+    (vdir / f"verification_summary_{stage_name}.json").write_text(json.dumps(summary, indent=2, default=str))
+    if record and stage_name == "IS":
+        paths = {f"{r['target']}|{r['model']}": {"label": r["label"], "mode": r["mode"], "research_families": r["research_families"],
+                                                  "research_results_valid": r["research_results_valid"]} for r in results}
+        reg.set_verification(ws, experiment_id, paths, summary["overall"], frozen)
+        if reg.is_revealed(exp) and not reg.oos_spent(ws, experiment_id) and (d / "results" / "results.json").exists():
+            from engine import is_report
+            is_report.write_is_report(ws, experiment_id)             # the IS report now shows the verification state
     return summary

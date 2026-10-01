@@ -13,6 +13,11 @@ Explicit sign conventions, direction d in {-1,+1}, N forward bars, P0 as above:
   DIR_PATH_SKEW_60 = MFE60 + MAE60           (>0: favorable excursion dominates)
 
 Only the four PRIMARY targets can take part in selection. Diagnostic targets are report-only.
+
+SAME-SESSION RULE (v1): a primary target window must resolve inside the event's own RTH session. An event whose
+max-horizon window would end after the RTH close is TARGET_TIMESTAMP_INELIGIBLE (decided from timestamps and session
+rules only, never from outcomes); the experiment pipeline drops such events up front, and ``compute_primary_targets``
+raises if it is ever handed a window that actually crosses the close (a data gap inside the session).
 """
 from __future__ import annotations
 
@@ -21,6 +26,42 @@ import pandas as pd
 
 from engine.common import EngineError, Frozen, utc_ns, validate_bars
 from features._base import gather
+
+
+class TargetSessionError(EngineError):
+    pass
+
+
+def max_primary_horizon_bars(frozen: Frozen) -> int:
+    return max(int(t["horizon_bars"]) for t in frozen.target_bank["primary_targets"])
+
+
+def session_close_utc(times, frozen: Frozen) -> pd.DatetimeIndex:
+    """RTH close (UTC) of the exchange-local calendar day of each timestamp (DST-safe: built from naive local time)."""
+    idx = pd.DatetimeIndex(times)
+    local_naive = idx.tz_convert(frozen.tz).tz_localize(None)
+    hh, mm = frozen.instrument["rth"]["close"].split(":")
+    close_naive = local_naive.normalize() + pd.Timedelta(hours=int(hh), minutes=int(mm))
+    return close_naive.tz_localize(frozen.tz).tz_convert("UTC")
+
+
+def target_timestamp_ineligible(event_time, frozen: Frozen) -> np.ndarray:
+    """TARGET_TIMESTAMP_INELIGIBLE mask: event_time + max_horizon*interval > RTH close of the event's session."""
+    idx = pd.DatetimeIndex(event_time).tz_convert("UTC")
+    end = idx + max_primary_horizon_bars(frozen) * frozen.interval
+    return np.asarray(end > session_close_utc(idx, frozen))
+
+
+def declared_resolution_times(bars_index: pd.DatetimeIndex, event_time, horizon_bars: int, interval: pd.Timedelta) -> pd.DatetimeIndex:
+    """Frozen declared resolution: completion time of the Nth bar opening at/after event_time (NaT if the data ends first)."""
+    ns = utc_ns(bars_index)
+    first = np.searchsorted(ns, utc_ns(pd.DatetimeIndex(event_time)), side="left")
+    last = first + horizon_bars - 1
+    ok = last < len(ns)
+    out = pd.DatetimeIndex([pd.NaT] * len(first), tz="UTC")
+    vals = np.full(len(first), np.iinfo(np.int64).min, dtype="int64")
+    vals[ok] = ns[last[ok]] + int(interval.value)
+    return pd.DatetimeIndex(pd.to_datetime(vals, utc=True)).where(ok, pd.NaT)
 
 
 def _directions(events: pd.DataFrame) -> np.ndarray:
@@ -73,10 +114,20 @@ def compute_primary_targets(bars: pd.DataFrame, events: pd.DataFrame, frozen: Fr
             val = fav.max(axis=1) + adv.min(axis=1)
         else:
             raise EngineError(f"unknown target kind {spec['kind']}")
+        claimed = bars.index[f + N - 1].tz_convert("UTC") + interval
+        ev_t = pd.DatetimeIndex(events["event_time"]).tz_convert("UTC")[ok]
+        if len(f) and (claimed > session_close_utc(ev_t, frozen)).any():
+            bad = events["event_id"].to_numpy()[ok][np.asarray(claimed > session_close_utc(ev_t, frozen))][:5].tolist()
+            raise TargetSessionError(f"{spec['name']}: window crosses the RTH close / a session gap for events {bad}; "
+                                     f"primary targets must resolve inside the event's session (TARGET_TIMESTAMP_INELIGIBLE "
+                                     f"events must be removed by timestamp rules before target computation)")
+        declared = declared_resolution_times(bars.index, ev_t, N, interval)
+        eff = pd.DatetimeIndex(np.maximum(claimed.as_unit("ns").asi8, declared.as_unit("ns").asi8)).tz_localize("UTC") if len(f) else claimed
         out[spec["name"]] = pd.DataFrame({
             "event_id": events["event_id"].to_numpy()[ok],
             "target_start": bars.index[f].tz_convert("UTC"),
-            "target_end": bars.index[f + N - 1].tz_convert("UTC") + interval,
+            "target_end": claimed,
+            "effective_target_end": eff,
             "value": val,
         }).reset_index(drop=True)
     return out
@@ -106,8 +157,12 @@ def compute_diagnostic_targets(bars: pd.DataFrame, events: pd.DataFrame, frozen:
     E = len(events)
     res = {"event_id": events["event_id"].to_numpy()}
 
+    ev_utc = pd.DatetimeIndex(events["event_time"]).tz_convert("UTC")
+    close = session_close_utc(ev_utc, frozen)
+
     def win_ok(N):
-        return (first + N - 1) < n
+        """Window complete in the data AND inside the event's RTH session (diagnostics never cross the close either)."""
+        return ((first + N - 1) < n) & np.asarray((ev_utc + N * frozen.interval) <= close)
 
     for N in cfg["return_horizons_bars"]:
         ok = win_ok(N)

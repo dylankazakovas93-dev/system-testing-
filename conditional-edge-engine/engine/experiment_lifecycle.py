@@ -17,6 +17,7 @@ from engine import trial_registry as reg
 from engine.common import (CODE_ROOT, EngineError, Frozen, canonical_json, engine_code_hash, frozen_files,
                            load_frozen, now_utc_iso, sha256_file)
 from engine.event_contract import EventSpecError, load_spec, static_scan_event_source, validate_spec
+from engine.partitions import parse_partitions
 
 EDITABLE = ["HYPOTHESIS.md", "EVENT_SPEC.yaml", "event.py", "reference.pine"]
 MANIFEST = "FROZEN_MANIFEST.json"
@@ -31,21 +32,28 @@ def experiment_dir(ws: reg.Workspace, experiment_id: str) -> Path:
 
 
 def create_experiment(ws: reg.Workspace, campaign_id: str | None = None, *, new_campaign: str | None = None,
-                      lockbox_start: str | None = None, lineage_parent: str = "") -> str:
-    """Register a new experiment (consumes one slot of the campaign) and copy the template."""
+                      partitions: dict | None = None, lineage_parent: str = "") -> str:
+    """Register a new experiment (consumes one slot of the campaign) and copy the template.
+
+    A NEW campaign needs explicit ``partitions`` = {development_end, oos_end, lockbox_start}; nothing infers or moves them.
+    """
     frozen = load_frozen()
     if new_campaign:
-        if not lockbox_start:
-            raise EngineError("a new campaign needs --lockbox-start YYYY-MM-DD (the confirmation lockbox boundary)")
-        reg.create_campaign(ws, new_campaign, lockbox_start, frozen)
+        if not partitions:
+            raise EngineError("a new campaign needs explicit partitions: --development-end, --oos-end, --lockbox-start "
+                              "(DEVELOPMENT / CONFIRMATION OOS / FINAL LOCKBOX)")
+        reg.create_campaign(ws, new_campaign, partitions, frozen)
         campaign_id = new_campaign
     if not campaign_id:
-        raise EngineError("specify --campaign <id> or --new-campaign <id> --lockbox-start <date>")
+        raise EngineError("specify --campaign <id> or --new-campaign <id> with --development-end --oos-end --lockbox-start")
     exp_id = reg.register_experiment(ws, campaign_id, lineage_parent, frozen)   # raises on experiment 21
     dest = experiment_dir(ws, exp_id)
     shutil.copytree(CODE_ROOT / "templates" / "experiment", dest)
     spec_path = dest / "EVENT_SPEC.yaml"
-    text = spec_path.read_text().replace("EXP_XXXX", exp_id).replace("C_XXXX", campaign_id)
+    parts = reg.campaign_partitions(ws, campaign_id)
+    text = (spec_path.read_text().replace("EXP_XXXX", exp_id).replace("C_XXXX", campaign_id)
+            .replace("DEV_END_XXXX", parts["development_end"]).replace("OOS_END_XXXX", parts["oos_end"])
+            .replace("LOCKBOX_XXXX", parts["lockbox_start"]))
     spec_path.write_text(text)
     hyp = dest / "HYPOTHESIS.md"
     hyp.write_text(hyp.read_text().replace("EXP_XXXX", exp_id))
@@ -71,7 +79,8 @@ def validate_experiment(ws: reg.Workspace, experiment_id: str, frozen: Frozen | 
         spec = load_spec(d / "EVENT_SPEC.yaml")
     except Exception as e:  # noqa: BLE001
         return [f"EVENT_SPEC.yaml unreadable: {e}"]
-    errs += validate_spec(spec, frozen, experiment_id=experiment_id, campaign_id=exp["campaign_id"])
+    errs += validate_spec(spec, frozen, experiment_id=experiment_id, campaign_id=exp["campaign_id"],
+                          campaign_partitions=reg.campaign_partitions(ws, exp["campaign_id"]))
     errs += [f"event.py: {m}" for m in static_scan_event_source((d / "event.py").read_text())]
     return errs
 
@@ -100,19 +109,22 @@ def freeze(ws: reg.Workspace, experiment_id: str) -> dict:
     d = experiment_dir(ws, experiment_id)
     bundle = _hash_bundle(ws, experiment_id)
     event_hash = hashlib.sha256((bundle["event_py"] + ":" + bundle["event_spec"]).encode()).hexdigest()
-    camp = reg.campaign_row(ws, exp["campaign_id"])
+    spec = load_spec(d / "EVENT_SPEC.yaml")
+    parts = parse_partitions(spec["partitions"])
     manifest = {
         "experiment_id": experiment_id, "campaign_id": exp["campaign_id"], "frozen_at": now_utc_iso(),
-        "engine_version": (CODE_ROOT / "ENGINE_VERSION").read_text().strip(), "lockbox_start": camp["lockbox_start"],
+        "engine_version": (CODE_ROOT / "ENGINE_VERSION").read_text().strip(),
+        "partitions": parts.as_dict(), "partitions_hash": parts.hash(),
         "hashes": bundle, "event_hash": event_hash, "frozen_spec_hashes": frozen.hashes(),
         "informational_hashes": {f: sha256_file(d / f) for f in ("HYPOTHESIS.md", "reference.pine")},
         "selection_trials": [{"trial_id": reg.trial_id(experiment_id, i), **s} for i, s in enumerate(reg.trial_specs(frozen))],
     }
     manifest["manifest_hash"] = hashlib.sha256(canonical_json(manifest).encode()).hexdigest()
+    text = json.dumps(manifest, indent=2, sort_keys=True)
     # registry first: if pre-registration fails nothing is locked
     reg.preregister_trials(ws, experiment_id, event_hash=event_hash, manifest_hash=manifest["manifest_hash"],
-                           hashes=frozen.hashes(), frozen=frozen)
-    (d / MANIFEST).write_text(json.dumps(manifest, indent=2, sort_keys=True))
+                           manifest_sha256=hashlib.sha256(text.encode()).hexdigest(), hashes=frozen.hashes(), frozen=frozen)
+    (d / MANIFEST).write_text(text)
     lock(d)
     return manifest
 
@@ -139,6 +151,10 @@ def verify_manifest(ws: reg.Workspace, experiment_id: str, *, raise_on_error: bo
         exp = reg.experiment_row(ws, experiment_id)
         if exp["manifest_hash"] != manifest.get("manifest_hash"):
             errors.append("manifest hash differs from the registry (experiments.csv)")
+        if exp["manifest_sha256"] and sha256_file(mp) != exp["manifest_sha256"]:
+            errors.append("FROZEN_MANIFEST.json file bytes differ from the registry (manifest_sha256)")
+        if parse_partitions(load_spec(d / "EVENT_SPEC.yaml")["partitions"]).hash() != manifest.get("partitions_hash"):
+            errors.append("partitions changed after freeze")
         cur = _hash_bundle(ws, experiment_id)
         for key, label in (("event_py", "event.py"), ("event_spec", "EVENT_SPEC.yaml")):
             if cur[key] != manifest["hashes"][key]:

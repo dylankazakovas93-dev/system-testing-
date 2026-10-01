@@ -26,7 +26,7 @@ class WFConfig:
 
     @staticmethod
     def from_policy(policy: dict) -> "WFConfig":
-        w = policy["walkforward"]
+        w = policy["development_cv"]
         return WFConfig(w["min_outer_train_events"], w["inner_blocks"], w["min_inner_train_events"],
                         w["min_inner_oof_events"])
 

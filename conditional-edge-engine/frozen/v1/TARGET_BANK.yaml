@@ -8,6 +8,11 @@
 version: v1
 forward_bar_rule: first_bars_with_open_ge_event_time
 reference_price: open_of_first_forward_bar
+# SAME-SESSION RULE (v1): every primary target window must resolve inside the event's own RTH session.
+# An event whose max-horizon window would end after the RTH close (event_time + max_horizon_bars*interval > close)
+# is TARGET_TIMESTAMP_INELIGIBLE and is not an event of the experiment (decided from timestamps/session rules only,
+# never from outcomes). No primary window may cross the RTH close, the ETH maintenance halt or a session boundary.
+session_rule: primary_targets_must_resolve_inside_event_rth_session
 primary_targets:
   - {name: DIR_RETURN_15,     kind: directional_return, horizon_bars: 15}
   - {name: DIR_RETURN_30,     kind: directional_return, horizon_bars: 30}

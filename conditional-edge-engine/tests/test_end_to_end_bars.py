@@ -1,6 +1,10 @@
-"""Bar-level end-to-end runs (synthetic 1-minute NQ-like bars through the REAL pipeline)."""
+"""Bar-level end-to-end runs (synthetic 1-minute NQ-like bars through the REAL pipeline and the REAL CLIs).
+
+Lifecycle covered at bar level: freeze -> IS run (stops at the human gate) -> [test code playing the human] approval ->
+one-shot OOS -> CPCV. The strong-mode external verification of the three model paths is injected here with the test-only
+helper ``prepare_for_approval`` (the real verifier is exercised in test_verifier_bridge.py and in the reported verifier runs).
+"""
 import json
-import os
 import shutil
 import subprocess
 import sys
@@ -9,17 +13,26 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
+import yaml
 
 from engine import trial_registry as reg
 from engine.common import CODE_ROOT, load_frozen
+from engine.event_contract import EventContractError, EventSpecError
 from engine.experiment_lifecycle import MutationDetected, create_experiment, experiment_dir, freeze, verify_manifest
 from engine.experiment_runner import run_experiment
+from engine.oos_stage import ApprovalError, validate_approval
 from engine.synthetic import make_bars
+from tests.scenario_helpers import human_approval, prepare_for_approval, top_group_ids
 
 F = load_frozen()
-REPORT_SECTIONS = ["BASE EVENT", "PROMOTED DEVELOPMENT CANDIDATES", "REJECTED — LOW FREQUENCY",
-                   "REJECTED — INSUFFICIENT UPLIFT", "REJECTED — STATISTICAL", "REJECTED — INSTABILITY",
-                   "REJECTED — SENSITIVITY", "DIAGNOSTIC / NON-PROMOTABLE OBSERVATIONS", "ALL 24 SELECTION TRIALS"]
+PARTS = {"development_end": "2018-01-01", "oos_end": "2018-07-01", "lockbox_start": "2018-10-01"}
+PART_ARGS = ["--development-end", PARTS["development_end"], "--oos-end", PARTS["oos_end"], "--lockbox-start", PARTS["lockbox_start"]]
+N_DAYS = 820                                      # 2016-01-04 .. 2019-02: development 2016-17, OOS 2018H1, gap, lockbox 2018-10 on
+REPORT_SECTIONS = ["A. Experiment hypothesis", "B. Exact event definition", "C. Direction", "D. Raw event frequency", "E. Data period used",
+                   "F. Exact selection trial count", "G. All 24 trial results", "H. Multiplicity adjustments", "I. Top configurations",
+                   "J. Model agreement", "K. All IS calendar years", "L. All 5 purged DEVELOPMENT_CV folds", "M–Q.", "R. Feature diagnostics",
+                   "S. Filter / component ladder", "T. Sensitivity diagnostics", "U. Why each shortlisted configuration was selected",
+                   "V. Why every other configuration was rejected", "W. Non-promotable interesting observations", "X. Exact hashes", "Y. OOS status"]
 
 
 def cli(*args, check=True):
@@ -29,14 +42,18 @@ def cli(*args, check=True):
     return p
 
 
-# ============================ 11. TradingView template, driven entirely through the CLI ====================
+def write_parquet(path, **kw):
+    make_bars(N_DAYS, seed=7, **kw).reset_index().rename(columns={"index": "timestamp"}).to_parquet(path)
+
+
+# ============================ the TradingView template, driven entirely through the CLI (no planted effect) ====================
 @pytest.fixture(scope="module")
 def golden(tmp_path_factory):
     base = tmp_path_factory.mktemp("golden")
     data = base / "NQ_synth.parquet"
-    make_bars(1100, seed=7).reset_index().rename(columns={"index": "timestamp"}).to_parquet(data)
+    write_parquet(data)                                                       # includes OOS AND lockbox rows: the CLI must discard them
     ws = base / "ws"
-    cli("scripts/new_experiment.py", "--new-campaign", "C001", "--lockbox-start", "2020-01-01", "--workspace", ws)
+    cli("scripts/new_experiment.py", "--new-campaign", "C001", *PART_ARGS, "--workspace", ws)
     spec = ws / "experiments/EXP_0001/EVENT_SPEC.yaml"
     spec.write_text(spec.read_text().replace("TODO: one or two sentences.", "A confirmed pivot is followed by a path."))
     cli("scripts/freeze_experiment.py", "--experiment", "EXP_0001", "--workspace", ws)
@@ -44,38 +61,78 @@ def golden(tmp_path_factory):
     return {"ws": ws, "data": data, "run_stdout": run.stdout}
 
 
-def test_template_experiment_report_has_every_required_section(golden):
-    text = (golden["ws"] / "experiments/EXP_0001/results/REPORT.md").read_text()
+def test_run_experiment_prints_the_counters_and_stops(golden):
+    out = golden["run_stdout"]
+    assert "EXPERIMENT SELECTION TRIALS: 24 / 24" in out and "CAMPAIGN REVEALED SELECTION TRIALS: 24 / 480" in out
+    assert "OOS NOT ACCESSED" in out and "stopped for human review" in out
+
+
+def test_is_report_has_sections_A_to_Y_and_the_sealed_oos_status(golden):
+    ws = golden["ws"]
+    text = (ws / "experiments/EXP_0001/results/IS_REPORT.md").read_text()
     for s in REPORT_SECTIONS:
         assert f"## {s}" in text, s
-    assert "These bins were not selection trials and cannot promote a candidate." in text
-    assert "Using them to construct a rule requires a new registered experiment." in text
-    assert "DIAGNOSTIC — NOT ELIGIBLE FOR PROMOTION" in text
-    assert "selection opportunities used by this experiment: 24 of 24" in text
+    assert "OOS status = NOT ACCESSED" in text and "DIAGNOSTIC ONLY — NOT A SELECTION TRIAL" in text
+    assert "NOT OOS" in text and "4 targets × 3 models × 2 states = **24**" in text
     assert text.count("EXP_0001_T") >= 24 and "EXP_0001_T24" in text
-    assert "score deciles" in text.lower() and "Year-by-year mean target by decile" in text
+    j = json.loads((ws / "experiments/EXP_0001/results/IS_REPORT.json").read_text())
+    assert j["markdown_sha256"] and j["X_hashes"]["manifest_sha256"] and j["Y_oos_status"] == "NOT ACCESSED"
 
 
-def test_template_experiment_registry_and_lockbox(golden):
+def test_registry_has_exactly_24_revealed_trials_and_no_oos_activity(golden):
     ws = reg.Workspace(golden["ws"])
-    assert reg.integrity_check(ws) == {"experiments": 1, "selection_trials": 24, "revealed_trials": 24,
-                                       "observations": len(reg.read_observations(ws))}
+    chk = reg.integrity_check(ws)
+    assert chk["selection_trials"] == 24 and chk["revealed_trials"] == 24
     t = reg.experiment_trials(ws, "EXP_0001")
-    assert len(t) == 24 and (t["status"] == "REVEALED").all() and t["campaign_q"].notna().all()
+    assert len(t) == 24 and (t["status"] == "REVEALED").all()
+    for col in ("experiment_bonferroni_p", "campaign_bonferroni_p", "experiment_q", "campaign_q"):
+        assert t[col].notna().all(), col
+    assert not t["decision"].isin(["IS_SHORTLIST_ELIGIBLE", "IS_PROVISIONAL_CANDIDATE"]).any()      # null data: nothing may survive
+    assert reg.experiment_row(ws, "EXP_0001")["status"] == "IS_REJECTED"
+    assert len(reg.read_oos_access(ws)) == 0 and not list(Path(golden["ws"], "approvals").glob("*.yaml"))
     res = json.loads((golden["ws"] / "experiments/EXP_0001/results/results.json").read_text())
-    assert res["base_event"]["lockbox_withheld_bars"] > 0 and res["base_event"]["flag"] == ""
-    assert res["oos_period"].endswith("2019-12-31") and res["lockbox_start"] == "2020-01-01"
-    for f in (golden["ws"] / "experiments/EXP_0001/results").glob("oos_*.csv"):
-        df = pd.read_csv(f, parse_dates=["event_time"])
-        assert (df["event_time"] < pd.Timestamp("2020-01-01", tz="UTC")).all(), f        # nothing from the lockbox
-    assert res["sensitivity"]["status"] == "NO_DEVELOPMENT_CANDIDATE"                    # sensitivity cannot create one
-    assert len(t) == 24 and not t["decision"].isin(["PROMOTABLE", "PROMOTABLE_PENDING_SENSITIVITY"]).any()
+    file_ts = pd.to_datetime(pd.read_parquet(golden["data"])["timestamp"], utc=True)
+    n_dev = int((file_ts < pd.Timestamp(PARTS["development_end"], tz="UTC")).sum())
+    assert len(file_ts) > n_dev                                                                   # the data file DID contain OOS + lockbox rows ...
+    assert res["base_event"]["development_bars"] == n_dev                                         # ... and exactly the development rows were used
+    assert res["base_event"]["rows_removed_before_research"] == 0                                 # (the CLI loader never materialised the rest)
+    assert pd.Timestamp(res["base_event"]["last_bar"]) < pd.Timestamp(PARTS["development_end"], tz="UTC")
+    assert not list((golden["ws"] / "experiments/EXP_0001/results").glob("oos_*")) and not (golden["ws"] / "experiments/EXP_0001/results/OOS_REPORT.json").exists()
+    man = json.loads((golden["ws"] / "experiments/EXP_0001/FROZEN_MANIFEST.json").read_text())
+    assert man["partitions"] == PARTS and man["partitions_hash"]
 
 
 def test_rerun_of_revealed_experiment_is_refused(golden):
-    p = cli("scripts/run_experiment.py", "--experiment", "EXP_0001", "--data", golden["data"], "--workspace",
-            golden["ws"], check=False)
+    p = cli("scripts/run_experiment.py", "--experiment", "EXP_0001", "--data", golden["data"], "--workspace", golden["ws"], check=False)
     assert p.returncode != 0 and "already revealed" in (p.stderr + p.stdout)
+
+
+def test_run_oos_refuses_without_a_human_approval_and_spends_nothing(golden):
+    p = cli("scripts/run_oos.py", "--experiment", "EXP_0001", "--data", golden["data"], "--workspace", golden["ws"], check=False)
+    assert p.returncode != 0 and "approval" in (p.stderr + p.stdout).lower()
+    ws = reg.Workspace(golden["ws"])
+    assert len(reg.read_oos_access(ws)) == 0 and not list(Path(golden["ws"], "approvals").glob("*.yaml"))
+    c = cli("scripts/run_cpcv.py", "--experiment", "EXP_0001", "--data", golden["data"], "--workspace", golden["ws"], check=False)
+    assert c.returncode != 0 and len(reg.read_oos_access(ws)) == 0
+
+
+def test_campaign_status_reports_counters_and_statuses(golden):
+    out = cli("scripts/campaign_status.py", "--workspace", golden["ws"]).stdout
+    assert "registry integrity" in out
+    assert "CAMPAIGN REVEALED SELECTION TRIALS    : 24 / 480" in out and "experiments used                      : 1 / 20" in out
+    assert "statistical selection opportunities exposed so far: 24" in out and "IS_REJECTED" in out
+
+
+def test_make_report_rebuilds_the_is_report_from_stored_results(golden, tmp_path):
+    ws_dir = tmp_path / "ws"
+    shutil.copytree(golden["ws"], ws_dir)
+    ws = reg.Workspace(ws_dir)
+    before = reg.experiment_trials(ws, "EXP_0001").to_csv()
+    cli("scripts/make_report.py", "--experiment", "EXP_0001", "--workspace", ws_dir)
+    text = (ws_dir / "experiments/EXP_0001/results/IS_REPORT.md").read_text()
+    for s in REPORT_SECTIONS:
+        assert f"## {s}" in text
+    assert reg.experiment_trials(ws, "EXP_0001").to_csv() == before
 
 
 def test_mutation_after_reveal_forces_a_new_lineage_and_never_overwrites(golden, tmp_path):
@@ -84,7 +141,7 @@ def test_mutation_after_reveal_forces_a_new_lineage_and_never_overwrites(golden,
     ws = reg.Workspace(ws_dir)
     before = reg.experiment_trials(ws, "EXP_0001").to_csv()
     ev = ws_dir / "experiments/EXP_0001/event.py"
-    os.chmod(ev, 0o644)
+    ev.chmod(0o644)
     ev.write_text(ev.read_text().replace("pivot_left", "pivot_left  "))        # any byte change after results were revealed
     with pytest.raises(MutationDetected):
         verify_manifest(ws, "EXP_0001")
@@ -92,29 +149,24 @@ def test_mutation_after_reveal_forces_a_new_lineage_and_never_overwrites(golden,
     assert (ws_dir / "experiments/EXP_0002/LINEAGE.md").exists()
     assert reg.experiment_trials(ws, "EXP_0001").to_csv() == before                # the old experiment's rows are untouched
     status = cli("scripts/campaign_status.py", "--campaign", "C001", "--workspace", ws_dir).stdout
-    assert "experiments used      : 2 / 20" in status and "lineage_of=EXP_0001" in status
+    assert "experiments used                      : 2 / 20" in status and "lineage_of=EXP_0001" in status
 
 
-def test_campaign_status_reports_the_opportunity_count(golden):
-    out = cli("scripts/campaign_status.py", "--workspace", golden["ws"]).stdout
-    assert "registry integrity" in out and "24 registered / 480 max; 24 revealed" in out
-    assert "experiments used      : 1 / 20" in out
-
-
-def test_cli_rejects_experiment_21(tmp_path):
+def test_cli_rejects_experiment_21_and_new_campaigns_need_explicit_partitions(tmp_path):
     ws_dir = tmp_path / "ws"
-    cli("scripts/new_experiment.py", "--new-campaign", "C001", "--lockbox-start", "2020-01-01", "--workspace", ws_dir)
+    cli("scripts/new_experiment.py", "--new-campaign", "C001", *PART_ARGS, "--workspace", ws_dir)
     for _ in range(19):
         cli("scripts/new_experiment.py", "--campaign", "C001", "--workspace", ws_dir)
     p = cli("scripts/new_experiment.py", "--campaign", "C001", "--workspace", ws_dir, check=False)
     assert p.returncode != 0 and "MAX_EXPERIMENTS_PER_CAMPAIGN=20" in (p.stderr + p.stdout)
-    p2 = cli("scripts/new_experiment.py", "--new-campaign", "C002", "--lockbox-start", "2021-01-01", "--workspace", ws_dir)
+    nodates = cli("scripts/new_experiment.py", "--new-campaign", "C002", "--workspace", ws_dir, check=False)
+    assert nodates.returncode != 0 and "--development-end" in (nodates.stderr + nodates.stdout)
+    p2 = cli("scripts/new_experiment.py", "--new-campaign", "C002", *PART_ARGS, "--workspace", ws_dir)
     assert "EXP_0021" in p2.stdout
 
 
-# ============================ planted bar-level edge: candidate + sensitivity =========================
-def custom_experiment(ws, *, mixed: bool, hypothesis: str):
-    exp = create_experiment(ws, new_campaign="C001", lockbox_start="2020-01-01")
+# ============================ a planted bar-level edge: candidate + sensitivity + human gate + OOS + CPCV ====================
+def write_custom_event(ws, exp, *, mixed: bool, hypothesis: str, spec_values=(1,)):
     d = experiment_dir(ws, exp)
     (d / "event.py").write_text(textwrap.dedent('''
         import numpy as np
@@ -125,102 +177,192 @@ def custom_experiment(ws, *, mixed: bool, hypothesis: str):
             step = int(params["every_n_bars"])
             flip = int(params["direction_period"])
             interval = pd.Timedelta(bars.attrs["bar_interval"])
-            position = np.arange(len(bars))
-            keep = position % step == 0
+            keep = np.arange(len(bars)) % step == 0
             n = int(keep.sum())
-            direction = np.where(np.arange(n) % flip == 0, 1, -1) if flip > 1 else np.ones(n, dtype=int)
+            direction = np.where(np.arange(n) % flip == 0, 1, -1) if flip > 1 else np.full(n, int(params["direction"]))
             return pd.DataFrame({"event_time": bars.index[keep] + interval, "direction": direction})
     '''))
-    (d / "EVENT_SPEC.yaml").write_text(textwrap.dedent(f'''
-        experiment_id: {exp}
-        campaign_id: C001
-        hypothesis: "{hypothesis}"
-        instrument: NQ_1m
-        data_interval: 1min
-        eligible_session: {{start: "09:31", end: "15:00"}}
-        direction_definition: {{rule: "long unless direction_period alternates", values: [1, -1]}}
-        event_condition: {{description: "every n-th bar of the supplied history", parameters_used: [every_n_bars, direction_period]}}
-        deduplication_rule: keep_first_per_event_time
-        cooldown: {{bars: 0}}
-        base_parameters: {{every_n_bars: 45, direction_period: {2 if mixed else 1}}}
-        sensitivity_parameters: [every_n_bars]
-        expected_information_time: {{rule: "completion time of the n-th bar", confirmation_delay_bars: 0}}
-    '''))
-    freeze(ws, exp)
-    return exp
+    s = yaml.safe_load((d / "EVENT_SPEC.yaml").read_text())
+    s["hypothesis"] = hypothesis
+    s["direction_definition"] = {"rule": "long only" if not mixed else "alternating (v1 forbids this)", "values": list(spec_values)}
+    s["event_condition"] = {"description": "every n-th bar of the supplied history", "parameters_used": ["every_n_bars", "direction_period", "direction"]}
+    s["cooldown"] = {"bars": 0}
+    s["deduplication_rule"] = "keep_first_per_event_time"
+    s["base_parameters"] = {"every_n_bars": 45, "direction_period": 2 if mixed else 1, "direction": 1}
+    s["sensitivity_parameters"] = ["every_n_bars"]
+    s["expected_information_time"] = {"rule": "completion time of the n-th bar", "confirmation_delay_bars": 0}
+    for k in ("tradingview", "indicator"):
+        s.pop(k, None)
+    (d / "EVENT_SPEC.yaml").write_text(yaml.safe_dump(s, sort_keys=False))
 
 
 @pytest.fixture(scope="module")
 def planted(tmp_path_factory):
-    ws = reg.Workspace(tmp_path_factory.mktemp("planted")).init()
-    exp = custom_experiment(ws, mixed=False, hypothesis="Planted AR(1) momentum makes recent path informative.")
-    out = run_experiment(ws, exp, make_bars(1100, seed=7, phi=0.8), verbose=False)
-    return ws, exp, out
+    base = tmp_path_factory.mktemp("planted")
+    data = base / "NQ_planted.parquet"
+    write_parquet(data, phi=0.8)                                              # planted AR(1) momentum
+    ws_dir = base / "ws"
+    ws = reg.Workspace(ws_dir).init()
+    exp = create_experiment(ws, new_campaign="C001", partitions=PARTS)
+    write_custom_event(ws, exp, mixed=False, hypothesis="Planted AR(1) momentum makes recent path informative.")
+    freeze(ws, exp)
+    run = cli("scripts/run_experiment.py", "--experiment", exp, "--data", data, "--workspace", ws_dir)
+    return {"ws_dir": ws_dir, "ws": ws, "exp": exp, "data": data, "stdout": run.stdout,
+            "results": json.loads((experiment_dir(ws, exp) / "results/results.json").read_text())}
 
 
-def test_planted_momentum_yields_a_development_candidate_that_survives_sensitivity(planted):
-    ws, exp, out = planted
-    t = out["trials"]
+def test_planted_momentum_yields_provisional_candidates_that_pass_every_floor(planted):
+    ws, exp = planted["ws"], planted["exp"]
+    t = reg.experiment_trials(ws, exp)
+    cand = t[t["decision"] == "IS_PROVISIONAL_CANDIDATE"]
+    assert len(cand) > 0
     for target in ("DIR_RETURN_15", "DIR_RETURN_30"):
-        for state in ("UPPER_HALF", "LOWER_HALF"):
-            g = t[(t["target"] == target) & (t["state"] == state)]
-            assert (g["decision"] == "PROMOTABLE").all(), (target, state, g["decision"].tolist())
-    assert out["sensitivity"]["status"] == "RUN"
-    grp = out["sensitivity"]["groups"]["DIR_RETURN_15|UPPER_HALF"]
+        assert (t[t["target"] == target]["decision"] == "IS_PROVISIONAL_CANDIDATE").all(), target
+    assert (t[t["target"] == "DIR_RETURN_60"]["decision"] == "REJECTED_INSUFFICIENT_UPLIFT").all()     # std uplift 0.06-0.09 < 0.10 floor
+    for c in ("standardized_uplift", "selected_frequency", "selected_effect", "bootstrap_ci_low", "experiment_q", "campaign_q",
+              "experiment_bonferroni_p", "campaign_bonferroni_p"):
+        cand = cand.assign(**{c: pd.to_numeric(cand[c])})
+    assert (cand["standardized_uplift"] >= 0.10).all() and (cand["selected_frequency"] >= 1.0).all()
+    assert (cand["selected_effect"] > 0).all() and (cand["bootstrap_ci_low"] > 0).all()
+    assert (cand[["experiment_q", "campaign_q", "experiment_bonferroni_p", "campaign_bonferroni_p"]] <= 0.05).all().all()
+    rejected = t[~t["decision"].isin(["IS_PROVISIONAL_CANDIDATE", "IS_SHORTLIST_ELIGIBLE"])]
+    assert len(rejected) > 0 and (rejected["decision"] != "PENDING").all()                    # rejected trials remain visible
+
+
+def test_candidate_without_strong_verification_is_provisional_and_cannot_be_approved(planted):
+    ws, exp = planted["ws"], planted["exp"]
+    assert reg.experiment_row(ws, exp)["status"] == "IS_PROVISIONAL_CANDIDATE" and reg.experiment_row(ws, exp)["research_verification"] == "NOT_RUN"
+    j = json.loads((experiment_dir(ws, exp) / "results/IS_REPORT.json").read_text())
+    assert j["I_top_configurations"]["top_groups"] == []                                      # only shortlist-ELIGIBLE (verified) trials are ranked
+    copy = planted["ws_dir"].parent / "unverified_copy"
+    shutil.copytree(planted["ws_dir"], copy)
+    cws = reg.Workspace(copy)
+    groups = ["DIR_RETURN_15|UPPER_HALF"]
+    human_approval(cws, exp, groups)                                                          # a human could write this file ...
+    with pytest.raises(ApprovalError):
+        validate_approval(cws, exp)                                                           # ... but it is not valid without verification
+    assert len(reg.read_oos_access(cws)) == 0
+
+
+def test_sensitivity_probes_ran_and_never_replace_the_base_parameter(planted):
+    ws, exp, res = planted["ws"], planted["exp"], planted["results"]
+    assert res["sensitivity"]["status"] == "RUN"
+    grp = res["sensitivity"]["groups"]["DIR_RETURN_15|UPPER_HALF"]
     assert grp["verdict"] == "PASSED" and [p["value"] for p in grp["probes"]] == [34, 56]      # 45 x 0.75, x 1.25
     assert all(p["models_frequency_ok"] >= 2 for p in grp["probes"])
+    assert verify_manifest(ws, exp)["errors"] == []                                           # spec + event untouched by probes
+    spec = yaml.safe_load((experiment_dir(ws, exp) / "EVENT_SPEC.yaml").read_text())
+    assert spec["base_parameters"]["every_n_bars"] == 45
+    probe_counts = {p["n_events"] for p in grp["probes"]}
+    assert res["base_event"]["n_events"] not in probe_counts and len(probe_counts) == 2       # probes really ran other events
     assert reg.experiment_row(ws, exp)["sensitivity_json"] != "{}"
 
 
-def test_sensitivity_never_replaces_the_base_parameter(planted):
-    ws, exp, out = planted
-    assert verify_manifest(ws, exp)["errors"] == []                                     # spec + event untouched by probes
-    import yaml
-    assert yaml.safe_load((experiment_dir(ws, exp) / "EVENT_SPEC.yaml").read_text())["base_parameters"]["every_n_bars"] == 45
-    from engine.event_contract import generate_events, load_event_module, load_spec
-    from engine.experiment_runner import dev_bars
-    d = experiment_dir(ws, exp)
-    dev, _ = dev_bars(make_bars(1100, seed=7, phi=0.8), "2020-01-01")
-    base_events, _ = generate_events(load_event_module(d / "event.py"), dev, load_spec(d / "EVENT_SPEC.yaml"), F)
-    assert out["base_event"]["n_events"] == len(base_events)                            # results use the BASE parameter
-    probe_counts = {p["n_events"] for p in out["sensitivity"]["groups"]["DIR_RETURN_15|UPPER_HALF"]["probes"]}
-    assert len(base_events) not in probe_counts and len(probe_counts) == 2              # probes really ran other events
-    text = Path(out["report_path"]).read_text()
-    assert "DEVELOPMENT CANDIDATE" in text and "Event-parameter sensitivity (robustness only): **PASSED**" in text
-    assert "never replaces the base parameter" in text
+def test_the_planted_run_never_touched_oos_or_the_lockbox(planted):
+    ws, exp = planted["ws"], planted["exp"]
+    assert len(reg.read_oos_access(ws)) == 0 and not list(Path(planted["ws_dir"], "approvals").glob("*.yaml"))
+    assert pd.Timestamp(planted["results"]["base_event"]["last_bar"]) < pd.Timestamp(PARTS["development_end"], tz="UTC")
+    assert "OOS status = NOT ACCESSED" in (experiment_dir(ws, exp) / "results/IS_REPORT.md").read_text()
 
 
-def test_planted_candidate_is_limited_to_what_clears_the_uplift_floor(planted):
-    _, _, out = planted
-    t = out["trials"]
-    promoted = t[t["decision"] == "PROMOTABLE"]
-    assert (promoted["standardized_uplift"] >= 0.10).all() and (promoted["selected_frequency"] >= 1.0).all()
-    assert (promoted["experiment_q"] <= 0.05).all() and (promoted["campaign_q"] <= 0.05).all()
-    rejected = t[t["decision"] != "PROMOTABLE"]
-    assert len(rejected) > 0 and (rejected["decision"] != "PENDING").all()             # rejected trials remain visible
-
-
-# ============================ documented limitation: mixed-direction events ============================
-def test_mixed_direction_events_hide_a_planted_state_effect_documented_limitation(tmp_path):
-    """Same planted structure as above, but directions alternate. The frozen feature bank has no direction input,
-    so a direction-relative continuation effect cannot be learned (see RESEARCH_RULES.md, spec issue 3)."""
+# ---------------- documented hard failure: mixed-direction events ----------------
+def test_mixed_direction_events_are_a_hard_event_contract_failure_before_any_result(tmp_path):
+    """Same planted structure, but the event alternates direction. v1 refuses it outright instead of hiding an effect."""
     ws = reg.Workspace(tmp_path).init()
-    exp = custom_experiment(ws, mixed=True, hypothesis="Same planted momentum but events alternate direction.")
-    out = run_experiment(ws, exp, make_bars(1100, seed=7, phi=0.8), verbose=False)
-    t = out["trials"]
-    assert not t["decision"].isin(["PROMOTABLE", "PROMOTABLE_PENDING_SENSITIVITY"]).any()
-    assert t["standardized_uplift"].abs().max() < 0.10
+    exp = create_experiment(ws, new_campaign="C001", partitions=PARTS)
+    write_custom_event(ws, exp, mixed=True, hypothesis="Same planted momentum but events alternate direction.", spec_values=(1,))
+    freeze(ws, exp)
+    with pytest.raises(EventContractError, match="FAIL EVENT CONTRACT.*mixed-direction"):
+        run_experiment(ws, exp, make_bars(N_DAYS, seed=7, phi=0.8), verbose=False)
+    assert not reg.is_revealed(reg.experiment_row(ws, exp)) and reg.experiment_row(ws, exp)["status"] == "FROZEN"
+    assert (reg.experiment_trials(ws, exp)["status"] == "PREREGISTERED").all()
 
 
-def test_make_report_rebuilds_from_stored_results_and_shows_verification_status(golden, tmp_path):
-    ws_dir = tmp_path / "ws"
-    shutil.copytree(golden["ws"], ws_dir)
+def test_a_spec_that_declares_two_directions_cannot_be_frozen(tmp_path):
+    ws = reg.Workspace(tmp_path).init()
+    exp = create_experiment(ws, new_campaign="C001", partitions=PARTS)
+    write_custom_event(ws, exp, mixed=True, hypothesis="alternating", spec_values=(1, -1))
+    with pytest.raises(EventSpecError):
+        freeze(ws, exp)
+
+
+# ---------------- bar-level human gate -> one-shot OOS -> CPCV (test code plays the human) ----------------
+def approve_and_spend_oos(planted, name, data):
+    ws_dir = planted["ws_dir"].parent / name
+    shutil.copytree(planted["ws_dir"], ws_dir)
     ws = reg.Workspace(ws_dir)
-    assert "verification: **NOT_RUN**" in (ws_dir / "experiments/EXP_0001/results/REPORT.md").read_text()
-    reg.update_experiment(ws, "EXP_0001", research_verification="FAILED")
-    cli("scripts/make_report.py", "--experiment", "EXP_0001", "--workspace", ws_dir)
-    text = (ws_dir / "experiments/EXP_0001/results/REPORT.md").read_text()
-    assert "external research verification: **FAILED**" in text
-    for s in REPORT_SECTIONS:
-        assert f"## {s}" in text
-    assert reg.experiment_trials(ws, "EXP_0001").to_csv() == reg.experiment_trials(reg.Workspace(golden["ws"]), "EXP_0001").to_csv()
+    exp = planted["exp"]
+    row = prepare_for_approval(ws, exp)                       # TEST-ONLY injection of strong verification of all 12 paths
+    assert row["status"] == "AWAITING_HUMAN_OOS_APPROVAL"
+    groups = top_group_ids(ws, exp)[:1]
+    human_approval(ws, exp, groups)                           # TEST CODE PLAYING THE HUMAN
+    run = cli("scripts/run_oos.py", "--experiment", exp, "--data", data, "--workspace", ws_dir)
+    return {"ws_dir": ws_dir, "ws": ws, "exp": exp, "groups": groups, "stdout": run.stdout, "data": data}
+
+
+@pytest.fixture(scope="module")
+def after_oos(planted):
+    return approve_and_spend_oos(planted, "ws_oos", planted["data"])
+
+
+@pytest.fixture(scope="module")
+def after_oos_poisoned_lockbox(planted):
+    """Same approval, same experiment - but every row at/after oos_end (gap + final lockbox) is wrecked in the data file."""
+    import numpy as np
+    df = pd.read_parquet(planted["data"])
+    ts = pd.to_datetime(df["timestamp"], utc=True)
+    late = (ts >= pd.Timestamp(PARTS["oos_end"], tz="UTC")).to_numpy()
+    assert late.sum() > 10_000
+    rng = np.random.default_rng(99)
+    df.loc[late, ["open", "high", "low", "close"]] = rng.uniform(1, 1e6, size=(int(late.sum()), 4))
+    df.loc[late, "volume"] = -5.0
+    df.iloc[-50:, df.columns.get_loc("close")] = np.nan
+    bad = planted["ws_dir"].parent / "NQ_poisoned.parquet"
+    df.to_parquet(bad)
+    return approve_and_spend_oos(planted, "ws_oos_poisoned", bad)
+
+
+def test_after_human_approval_the_bar_level_oos_runs_exactly_once(after_oos):
+    ws, exp = after_oos["ws"], after_oos["exp"]
+    assert "OOS is now SPENT" in after_oos["stdout"]
+    ledger = reg.read_oos_access(ws)
+    assert len(ledger) == 1 and ledger["experiment_id"].iloc[0] == exp and reg.verify_oos_ledger(ws) == 1
+    rep = json.loads((experiment_dir(ws, exp) / "results/OOS_REPORT.json").read_text())
+    assert rep["status"] == reg.experiment_row(ws, exp)["status"] == "OOS_CONFIRMED"           # the planted momentum persists in the OOS period
+    oos_rows = reg.read_oos_trials(ws)
+    assert len(oos_rows) == 3 * len(after_oos["groups"]) and set(oos_rows["model"]) == {"RIDGE", "SPLINE", "XGB"}   # an approved group runs all 3 models
+    assert rep["family_size_for_multiple_testing"] == 3 and rep["oos_period"] == [PARTS["development_end"], PARTS["oos_end"]]
+
+
+def test_second_oos_unlock_and_is_report_regeneration_are_refused_afterwards(after_oos):
+    from engine.is_report import NOT_ACCESSED, oos_status_label
+    ws, exp = after_oos["ws"], after_oos["exp"]
+    p = cli("scripts/run_oos.py", "--experiment", exp, "--data", after_oos["data"], "--workspace", after_oos["ws_dir"], check=False)
+    assert p.returncode != 0 and "SPENT" in (p.stderr + p.stdout) and len(reg.read_oos_access(ws)) == 1
+    m = cli("scripts/make_report.py", "--experiment", exp, "--workspace", after_oos["ws_dir"], check=False)
+    assert m.returncode != 0 and "OOS SPENT" in (m.stderr + m.stdout)                          # 'NOT ACCESSED' can no longer be printed
+    label = oos_status_label(ws, exp)
+    assert label != NOT_ACCESSED and label.startswith("OOS SPENT")
+
+
+def test_poisoned_lockbox_rows_cannot_change_a_single_oos_result(after_oos, after_oos_poisoned_lockbox):
+    exp = after_oos["exp"]
+    a = json.loads((experiment_dir(after_oos["ws"], exp) / "results/OOS_REPORT.json").read_text())
+    b = json.loads((experiment_dir(after_oos_poisoned_lockbox["ws"], exp) / "results/OOS_REPORT.json").read_text())
+    assert a["status"] == b["status"] and a["oos_bars_fingerprint"] == b["oos_bars_fingerprint"]
+    assert a["confirmations"] == b["confirmations"] and a["group_verdicts"] == b["group_verdicts"]    # every OOS statistic is identical
+    assert pd.Timestamp(a["oos_period"][1]) <= pd.Timestamp(PARTS["lockbox_start"])
+
+
+def test_bar_level_cpcv_runs_only_after_oos_confirmation_and_only_vetoes(after_oos):
+    ws, exp = after_oos["ws"], after_oos["exp"]
+    cli("scripts/run_cpcv.py", "--experiment", exp, "--data", after_oos["data"], "--workspace", after_oos["ws_dir"])
+    rep = json.loads((experiment_dir(ws, exp) / "results/CPCV_REPORT.json").read_text())
+    cp = reg.read_cpcv(ws)
+    assert len(cp) == 3 and set(cp["model"]) == {"RIDGE", "SPLINE", "XGB"}
+    assert rep["n_splits"] == 15 and all(int(v["n_valid_splits"]) == 15 for v in rep["summary"].values())
+    assert reg.experiment_row(ws, exp)["status"] in ("AWAITING_FINAL_LOCKBOX", "CPCV_REJECTED")
+    status = reg.experiment_row(ws, exp)["status"]
+    assert (status == "AWAITING_FINAL_LOCKBOX") == bool(rep["cpcv_confirmed_groups"])
+    p = cli("scripts/confirm_lockbox.py", check=False)
+    assert p.returncode != 0 and "not implemented" in (p.stderr + p.stdout)                    # the lockbox stays sealed (stub)

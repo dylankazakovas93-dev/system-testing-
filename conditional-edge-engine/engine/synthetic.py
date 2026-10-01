@@ -82,7 +82,7 @@ def make_event_tables(*, years=range(2015, 2023), events_per_week: float = 10.0,
         core = np.where(x > tail_threshold, tail_shift, 0.0)
     else:
         raise ValueError(signal)
-    direction = np.where(rng.random(n) < 0.5, 1, -1)
+    direction = np.ones(n, dtype=int)                 # v1: single-direction experiments only
     events = pd.DataFrame({"event_id": [f"S{i:06d}" for i in range(n)], "event_time": t, "direction": direction})
     targets = {}
     scale = {"DIR_RETURN_15": 1.0, "DIR_RETURN_30": 1.0, "DIR_RETURN_60": 1.0, "DIR_PATH_SKEW_60": 0.8}
@@ -90,7 +90,8 @@ def make_event_tables(*, years=range(2015, 2023), events_per_week: float = 10.0,
         y = drift + scale[name] * core + rng.normal(size=n)
         targets[name] = pd.DataFrame({
             "event_id": events["event_id"], "target_start": t,
-            "target_end": t + pd.Timedelta(minutes=HORIZON_MIN[name]), "value": y})
+            "target_end": t + pd.Timedelta(minutes=HORIZON_MIN[name]),
+            "effective_target_end": t + pd.Timedelta(minutes=HORIZON_MIN[name]), "value": y})
     eligible = np.ones(n, dtype=bool)
     calendar = pd.date_range(f"{min(years)}-01-01", f"{max(years)}-12-31", freq="B", tz="UTC")
     return events, X.assign(event_id=events["event_id"].to_numpy(), feature_asof_time=t)[["event_id", "feature_asof_time"] + names], \

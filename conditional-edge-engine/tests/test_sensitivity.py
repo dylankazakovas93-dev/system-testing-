@@ -72,25 +72,23 @@ def test_better_probe_performance_cannot_replace_or_improve_the_base():
     assert "base_parameters" not in sig.parameters and "params" not in sig.parameters
 
 
+from tests.test_statistics import VER_ALL, good_row
+
+
 def rows_for(pass_models):
-    rows = []
-    for m in ("RIDGE", "SPLINE", "XGB"):
-        good = m in pass_models
-        rows.append(dict(target="DIR_RETURN_30", model=m, state="UPPER_HALF", n_selected_events=500,
-                         selected_frequency=2.0, retention_ratio=0.5, standardized_uplift=0.2 if good else 0.0,
-                         bootstrap_ci_low=0.01, experiment_q=0.01, campaign_q=0.01, positive_years=4, eligible_years=5))
-    return rows
+    return [good_row(model=m, state="UPPER_HALF", trial_id=m, standardized_uplift=0.2 if m in pass_models else 0.0)
+            for m in ("RIDGE", "SPLINE", "XGB")]
 
 
 def test_sensitivity_cannot_rescue_a_failed_base_candidate():
     sens = {"DIR_RETURN_30|UPPER_HALF": "PASSED"}
-    none = decide_experiment(rows_for(set()), ACC, sens)
+    none = decide_experiment(rows_for(set()), ACC, sens, VER_ALL)
     assert {r["decision"] for r in none} == {acceptance.LOW_UPLIFT}                       # nothing passes -> nothing promoted
-    one = decide_experiment(rows_for({"RIDGE"}), ACC, sens)
+    one = decide_experiment(rows_for({"RIDGE"}), ACC, sens, VER_ALL)
     assert next(r for r in one if r["model"] == "RIDGE")["decision"] == acceptance.AGREE    # 1 of 3 is not a candidate
-    two = decide_experiment(rows_for({"RIDGE", "XGB"}), ACC, sens)
-    assert {r["decision"] for r in two if r["model"] != "SPLINE"} == {acceptance.PROMOTABLE}
-    # and a PASSED sensitivity verdict has no effect on groups that did not pass their own gates
+    two = decide_experiment(rows_for({"RIDGE", "XGB"}), ACC, sens, VER_ALL)
+    assert {r["decision"] for r in two if r["model"] != "SPLINE"} == {acceptance.SHORTLIST}
+    # and a PASSED sensitivity verdict has no effect on trials that did not pass their own gates
     assert next(r for r in two if r["model"] == "SPLINE")["decision"] == acceptance.LOW_UPLIFT
 
 
@@ -99,9 +97,8 @@ def test_zero_designated_parameters_skips_the_stage():
     out = run_sensitivity(None, spec(sensitivity_parameters=[]), None, F, pending)
     assert out["status"] == "SKIPPED_NO_PARAMETERS"
     assert out["groups"]["DIR_RETURN_30|UPPER_HALF"]["verdict"] == "SKIPPED_NO_PARAMETERS"
-    rows = rows_for({"RIDGE", "XGB"})
-    done = decide_experiment(rows, ACC, {"DIR_RETURN_30|UPPER_HALF": "SKIPPED_NO_PARAMETERS"})
-    assert {r["decision"] for r in done if r["model"] != "SPLINE"} == {acceptance.PROMOTABLE}
+    done = decide_experiment(rows_for({"RIDGE", "XGB"}), ACC, {"DIR_RETURN_30|UPPER_HALF": "SKIPPED_NO_PARAMETERS"}, VER_ALL)
+    assert {r["decision"] for r in done if r["model"] != "SPLINE"} == {acceptance.SHORTLIST}
 
 
 def test_frozen_sensitivity_policy_values():
