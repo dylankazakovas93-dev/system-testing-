@@ -145,6 +145,9 @@ def validate_approval(ws: reg.Workspace, experiment_id: str, frozen: Frozen | No
         errs.append("IS_REPORT.md was edited after the report was generated")
     if sha256_file(d / "results" / "results.json") != J["X_hashes"]["results_sha256"]:
         errs.append("IS results.json changed after the IS report was generated (IS results invalidate the approval)")
+    ps = J["X_hashes"].get("path_diagnostics_sha256")
+    if ps and sha256_file(d / "results" / "PATH_DIAGNOSTICS.json") != ps:
+        errs.append("PATH_DIAGNOSTICS.json changed after the IS report was generated")
     if exp["is_report_sha256"] and exp["is_report_sha256"] != sha256_file(rep):
         errs.append("IS_REPORT.json differs from the registry")
     groups = ap["approved_target_side_groups"]

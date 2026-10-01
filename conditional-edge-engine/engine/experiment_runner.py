@@ -348,18 +348,62 @@ def finish_is(ws: reg.Workspace, experiment_id: str, panels: dict, events: pd.Da
     rdir.mkdir(exist_ok=True)
     for (t, m), p in panels.items():
         p.cv.to_csv(rdir / f"cv_{t}_{m}.csv", index=False)
+    path_info = _path_diagnostics_stage(ws, experiment_id, panels, events, features, eligible, frozen, spec, module, bars_dev, rdir)
     bundle = {"experiment_id": experiment_id, "data": data_label, "is_data_fingerprint": data_hash,
               "partitions": parts.as_dict(), "manifest_check": verified, "event_causality": causality,
               "base_event": base, "train_period": train_p, "validation_period": val_p, "sensitivity": sensitivity,
               "development_cv_folds": {f"{t}|{m}": p.folds for (t, m), p in panels.items()},
               "panels": {f"{t}|{m}": {"stats": p.stats, "importances": p.importances, "deciles": p.deciles}
                          for (t, m), p in panels.items()},
-              "ladder": ladder, "feature_diagnostics": feature_diagnostics(panels, features, eligible, frozen),
+              "ladder": ladder, "path_diagnostics": path_info, "feature_diagnostics": feature_diagnostics(panels, features, eligible, frozen),
               "diagnostic_targets": _diagnostic_summary(bars_dev, events, features, eligible, frozen) if bars_dev is not None else {}}
     (rdir / "results.json").write_text(json.dumps(_clean(bundle), indent=2, sort_keys=True))
     paths = is_report_mod.write_is_report(ws, experiment_id)
     bundle.update(report_path=paths["md"], is_report_json=paths["json"], trials=reg.experiment_trials(ws, experiment_id))
     return bundle
+
+
+def _path_diagnostics_stage(ws, experiment_id, panels, events, features, eligible, frozen, spec, module, bars_dev, rdir) -> dict:
+    """DIAGNOSTIC ONLY forward-path layer. Reads development rows and panels; writes results/PATH_DIAGNOSTICS.json; logs fixed-recipe
+    observations. It runs AFTER the 24 trials are revealed and cannot alter any trial, decision, ranking or status."""
+    from engine import path_diagnostics as pdx
+    if bars_dev is None or not eligible.any():
+        return {"status": "NOT_COMPUTED_NO_BARS", "label": frozen.path_diagnostics["label"]}
+    ev = events.assign(_el=np.asarray(eligible, dtype=bool))
+    ev = ev[ev["_el"]].sort_values(["event_time", "event_id"], kind="stable").reset_index(drop=True)
+    folds = development_folds(pd.DatetimeIndex(ev["event_time"]), frozen.trial_policy["development_cv"]["K"], frozen.tz)
+    weeks_all = weeks_in_intervals(bars_dev.index, [(-INT64_MAX, INT64_MAX)], frozen.tz)
+    weeks_cv = {}
+    for (t, m), p in panels.items():
+        ok = sorted(int(f) for f in p.cv["fold"].unique()) if len(p.cv) else []
+        iv = [(f.val_start_ns, f.val_end_ns) for f in folds if f.fold in ok]
+        weeks_cv[f"{t}|{m}"] = weeks_in_intervals(bars_dev.index, iv, frozen.tz) if iv else {"total": 0, "by_year": {}}
+    ladder_steps = {}
+    if module is not None and spec.get("filter_ladder"):
+        from engine.event_contract import ladder_event_sets
+        ladder_steps = pdx.ladder_path_diagnostics(ladder_event_sets(module, bars_dev, spec, frozen), list(spec["filter_ladder"]), bars_dev, frozen)
+    rep = pdx.build_path_diagnostics(bars_dev=bars_dev, events=events, features=features, eligible=eligible, panels=panels, folds=folds,
+                                     weeks_all=weeks_all, weeks_cv=weeks_cv, frozen=frozen, ladder_steps=ladder_steps)
+    rep = _clean(rep)
+    pdx.assert_no_forbidden_phrases(rep)
+    txt = json.dumps(rep, separators=(",", ":"), sort_keys=True)
+    (rdir / "PATH_DIAGNOSTICS.json").write_text(txt)
+    allc = rep["contexts"]["ALL"]
+    cells = allc["bracket_surface"]
+    npos = sum(1 for c in cells if c.get("mean_gross_points") is not None and c["mean_gross_points"] > 0)
+    h60 = allc["continuation"]["60"]["continuation"]
+    dom60 = allc["dominance"]["60"]
+    banner = f"{frozen.path_diagnostics['label']}; {frozen.path_diagnostics['bracket_surface']['cost_banner']}"
+    for cat, desc, name, val in (
+            ("path_continuation", f"raw base event: continuation at 60 bars {h60['n']}/{h60['denominator']} ({banner})", "continuation_rate_60", h60["rate"] if h60["rate"] is not None else ""),
+            ("path_dominance", f"raw base event: median path dominance (MFE+MAE) at 60 bars {dom60['median']} points ({banner})", "median_dominance_60", dom60["median"] if dom60["median"] is not None else ""),
+            ("bracket_surface_description", f"{npos} of {len(cells)} fixed bracket cells have positive conservative mean gross points for the raw base event "
+                                            f"(descriptive count only; {frozen.path_diagnostics['bracket_surface']['selection_banner']}; {frozen.path_diagnostics['bracket_surface']['cost_banner']})",
+             "cells_positive_mean_gross", npos)):
+        reg.add_observation(ws, experiment_id, cat, desc, name, val)
+    return {"status": "COMPUTED", "file": "PATH_DIAGNOSTICS.json", "sha256": hashlib.sha256(txt.encode()).hexdigest(),
+            "n_bracket_cells": rep["n_bracket_cells"], "n_contexts": rep["n_contexts"], "promotion_eligible": False,
+            "selection_trials_affected": 0, "label": rep["label"]}
 
 
 def _diagnostic_summary(bars, events, features, eligible, frozen) -> dict:

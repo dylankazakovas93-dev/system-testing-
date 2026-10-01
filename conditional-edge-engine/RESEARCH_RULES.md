@@ -111,6 +111,19 @@ revealed is a **new lineage** (`new_experiment.py --lineage-of EXP_xxxx`) that c
 5. **Lifecycle**: `IS_REJECTED → IS_PROVISIONAL_CANDIDATE → AWAITING_HUMAN_OOS_APPROVAL → OOS_NOT_APPROVED | OOS_REJECTED | OOS_CONFIRMED → CPCV_REJECTED | CPCV_CONFIRMED → AWAITING_FINAL_LOCKBOX`.
    The lockbox stays sealed.
 
+## 5b. Forward-path and monetisation diagnostics (v1.1.0) — DIAGNOSTIC ONLY
+
+`frozen/v1/PATH_DIAGNOSTICS.yaml` (hashed into every manifest) freezes horizons (5/15/30/60/120 bars), all formulas, the exact percentiles (linear interpolation; no others), the sigma unit
+(`sigma_log = RV_60`, the unit the diagnostic targets already used; **not** divided by √60, so a 1σ barrier is a 60-bar-scale move), the 5 × (4 symmetric + 4 asymmetric) first-passage cases and the fixed **64-cell bracket surface**
+(4 stops × 4 targets × 4 expiries, canonical order expiry/stop/target, never performance order). For every model-eligible event, per horizon: endpoint returns, continuation/reversal/flat counts, MFE/MAE (points, ticks from the instrument config, σ units),
+path dominance, time to extrema, first passage and brackets (conservative result = `AMBIGUOUS_SAME_BAR` counted as STOP is primary; raw-path result excludes ambiguous observations). Contexts: all events and UPPER/LOWER_HALF of every target × model (DEVELOPMENT_CV pooled validation events), by year, by
+DEVELOPMENT_CV fold, plus the frozen filter-ladder steps. Gross points only: **GROSS — COSTS NOT APPLIED**; **DIAGNOSTIC ONLY — NO BRACKET WAS SELECTED**.
+
+* It runs after the 24 trials are revealed, reads only development rows, writes `results/PATH_DIAGNOSTICS.json` (hash-bound into `results.json` and `IS_REPORT.json`) and an IS-report section Z (separated from the PROMOTION EVIDENCE). Nothing enters `selection_trials.csv`, BH, Bonferroni, ranking or status (tests compare a run with and without the layer).
+* `PATH_TIMESTAMP_INELIGIBLE` is decided per event and horizon from timestamps only (non-consecutive bars, data end, completion after the RTH close; non-finite prices also void a window). With `eligible_session` ending at 15:00 every event is 60-bar eligible but events after 14:00 are not 120-bar eligible.
+* Memory: streaming over forward-bar steps vectorised over events (O(events) state, no events × horizon matrices).
+* Any trading rule, threshold, bracket, horizon, percentile or filter inspired by these numbers needs a NEW registered experiment or a separate monetisation study. CPCV path diagnostics are not implemented (optional in the specification); CPCV remains a veto only.
+
 ## 6. External verification
 
 `verify_experiment.py` stages the candidate on the **development cut** only, runs **all 3** model adapters (strong mode) on the candidate targets, and checks the verifier checkout is the pinned commit with a clean tree (`VERIFIER_PIN.yaml`).

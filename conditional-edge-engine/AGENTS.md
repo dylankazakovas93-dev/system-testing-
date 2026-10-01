@@ -28,6 +28,8 @@ lockbox stays sealed.**
 8. Never weaken a gate to make a test pass (see RESEARCH_RULES.md §0). If synthetic data fails a gate, change the planted effect.
 9. Report faithfully: say when a step was skipped, when verification is pending, when a candidate lost eligibility.
 
+10. The forward-path / bracket diagnostics (IS report section Z) are DIAGNOSTIC ONLY. Never present a bracket, stop, target, horizon or percentile from them as best, optimal or recommended; any rule inspired by them is a NEW experiment or a separate registered monetisation study.
+
 ## Lifecycle you must respect
 `DRAFT -> FROZEN -> IS run (stops) -> [IS_REJECTED | IS_PROVISIONAL_CANDIDATE | AWAITING_HUMAN_OOS_APPROVAL]
  -> human approvals -> campaign OOS freeze (all IS experiments complete; campaign closed) -> human campaign-open approval -> ONE campaign-wide OOS opening -> [OOS_REJECTED | OOS_CONFIRMED] -> CPCV -> [CPCV_REJECTED | CPCV_CONFIRMED -> AWAITING_FINAL_LOCKBOX]`

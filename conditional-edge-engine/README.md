@@ -74,6 +74,11 @@ filter ladder, sensitivity, the deterministic top-5 TARGET|SIDE groups, why each
 other one was rejected, exact hashes, and the OOS status (`NOT ACCESSED` until the campaign OOS is opened).
 Rejected and low-frequency results are never hidden.
 
+## Forward-path diagnostics (DIAGNOSTIC ONLY)
+
+`IS_REPORT.md` section **Z** (non-promotable) and `results/PATH_DIAGNOSTICS.json` report endpoint returns, continuation/reversal, MFE/MAE, time to extrema, first passage and a fixed 64-cell *gross* bracket surface
+(`GROSS — COSTS NOT APPLIED`, `DIAGNOSTIC ONLY — NO BRACKET WAS SELECTED`) for the raw event and every model/state subset. Frozen in `frozen/v1/PATH_DIAGNOSTICS.yaml`; they never enter the 24 trials, multiplicity, ranking or status.
+
 ## Evidence in this repository
 
 * `docs/SYNTHETIC_RESULTS.md` — planted-structure scenarios and the lifecycle outcomes. Reproduce with `python scripts/synthetic_summary.py`.

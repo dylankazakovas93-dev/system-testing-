@@ -8,3 +8,4 @@ rth:
   close: "16:00"
   minutes: 390
 eth_session_start: "18:00"   # ETH session begins 18:00 local time on the previous calendar day
+tick_size: 0.25          # points; the only source of tick conversions (never hard-coded in generic code)

@@ -119,6 +119,8 @@ def build_is_report(ws: reg.Workspace, experiment_id: str, bundle: dict, trials:
     cumulative = int(trials["cumulative_campaign_selection_trials"].iloc[0]) if len(trials) else 0
     first_opp, last_opp = int(trials["selection_opportunity_number"].min()), int(trials["selection_opportunity_number"].max())
 
+    from engine import path_report as path_report_mod
+    path_rep = path_report_mod.load_path_file(d / "results", bundle)
     # ---------------------------------------------------------------- JSON
     J: dict = {
         "experiment_id": experiment_id, "campaign_id": exp["campaign_id"],
@@ -161,7 +163,10 @@ def build_is_report(ws: reg.Workspace, experiment_id: str, bundle: dict, trials:
                      "engine_code_hash": manifest["hashes"]["engine_code_hash"], "engine_version": manifest["engine_version"],
                      "trial_ledger_hash": exp["trial_ledger_hash"], "is_data_fingerprint": bundle["is_data_fingerprint"],
                      "results_sha256": sha256_file(d / "results" / "results.json"),
+                     "path_diagnostics_sha256": (bundle.get("path_diagnostics") or {}).get("sha256"),
                      "verifier_pin": load_yaml(CODE_ROOT / "frozen/v1/VERIFIER_PIN.yaml")["commit"]},
+        "Z_forward_path_diagnostics": (path_report_mod.compact_json(path_rep, bundle["path_diagnostics"]) if path_rep else
+                                       {"status": "NOT_COMPUTED_NO_BARS", "promotion_eligible": False, "selection_trials_affected": 0}),
         "Y_oos_status": status,
         "is_status": exp["is_status"], "lifecycle_status": exp["status"],
     }
@@ -341,6 +346,8 @@ def build_is_report(ws: reg.Workspace, experiment_id: str, bundle: dict, trials:
     L.append("## W. Non-promotable interesting observations (registry/observations.csv)\n")
     L.append(f"**{DIAG_BANNER}.** Anything here can only inspire a NEW registered experiment (which adds 24 selection trials to the campaign universe).\n")
     L.append(_table(["id", "category", "description"], [[r["observation_id"], r["category"], r["description"]] for _, r in my_obs.iterrows()]))
+    L += path_report_mod.render(path_rep, rows, my_obs, DIAG_BANNER)
+    L.append("")
     L.append("## X. Exact hashes\n")
     L.append(_table(["item", "sha256"], [[k, v] for k, v in J["X_hashes"].items()]))
     L.append("## Y. OOS status\n")

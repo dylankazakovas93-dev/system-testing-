@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -78,10 +78,15 @@ class Frozen:
     trial_policy: dict
     acceptance: dict
     instrument: dict
+    path_diagnostics: dict = field(default_factory=dict)
 
     @property
     def interval(self) -> pd.Timedelta:
         return pd.Timedelta(self.instrument["bar_interval"])
+
+    @property
+    def tick_size(self) -> float:
+        return float(self.instrument["tick_size"])
 
     @property
     def tz(self) -> str:
@@ -108,6 +113,7 @@ def load_frozen(version: str = FROZEN_VERSION, instrument: str = "NQ_1m") -> Fro
         trial_policy=load_yaml(d / "TRIAL_POLICY.yaml"),
         acceptance=load_yaml(d / "ACCEPTANCE_RULES.yaml"),
         instrument=load_yaml(d / "instruments" / f"{instrument}.yaml"),
+        path_diagnostics=load_yaml(d / "PATH_DIAGNOSTICS.yaml"),
     )
 
 
