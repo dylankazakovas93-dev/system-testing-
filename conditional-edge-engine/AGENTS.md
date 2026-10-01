@@ -28,7 +28,7 @@ lockbox stays sealed.**
 8. Never weaken a gate to make a test pass (see RESEARCH_RULES.md §0). If synthetic data fails a gate, change the planted effect.
 9. Report faithfully: say when a step was skipped, when verification is pending, when a candidate lost eligibility.
 
-10. The forward-path / bracket diagnostics (IS report section Z) are DIAGNOSTIC ONLY. Never present a bracket, stop, target, horizon or percentile from them as best, optimal or recommended; any rule inspired by them is a NEW experiment or a separate registered monetisation study.
+10. The forward-path / bracket diagnostics (IS report section Z) are DIAGNOSTIC ONLY. Never present a bracket, stop, target, horizon or percentile from them as best, optimal or recommended; any rule inspired by them is a NEW experiment or a separate registered monetisation study. You may not substitute a non-eligible or lower-ranked group for the deterministic approval-eligible set because a diagnostic looks attractive (humans may approve, decline or approve fewer from the eligible list only).
 
 ## Lifecycle you must respect
 `DRAFT -> FROZEN -> IS run (stops) -> [IS_REJECTED | IS_PROVISIONAL_CANDIDATE | AWAITING_HUMAN_OOS_APPROVAL]

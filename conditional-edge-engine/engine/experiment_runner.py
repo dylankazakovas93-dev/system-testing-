@@ -411,6 +411,7 @@ def _diagnostic_summary(bars, events, features, eligible, frozen) -> dict:
     if not eligible.any():
         return {}
     ev = events[eligible].reset_index(drop=True)
-    sigma = features.loc[eligible, "RV_60"].to_numpy()
+    from engine.path_engine import sigma_ref
+    sigma = sigma_ref(features.loc[eligible, "RV_60"].to_numpy())          # one-bar RMS scale (same unit as the path diagnostics)
     d = compute_diagnostic_targets(bars, ev, frozen, sigma)
     return {c: float(np.nanmean(d[c])) for c in d.columns if c != "event_id" and d[c].notna().any()}

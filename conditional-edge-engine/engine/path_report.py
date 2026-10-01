@@ -34,7 +34,8 @@ def load_path_file(results_dir, bundle: dict) -> dict | None:
 def compact_json(rep: dict, info: dict) -> dict:
     allc = rep["contexts"]["ALL"]
     return {"label": rep["label"], "promotion_eligible": False, "selection_trials_affected": 0,
-            "diagnostic_statement": rep["diagnostic_statement"], "cost_banner": rep["cost_banner"], "selection_banner": rep["selection_banner"],
+            "diagnostic_statement": rep["diagnostic_statement"], "non_promotable_rule": rep["non_promotable_rule"],
+            "human_interpretation_rule": rep["human_interpretation_rule"], "sigma_ref_formula": rep["sigma_ref_formula"], "cost_banner": rep["cost_banner"], "selection_banner": rep["selection_banner"],
             "file": info["file"], "sha256": info["sha256"], "n_bracket_cells": rep["n_bracket_cells"], "n_contexts": rep["n_contexts"],
             "counts": rep["counts"], "tick_size_points": rep["tick_size_points"], "sigma_ref": rep["sigma_ref"],
             "percentile_method": rep["percentile_method"], "bracket_canonical_order": rep["bracket_canonical_order"],
@@ -53,7 +54,8 @@ def render(rep: dict | None, trials_rows: list[dict], my_obs, frozen_label: str)
         return L
     L += [f"**{rep['label']}** — **{rep['cost_banner']}** — **{rep['selection_banner']}**\n",
           "> " + rep["diagnostic_statement"] + "\n",
-          f"Horizons {rep['horizons_bars']} bars; tick size {rep['tick_size_points']} points (instrument config); sigma = {rep['sigma_ref']}; percentiles: {rep['percentile_method']}. "
+          f"**{rep['non_promotable_rule']}**\n", "**Human interpretation rule.** " + rep["human_interpretation_rule"] + "\n",
+          f"Horizons {rep['horizons_bars']} bars; tick size {rep['tick_size_points']} points (instrument config); {rep['sigma_ref_formula']} ({rep['sigma_ref']}); percentiles: {rep['percentile_method']}. "
           f"Events: {rep['counts']['model_eligible_events']:,} model-eligible of {rep['counts']['events_total']:,}; PATH_TIMESTAMP_INELIGIBLE per horizon: {rep['counts']['path_ineligible_by_horizon']}. "
           f"Contexts: ALL events and UPPER/LOWER_HALF of every target × model (DEVELOPMENT_CV pooled validation events; identical event sets are grouped). Full detail: `{'results/PATH_DIAGNOSTICS.json'}`. "
           "No OOS or lockbox row entered any number below.\n"]

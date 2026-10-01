@@ -224,10 +224,11 @@ def overall_label(results: list[dict]) -> str:
     return "RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE"
 
 
-def candidate_targets(ws: reg.Workspace, experiment_id: str) -> list[str]:
-    """Targets of every group capable of promotion (provisional or shortlist-eligible)."""
-    t = reg.experiment_trials(ws, experiment_id)
-    return sorted(set(t[t["decision"].isin(["IS_PROVISIONAL_CANDIDATE", "IS_SHORTLIST_ELIGIBLE"])]["target"]))
+def promotion_capable_targets(frozen) -> list[str]:
+    """Every primary target takes part in the 24 selection trials, so every one of them can reach IS_SHORTLIST_ELIGIBLE,
+    AWAITING_HUMAN_OOS_APPROVAL and OOS_CONFIRMED (4 primary targets x 3 models = 12 strong-mode paths). Which targets happen to be
+    rejected at IS time is NOT used to skip verification: a retroactive or later change must never find an unverified path."""
+    return list(primary_target_names(frozen))
 
 
 def run_verification(ws: reg.Workspace, experiment_id: str, verifier_repo: str | Path, data: str, *,
@@ -256,9 +257,12 @@ def run_verification(ws: reg.Workspace, experiment_id: str, verifier_repo: str |
     if stage_name == "OOS" and not reg.oos_spent(ws, experiment_id):
         raise EngineError("OOS-stage verification is only available after the human-approved OOS has been spent")
     models = models or model_names(frozen)
-    targets = targets or (candidate_targets(ws, experiment_id) if reg.is_revealed(exp) else primary_target_names(frozen))
-    if not targets:
-        raise EngineError("no candidate target paths to verify (pass --targets explicitly to override)")
+    all_targets = promotion_capable_targets(frozen)
+    targets = targets or all_targets
+    unknown = sorted(set(targets) - set(all_targets))
+    if unknown:
+        raise EngineError(f"unknown primary targets {unknown}")
+    warnings_skipped = sorted(set(all_targets) - set(targets))
     stage = stage_verification_dir(ws, experiment_id, models)
     # the verifier never sees rows beyond this stage's partition
     vdir = d / "verification"
@@ -267,6 +271,8 @@ def run_verification(ws: reg.Workspace, experiment_id: str, verifier_repo: str |
     holdout_start = stage_holdout_start(bars.index.min(), cutoff)
     years = calendar_years_before(bars.index, holdout_start)
     warnings = []
+    if warnings_skipped:
+        warnings.append(f"PARTIAL VERIFICATION: promotion-capable targets {warnings_skipped} were NOT verified; an approval for any group on them will be refused")
     if len(years) < 3:
         warnings.append(f"only {len(years)} UTC calendar year(s) {years} of staged data precede the verifier holdout ({holdout_start}): the verifier's "
                         "future_label/future_feature poisoning checks need a fold with later rows, so strong-mode verification is expected to be "

@@ -16,7 +16,7 @@ import pandas as pd
 
 from engine.common import Frozen, utc_ns
 from engine.path_engine import (AMBIG, EXPIRED, STOP, TARGET, PathArrays, barrier_outcome, bracket_pnl, compute_paths, mfe_mae_log,
-                                rv_ref)
+                                rv_ref, sigma_ref)
 from engine.target_engine import forward_start, session_close_utc
 
 FORBIDDEN_PHRASES = ("BEST BRACKET", "OPTIMAL STOP", "OPTIMAL TARGET", "RECOMMENDED BRACKET")
@@ -250,7 +250,7 @@ def build_path_diagnostics(*, bars_dev: pd.DataFrame, events: pd.DataFrame, feat
     ``folds`` = DEVELOPMENT_CV Fold objects; ``weeks_all`` = weeks_in_intervals over all development bars;
     ``weeks_cv[f'{target}|{model}']`` = weeks info of that panel's validation folds."""
     spec = frozen.path_diagnostics
-    ev = events.assign(_el=np.asarray(eligible, dtype=bool), _sigma=features["RV_60"].to_numpy())
+    ev = events.assign(_el=np.asarray(eligible, dtype=bool), _sigma=sigma_ref(features["RV_60"].to_numpy()))
     ev = ev[ev["_el"]].sort_values(["event_time", "event_id"], kind="stable").reset_index(drop=True)
     T = make_paths(bars_dev, ev, ev["_sigma"].to_numpy(), frozen)
     etime = pd.DatetimeIndex(ev["event_time"]).tz_convert("UTC")
@@ -285,6 +285,8 @@ def build_path_diagnostics(*, bars_dev: pd.DataFrame, events: pd.DataFrame, feat
     inel = {int(h): int((~T.elig[h]).sum()) for h in T.horizons}
     rep = {"version": spec["version"], "label": spec["label"], "promotion_eligible": False, "selection_trials_affected": 0,
            "diagnostic_statement": " ".join(spec["diagnostic_statement"].split()),
+           "non_promotable_rule": spec["non_promotable_rule"], "human_interpretation_rule": " ".join(spec["human_interpretation_rule"].split()),
+           "sigma_ref_formula": spec["sigma_ref"]["formula"],
            "cost_banner": spec["bracket_surface"]["cost_banner"], "selection_banner": spec["bracket_surface"]["selection_banner"],
            "horizons_bars": list(T.horizons), "tick_size_points": frozen.tick_size, "sigma_ref": spec["sigma_ref"]["definition"],
            "percentile_method": spec["percentiles"]["method"], "n_bracket_cells": len(bracket_cell_defs(spec)),
@@ -309,7 +311,7 @@ def ladder_path_diagnostics(sets: dict, order: list[str], bars_dev: pd.DataFrame
         rec = {"step": name, "n_events": int(len(ev))}
         if len(ev):
             pos = last_completed_position(bars_dev.index, ev["event_time"], frozen.interval)
-            sig = rv_ref(close, pos)
+            sig = sigma_ref(rv_ref(close, pos))
             ok = np.isfinite(sig)
             ev, sig = ev[ok].reset_index(drop=True), sig[ok]
         rec["n_events_with_sigma"] = int(len(ev))

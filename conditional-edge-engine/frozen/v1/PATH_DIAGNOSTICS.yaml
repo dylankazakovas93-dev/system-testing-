@@ -31,15 +31,19 @@ formulas:
   path_dominance: "MFE_points + MAE_points (MAE <= 0)"
   bars_to_extreme: "1-based forward-bar index of the FIRST occurrence of the final extremum (a zero excursion on bar 1 counts as bar 1)"
   same_bar_extrema: "bars_to_MFE == bars_to_MAE (no intrabar ordering is inferred)"
-# Volatility normalisation: ONE definition, reusing the already-frozen unit of the diagnostic targets (TARGET_BANK first_passage.sigma).
+# Volatility normalisation: ONE definition (the ONE-BAR RMS volatility scale derived from the already-frozen RV_60 feature).
 sigma_ref:
   feature: RV_60
-  definition: "sigma_log = RV_60 = sqrt(sum of the 60 squared one-bar log returns ending at the last bar completed by event_time) (log-return units, 60-bar scale; NOT divided by sqrt(60))"
-  sigma_points: "sigma_log * P0"
-  MFE_sigma: "MFE_log / sigma_log"
-  MAE_sigma: "MAE_log / sigma_log"
-  barrier_levels: "k*sigma in directional log space: target when fav_log >= t*sigma_log, stop when adv_log <= -s*sigma_log"
+  formula: "sigma_ref = RV_60 / sqrt(60)"
+  definition: "sigma_ref = RV_60 / sqrt(60), where RV_60 = sqrt(sum_{i=1..60} r_i^2) over the 60 one-minute log returns ending at the last bar completed by event_time (the frozen feature-engine RV_60); sigma_ref is the corresponding one-bar RMS log-return scale"
+  units: one_bar_log_return
+  sigma_points: "sigma_ref * P0"
+  MFE_sigma: "MFE_log / sigma_ref"
+  MAE_sigma: "MAE_log / sigma_ref"
+  barrier_levels: "k*sigma_ref in directional log space: target when fav_log >= t*sigma_ref, stop when adv_log <= -s*sigma_ref"
+  used_for: [MFE_sigma, MAE_sigma, first_passage_barriers, fixed_bracket_cells_64]
   alternative_normalisers: none
+  fallback_to_raw_RV_60: none
 
 percentiles:
   method: linear_interpolation             # numpy.percentile(method="linear") (Hyndman-Fan type 7)
@@ -97,4 +101,10 @@ diagnostic_statement: >-
   They are not eligible to create or promote a candidate in this experiment.
   Any trading rule, threshold, bracket, horizon, percentile, or filter inspired by these diagnostics requires a NEW registered
   experiment or a separate monetisation study.
+non_promotable_rule: "PATH DIAGNOSTICS ARE NON-PROMOTABLE: they never change candidate status, trial rank, group rank, the top-5 IS list, campaign BH/Bonferroni, human-approval eligibility or OOS group ordering."
+human_interpretation_rule: >-
+  A human may approve, decline, or approve fewer than the eligible maximum from the deterministic eligible list. A human may NOT use a visually
+  attractive path or bracket diagnostic to substitute a non-eligible or lower-ranked configuration that the engine did not place in the
+  approval-eligible set. If diagnostics inspire a different rule, bracket, horizon, threshold or filter, a NEW experiment or a SEPARATE
+  MONETISATION STUDY is required; there is no current-experiment promotion.
 lifecycle: "IS (development) rows only; no OOS / lockbox path diagnostics exist before the human campaign OOS opening."

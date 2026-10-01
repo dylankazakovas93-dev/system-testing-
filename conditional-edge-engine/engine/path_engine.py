@@ -9,7 +9,7 @@ Conventions (see the YAML for the authoritative statement):
   long : fav_pts = high - P0 ; adv_pts = low  - P0        short: fav_pts = P0 - low ; adv_pts = P0 - high
   MFE_pts = max fav_pts (>= 0) ; MAE_pts = min adv_pts (<= 0) ; first occurrence defines bars_to_MFE / bars_to_MAE (1-based)
   directional log excursions: long fav_log = log(high/P0), adv_log = log(low/P0); short fav_log = -log(low/P0), adv_log = -log(high/P0)
-  barrier touch (levels in sigma = RV_60 log units): target when fav_log >= t*sigma, stop when adv_log <= -s*sigma;
+  barrier touch (levels in sigma_ref = RV_60/sqrt(60), one-bar log units): target when fav_log >= t*sigma, stop when adv_log <= -s*sigma;
   same-bar double touch at the first touching bar -> AMBIGUOUS_SAME_BAR (no winner assumed)
 Eligibility (PATH_TIMESTAMP_INELIGIBLE) per event and horizon is decided from timestamps only.
 """
@@ -158,6 +158,15 @@ def bracket_pnl(pa: PathArrays, target_sigma: float, stop_sigma: float, expiry: 
     bad = ~pa.elig[expiry] | ~np.isfinite(pa.sigma_log)
     code = np.where(bad, np.int8(-1), code)
     return code, np.where(bad, np.nan, cons), np.where(bad, np.nan, raw), sdist
+
+
+SIGMA_LOOKBACK_BARS = 60
+
+
+def sigma_ref(rv60: np.ndarray) -> np.ndarray:
+    """THE volatility unit of every path diagnostic: sigma_ref = RV_60 / sqrt(60) (one-bar RMS log-return scale).
+    Used for MFE_sigma, MAE_sigma, first-passage barriers and all 64 bracket cells. There is no other normaliser and no fallback."""
+    return np.asarray(rv60, dtype="float64") / np.sqrt(SIGMA_LOOKBACK_BARS)
 
 
 def rv_ref(close: np.ndarray, pos: np.ndarray, n_returns: int = 60) -> np.ndarray:

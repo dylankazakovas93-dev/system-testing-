@@ -24,6 +24,6 @@ diagnostic_targets:
   excursion_horizons_bars: [15, 30, 60, 120]
   first_passage:
     horizon_bars: 60
-    sigma: RV_60            # sigma = RV_60 feature at the event (known at event time)
+    sigma: RV_60_over_sqrt_60   # sigma_ref = RV_60 / sqrt(60) at the event (one-bar RMS scale; same unit as PATH_DIAGNOSTICS.yaml)
     multiples: [1.0, 0.5]
   path_horizon_bars: 60     # path length, path efficiency, forward realized vol

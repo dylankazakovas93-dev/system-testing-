@@ -20,7 +20,7 @@ from engine.common import CODE_ROOT, EngineError, load_frozen
 from engine.experiment_lifecycle import experiment_dir
 from engine.partitions import parse_partitions
 from engine.path_engine import (AMBIG, EXPIRED, STOP, TARGET, barrier_outcome, bracket_distances, bracket_pnl, compute_paths,
-                                mfe_mae_log, path_eligibility, rv_ref)
+                                mfe_mae_log, path_eligibility, rv_ref, sigma_ref)
 from engine.synthetic import make_bars
 from tests.test_event_contract import LADDER_EVENT, module_from
 from tests.test_ladder import ladder_spec
@@ -49,6 +49,8 @@ HAND = [(100, 102, 99, 101), (101, 105, 100, 104), (104, 104, 97, 98), (98, 99, 
 
 def test_frozen_path_constants_are_pinned_and_the_discovery_space_is_unchanged():
     assert SPEC["horizons_bars"] == [5, 15, 30, 60, 120] and SPEC["sigma_ref"]["feature"] == "RV_60" and SPEC["sigma_ref"]["alternative_normalisers"] == "none"
+    assert SPEC["sigma_ref"]["formula"] == "sigma_ref = RV_60 / sqrt(60)" and SPEC["sigma_ref"]["fallback_to_raw_RV_60"] == "none"
+    assert set(SPEC["sigma_ref"]["used_for"]) == {"MFE_sigma", "MAE_sigma", "first_passage_barriers", "fixed_bracket_cells_64"}
     b = SPEC["bracket_surface"]
     assert (b["stops_sigma"], b["targets_sigma"], b["expiries_bars"], b["n_cells"]) == (LV, LV, [15, 30, 60, 120], 64)
     assert SPEC["stability"]["min_events_for_eligible_year"] == 20 and SPEC["percentiles"]["excursion_summary"] == ["mean", "median", "p75", "p95"]
@@ -58,6 +60,126 @@ def test_frozen_path_constants_are_pinned_and_the_discovery_space_is_unchanged()
     assert len(reg.trial_specs(F)) == 24
 
 
+# =================================================== sigma_ref = RV_60 / sqrt(60)
+RV60 = 0.0774596669                                                                           # = 0.01 * sqrt(60)
+
+
+def test_sigma_ref_is_rv60_over_sqrt_60():
+    assert sigma_ref(np.array([RV60]))[0] == pytest.approx(RV60 / np.sqrt(60), rel=1e-15)
+    assert sigma_ref(np.array([RV60]))[0] == pytest.approx(0.01, rel=1e-9)                     # sqrt(60) = 7.745966692
+    assert np.allclose(sigma_ref(np.array([0.0, 0.05, 0.2])), np.array([0.0, 0.05, 0.2]) / np.sqrt(60), rtol=1e-15)
+    assert "RV_60 / sqrt(60)" in SPEC["sigma_ref"]["definition"] and SPEC["sigma_ref"]["units"] == "one_bar_log_return"
+    for name in ("path_diagnostics", "path_engine"):                                          # single definition, no alternative normaliser / fallback
+        src = (CODE_ROOT / "engine" / f"{name}.py").read_text()
+        assert src.count("RV_60") <= 6 and "raw RV" not in src.lower()
+    src = (CODE_ROOT / "engine" / "path_diagnostics.py").read_text()
+    assert 'sigma_ref(features["RV_60"]' in src and "sigma_ref(rv_ref(" in src                  # both call sites convert; neither passes RV_60 raw
+
+
+SIG = float(sigma_ref(np.array([RV60]))[0])                                                   # 0.01
+UP, DN = 100 * np.exp(SIG), 100 * np.exp(-SIG)                                                 # 101.00502..., 99.00498...
+
+
+def _bars(*hl):
+    return [(100, h, l, 100) for h, l in hl] + [(100, 100.2, 99.8, 100)] * 4
+
+
+def test_barrier_conversion_long_plus_and_minus_one_sigma():
+    tgt = one_event(_bars((101.01, 99.5)), +1, sigma=SIG)                                      # high above 100*exp(+sigma), low above the stop level
+    code, cons, raw, sd = bracket_pnl(tgt, 1.0, 1.0, 5)
+    assert code[0] == TARGET and raw[0] == pytest.approx(100 * (np.exp(SIG) - 1))              # +1.005017 points
+    stp = one_event(_bars((100.5, 98.9)), +1, sigma=SIG)
+    code, cons, raw, sd = bracket_pnl(stp, 1.0, 1.0, 5)
+    assert code[0] == STOP and raw[0] == pytest.approx(-100 * (1 - np.exp(-SIG)))              # -0.995017 points
+    assert one_event(_bars((101.00, 99.01)), +1, sigma=SIG).t_fav[1.0][0] == 2**30            # 101.00 < 101.005 and 99.01 > 99.005: neither level touched
+    assert one_event(_bars((101.00, 99.01)), +1, sigma=SIG).t_adv[1.0][0] == 2**30
+
+
+def test_barrier_conversion_short_plus_and_minus_one_sigma():
+    tgt = one_event(_bars((100.5, 98.9)), -1, sigma=SIG)                                       # price FALLS through 100*exp(-sigma) -> favourable for a short
+    code, cons, raw, sd = bracket_pnl(tgt, 1.0, 1.0, 5)
+    assert code[0] == TARGET and raw[0] == pytest.approx(100 * (1 - np.exp(-SIG)))             # +0.995017 points
+    stp = one_event(_bars((101.01, 99.5)), -1, sigma=SIG)                                      # price RISES through 100*exp(+sigma) -> adverse
+    code, cons, raw, sd = bracket_pnl(stp, 1.0, 1.0, 5)
+    assert code[0] == STOP and raw[0] == pytest.approx(-100 * (np.exp(SIG) - 1))               # -1.005017 points
+    tdist, sdist = bracket_distances(np.array([100.0]), np.array([-1.0]), np.array([SIG]), 1.0, 1.0)
+    assert tdist[0] == pytest.approx(100 * (1 - np.exp(-SIG))) and sdist[0] == pytest.approx(100 * (np.exp(SIG) - 1))
+
+
+def test_one_bar_sigma_and_raw_rv60_give_different_barrier_outcomes_on_the_same_path():
+    rows = [(100, 100.4, 99.9, 100.3), (100.3, 102, 100.2, 101.5), (101.5, 105, 101, 104.5), (104.5, 105, 103, 104), (104, 104.5, 103.5, 104)]
+    one_bar = one_event(rows, +1, sigma=float(sigma_ref(np.array([RV60]))[0]))                 # 1 sigma = 1%: touched by the +5% path
+    raw_scale = one_event(rows, +1, sigma=RV60)                                                # what v1.1.0 used: 1 sigma = 7.7%: not touched
+    assert barrier_outcome(one_bar.t_fav[1.0], one_bar.t_adv[1.0], 5)[0] == TARGET
+    assert barrier_outcome(raw_scale.t_fav[1.0], raw_scale.t_adv[1.0], 5)[0] == EXPIRED
+    assert one_bar.t_fav[1.0][0] == 2 and raw_scale.t_fav[1.0][0] == 2**30
+
+
+# =================================================== exact session-boundary arithmetic (RTH 09:30-16:00 America/New_York, frozen)
+NY = "America/New_York"
+LATEST = {5: "15:55", 15: "15:45", 30: "15:30", 60: "15:00", 120: "14:00"}                      # close 16:00 - h bars: last bar opens 15:59
+
+
+def _day(day):
+    idx = pd.date_range(f"{day} 09:30", f"{day} 17:59", freq="1min", tz=NY).tz_convert("UTC")    # continuous through the close: only the SESSION rule can bind
+    px = 100 + np.arange(len(idx)) * 0.01
+    return pd.DataFrame({"open": px, "high": px + 0.05, "low": px - 0.05, "close": px + 0.01, "volume": 1.0}, index=idx)
+
+
+def _elig(bars, day, hhmmss, h):
+    t = pd.Timestamp(f"{day} {hhmmss}", tz=NY).tz_convert("UTC")
+    ev = pd.DataFrame({"event_time": [t], "direction": [1]})
+    return bool(pdx.make_paths(bars, ev, np.array([0.01]), F).elig[h][0])
+
+
+def test_rth_close_is_frozen_as_1600_new_york():
+    assert F.instrument["rth"] == {"open": "09:30", "close": "16:00", "minutes": 390} and F.tz == NY and F.interval == pd.Timedelta("1min")
+
+
+@pytest.mark.parametrize("day", ["2024-01-08", "2024-07-08", "2024-03-11", "2024-11-04"])      # EST, EDT, day after spring-forward, day after fall-back
+@pytest.mark.parametrize("h", [5, 15, 30, 60, 120])
+def test_latest_eligible_event_for_every_horizon_is_exact_to_the_bar(day, h):
+    bars = _day(day)
+    latest = pd.Timestamp(f"{day} {LATEST[h]}", tz=NY)
+    # forward bars open latest .. latest+h-1 minutes; the last one opens 15:59 and completes exactly at the 16:00 close
+    assert latest + pd.Timedelta(minutes=h) == pd.Timestamp(f"{day} 16:00", tz=NY)
+    earlier, later = (latest - pd.Timedelta(minutes=1)).strftime("%H:%M"), (latest + pd.Timedelta(minutes=1)).strftime("%H:%M")
+    assert _elig(bars, day, earlier, h)                                                        # one bar earlier: eligible
+    assert _elig(bars, day, LATEST[h], h)                                                      # boundary minus h bars: eligible (window ends AT the close)
+    assert not _elig(bars, day, later, h)                                                      # one bar later: its last bar would complete at 16:01
+
+
+def test_event_time_between_bars_uses_the_first_bar_that_opens_at_or_after_it():
+    bars = _day("2024-01-08")
+    assert _elig(bars, "2024-01-08", "13:59:30", 120)                                          # first forward bar opens 14:00 -> window 14:00..15:59
+    assert not _elig(bars, "2024-01-08", "14:00:30", 120)                                      # first forward bar opens 14:01 -> would end 16:01
+    assert _elig(bars, "2024-01-08", "14:00:00", 120) and not _elig(bars, "2024-01-08", "14:00:01", 120)
+
+
+def test_path_rule_equals_the_primary_target_rule_at_60_bars_for_every_minute_of_the_day():
+    from engine.target_engine import target_timestamp_ineligible
+    day = "2024-07-08"
+    bars = _day(day)
+    minutes = pd.date_range(f"{day} 09:31", f"{day} 15:59", freq="1min", tz=NY).tz_convert("UTC")
+    ev = pd.DataFrame({"event_time": minutes, "direction": 1})
+    T = pdx.make_paths(bars, ev, np.full(len(ev), 0.01), F)
+    assert (T.elig[60] == ~target_timestamp_ineligible(minutes, F)).all()                      # same arithmetic as the frozen primary-target rule
+    local = minutes.tz_convert(NY)
+    for h, last in LATEST.items():
+        expected = np.array([t.strftime("%H:%M") <= last for t in local])
+        assert (T.elig[h] == expected).all(), h                                                # eligibility == (event_time <= 16:00 - h minutes), nothing else
+    assert T.elig[120].sum() == len([t for t in local if t.strftime("%H:%M") <= "14:00"])
+    assert not (T.elig[120] & ~T.elig[60]).any() and not (T.elig[60] & ~T.elig[30]).any()      # nested: a longer window is never more eligible
+
+
+def test_template_session_end_1500_makes_120_bar_windows_unavailable_after_1400_only():
+    from engine.event_contract import load_spec
+    spec = load_spec(CODE_ROOT / "templates/experiment/EVENT_SPEC.yaml")
+    assert spec["eligible_session"] == {"start": "09:31", "end": "15:00"}                      # events are < 15:00: all 60-bar eligible (latest 15:00)
+    assert LATEST[60] == "15:00" and LATEST[120] == "14:00"                                    # but events in (14:00, 15:00) are PATH_TIMESTAMP_INELIGIBLE at 120 bars
+
+
+# =================================================== sigma_ref actually flows through the pipeline
 # =================================================== 1-2. MFE / MAE hand examples
 def test_long_mfe_mae_hand_example():
     pa = one_event(HAND, +1)
@@ -410,10 +532,20 @@ def runs(tmp_path_factory):
         return b
     variants = {"clean": bars, "oos": corrupt((ts >= p.development_end) & (ts < p.oos_end)), "lockbox": corrupt(ts >= p.lockbox_start)}
     out = {}
+    captured = []
+    orig = pdx.make_paths
+
+    def spy(bars_, events_, sigma_, frozen_):
+        captured.append((events_.copy(), np.array(sigma_)))
+        return orig(bars_, events_, sigma_, frozen_)
+    mp0 = pytest.MonkeyPatch()
+    mp0.setattr(pdx, "make_paths", spy)
     for label, data in variants.items():
         ws = reg.Workspace(tmp_path_factory.mktemp(label)).init()
         exp = make_experiment(ws)
         out[label] = (ws, exp, runner.run_experiment(ws, exp, data, verbose=False, run_sensitivity_stage=False))
+    mp0.undo()
+    out["captured"] = captured
     ws = reg.Workspace(tmp_path_factory.mktemp("nopath")).init()
     exp = make_experiment(ws)
     mp = pytest.MonkeyPatch()
@@ -560,3 +692,14 @@ class TestPipeline:
         human_approval(ws, exp, ["DIR_RETURN_30|UPPER_HALF"])
         with pytest.raises(ApprovalError, match="PATH_DIAGNOSTICS.json changed|PATH_DIAGNOSTICS.json was edited|edited"):
             validate_approval(ws, exp)
+
+    def test_the_pipeline_passes_rv60_over_sqrt_60_to_every_barrier_and_bracket(self, runs):
+        from engine.feature_engine import last_completed_position
+        events, sigma = runs["captured"][0]                                                    # the clean run's make_paths call
+        dev = three_stage_bars()
+        dev = dev[dev.index.tz_convert("UTC") < parse_partitions(P).development_end]
+        pos = last_completed_position(dev.index, events["event_time"], F.interval)
+        rv = rv_ref(dev["close"].to_numpy(), pos)
+        assert np.allclose(sigma, rv / np.sqrt(60), rtol=1e-12, atol=0)
+        assert not np.allclose(sigma, rv, rtol=0.5)                                           # not the old raw-RV_60 scale
+        assert len(runs["captured"]) >= 3 and np.array_equal(runs["captured"][1][1], sigma)      # OOS-poisoned run: identical sigma

@@ -77,7 +77,7 @@ Rejected and low-frequency results are never hidden.
 ## Forward-path diagnostics (DIAGNOSTIC ONLY)
 
 `IS_REPORT.md` section **Z** (non-promotable) and `results/PATH_DIAGNOSTICS.json` report endpoint returns, continuation/reversal, MFE/MAE, time to extrema, first passage and a fixed 64-cell *gross* bracket surface
-(`GROSS — COSTS NOT APPLIED`, `DIAGNOSTIC ONLY — NO BRACKET WAS SELECTED`) for the raw event and every model/state subset. Frozen in `frozen/v1/PATH_DIAGNOSTICS.yaml`; they never enter the 24 trials, multiplicity, ranking or status.
+(`GROSS — COSTS NOT APPLIED`, `DIAGNOSTIC ONLY — NO BRACKET WAS SELECTED`) for the raw event and every model/state subset. Frozen in `frozen/v1/PATH_DIAGNOSTICS.yaml`; they never enter the 24 trials, multiplicity, ranking, approval eligibility or status (`sigma_ref = RV_60 / sqrt(60)`, one-bar RMS scale). A human may approve, decline or approve fewer from the deterministic eligible list; a diagnostic never justifies a different group, bracket or filter (that is a new experiment or a separate monetisation study).
 
 ## Evidence in this repository
 

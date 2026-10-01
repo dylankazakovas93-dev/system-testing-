@@ -146,14 +146,28 @@ def make_fake_verifier(tmp_path):
     return repo
 
 
-def test_bridge_exercises_ridge_spline_and_xgb_for_every_candidate_target(tmp_path, monkeypatch):
-    """Every candidate path (target x model) is verified in STRONG mode; the verifier only receives development rows."""
+def test_promotion_capable_targets_are_exactly_the_primary_targets():
+    """Every primary target takes part in the 24 selection trials, so every one must be externally verified: 4 x 3 = 12 paths."""
+    from engine.common import primary_target_names
+    from engine.verifier_bridge import promotion_capable_targets
+    verification_targets = promotion_capable_targets(F)
+    trial_targets = {s["target"] for s in reg.trial_specs(F)}                                  # targets that can reach IS_SHORTLIST_ELIGIBLE / OOS
+    assert set(verification_targets) == set(primary_target_names(F)) == trial_targets
+    assert verification_targets == ["DIR_RETURN_15", "DIR_RETURN_30", "DIR_RETURN_60", "DIR_PATH_SKEW_60"]
+    assert len(verification_targets) * len(MODELS) == 12
+
+
+def test_bridge_verifies_all_twelve_strong_paths_even_when_most_targets_are_rejected_at_is(tmp_path, monkeypatch):
+    """Only DIR_RETURN_30 has candidate trials here, yet all 4 targets x 3 models are verified in STRONG mode: a rejected target must never
+    become an unverified path later. The verifier only receives development rows."""
+    from engine.common import primary_target_names
     from engine.synthetic import make_bars
     ws = reg.Workspace(tmp_path / "w").init()
     exp = new_frozen_experiment(ws, partitions={"development_end": "2017-01-01", "oos_end": "2017-07-01", "lockbox_start": "2017-10-01"})
     reg.reveal_experiment(ws, exp, fake_results(ws, exp, {("DIR_RETURN_30", m): 0.0009 for m in MODELS}),
                           train_period="a", validation_period="b", frozen=F)
-    assert vb.candidate_targets(ws, exp) == ["DIR_RETURN_30"]
+    t = reg.experiment_trials(ws, exp)
+    assert set(t[t["decision"].isin(["IS_PROVISIONAL_CANDIDATE", "IS_SHORTLIST_ELIGIBLE"])]["target"]) == {"DIR_RETURN_30"}
     bars = make_bars(n_days=600, seed=2)
     data = tmp_path / "bars.parquet"
     bars.reset_index().rename(columns={"index": "timestamp"}).to_parquet(data)
@@ -167,24 +181,39 @@ def test_bridge_exercises_ridge_spline_and_xgb_for_every_candidate_target(tmp_pa
     monkeypatch.setattr(vb, "check_verifier_pin", lambda r: verifier_pin()["commit"])
     monkeypatch.setattr(vb.subprocess, "run", fake_run)
     summary = run_verification(ws, exp, repo, str(data), verbose=False)
-    assert len(calls) == 3
-    assert len(summary["warnings"]) == 1 and "INCOMPLETE" in summary["warnings"][0]               # 1 UTC calendar year before the holdout
+    assert len(calls) == 12
+    flags = [{c[i]: c[i + 1] for i in range(2, len(c) - 1) if c[i].startswith("--")} for c in calls]
     adapters = [Path(dict(zip(c[2::2], c[3::2]))["--adapter"]).name for c in calls]
-    assert adapters == ["adapter_RIDGE.py", "adapter_SPLINE.py", "adapter_XGB.py"]               # all three model paths
-    for c in calls:
-        flags = {c[i]: c[i + 1] for i in range(2, len(c) - 1) if c[i].startswith("--")}
-        assert flags["--mode"] == "strong" and flags["--target"] == "DIR_RETURN_30" and flags["--target-horizon"] == "30bars"
-        assert flags["--lockbox-start"] == summary["verifier_holdout_start"]                      # a holdout INSIDE the staged development span
-        assert pd.Timestamp("2016-01-04") < pd.Timestamp(flags["--lockbox-start"]) < pd.Timestamp("2017-01-01")
-        assert flags["--bar-interval"] == "1min"
+    assert set(summary["targets_verified"]) == set(primary_target_names(F)) and summary["models_verified"] == MODELS
+    assert {(f["--target"], a) for f, a in zip(flags, adapters)} == {(tg, f"adapter_{m}.py") for tg in primary_target_names(F) for m in MODELS}
+    horizons = {x["name"]: x["horizon_bars"] for x in F.target_bank["primary_targets"]}
+    for f in flags:
+        assert f["--mode"] == "strong" and f["--target-horizon"] == f"{horizons[f['--target']]}bars" and f["--bar-interval"] == "1min"
+        assert f["--lockbox-start"] == summary["verifier_holdout_start"]                          # a holdout INSIDE the staged development span
+        assert pd.Timestamp("2016-01-04") < pd.Timestamp(f["--lockbox-start"]) < pd.Timestamp("2017-01-01")
+    assert len(summary["warnings"]) == 1 and "INCOMPLETE" in summary["warnings"][0]               # 1 UTC calendar year before the holdout
     assert "--skip-tests" not in calls[0] and all("--skip-tests" in c for c in calls[1:])          # repository_health once
     stage_data = pd.read_parquet(Path(dict(zip(calls[0][2::2], calls[0][3::2]))["--data"]))
     assert pd.to_datetime(stage_data["timestamp"], utc=True).max() < pd.Timestamp("2017-01-01", tz="UTC")   # no OOS/lockbox row reaches it
-    assert (pd.to_datetime(bars.index, utc=True) >= pd.Timestamp("2017-01-01", tz="UTC")).any()
-    assert summary["models_verified"] == MODELS and summary["overall"] == "RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE"
+    assert summary["overall"] == "RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE"
     rec = json.loads(reg.experiment_row(ws, exp)["verification_json"])
-    assert set(rec) == {f"DIR_RETURN_30|{m}" for m in MODELS} and all(v["mode"] == "strong" for v in rec.values())
+    assert set(rec) == {f"{tg}|{m}" for tg in primary_target_names(F) for m in MODELS} and len(rec) == 12 and all(v["mode"] == "strong" for v in rec.values())
     assert reg.experiment_row(ws, exp)["research_verification"] == "RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE"
+
+
+def test_partial_target_verification_is_flagged_and_unknown_targets_are_refused(tmp_path, monkeypatch):
+    from engine.synthetic import make_bars
+    ws = reg.Workspace(tmp_path / "w").init()
+    exp = new_frozen_experiment(ws, partitions={"development_end": "2017-01-01", "oos_end": "2017-07-01", "lockbox_start": "2017-10-01"})
+    data = tmp_path / "bars.parquet"
+    make_bars(n_days=400, seed=2).reset_index().rename(columns={"index": "timestamp"}).to_parquet(data)
+    repo = make_fake_verifier(tmp_path)
+    monkeypatch.setattr(vb, "check_verifier_pin", lambda r: verifier_pin()["commit"])
+    monkeypatch.setattr(vb.subprocess, "run", lambda cmd, **kw: SimpleNamespace(returncode=2, stdout=OUT_OK, stderr=""))
+    s = run_verification(ws, exp, repo, str(data), targets=["DIR_RETURN_15"], verbose=False, record=False)
+    assert any("PARTIAL VERIFICATION" in w and "DIR_RETURN_60" in w and "DIR_PATH_SKEW_60" in w for w in s["warnings"])
+    with pytest.raises(EngineError, match="unknown primary targets"):
+        run_verification(ws, exp, repo, str(data), targets=["DIR_RETURN_999"], verbose=False, record=False)
 
 
 def test_a_research_family_failure_rejects_that_model_path(tmp_path, monkeypatch):

@@ -265,6 +265,73 @@ def test_the_planted_run_never_touched_oos_or_the_lockbox(planted):
     assert "OOS status = NOT ACCESSED" in (experiment_dir(ws, exp) / "results/IS_REPORT.md").read_text()
 
 
+def test_path_diagnostics_are_non_promotable_content_cannot_move_ranking_but_tampering_breaks_approval_integrity(planted, tmp_path):
+    """PATH DIAGNOSTICS ARE NON-PROMOTABLE: drastically rewriting PATH_DIAGNOSTICS.json (and legitimately regenerating the report)
+    leaves candidate status, trial/group ranking, the top-5 list, approval eligibility and OOS group order untouched, while the
+    hash-bound approval of the earlier report is invalidated."""
+    from engine.acceptance import rank_groups, rank_trials
+    from engine.is_report import write_is_report
+    from engine.oos_stage import ApprovalError, approval_hashes, freeze_campaign_oos, validate_approval
+    ws_dir = tmp_path / "ws"
+    shutil.copytree(planted["ws_dir"], ws_dir)
+    ws = reg.Workspace(ws_dir)
+    exp = planted["exp"]
+    prepare_for_approval(ws, exp)                                                              # test-only injection of strong verification; regenerates the report
+
+    def formal():
+        rows = reg.experiment_trials(ws, exp).to_dict("records")
+        j = json.loads((experiment_dir(ws, exp) / "results/IS_REPORT.json").read_text())
+        e = reg.experiment_row(ws, exp)
+        return {"trials": reg.experiment_trials(ws, exp).to_csv(), "status": (e["status"], e["is_status"]),
+                "trial_rank": [r["trial_id"] for r in rank_trials(rows)], "group_rank": [g["group_id"] for g in rank_groups(rows, F.acceptance, 5)],
+                "top5": j["I_top_configurations"], "agreement": j["J_model_agreement"], "allowed": approval_hashes(ws, exp)["allowed_target_side_groups"],
+                "eligible_ids": sorted(r["trial_id"] for r in rows if r["decision"] == "IS_SHORTLIST_ELIGIBLE")}
+    before = formal()
+    assert before["status"][0] == "AWAITING_HUMAN_OOS_APPROVAL" and len(before["top5"]["top_groups"]) >= 2
+    order = top_group_ids(ws, exp)[:2][::-1]                                                   # the human picks 2 eligible groups, in his own order
+    human_approval(ws, exp, order)
+    old_report_hash = approval_hashes(ws, exp)["is_report_sha256"]
+    assert validate_approval(ws, exp)["approved_target_side_groups"] == order
+
+    # (a) raw tampering of the frozen diagnostic artifact (no regeneration) invalidates the hash-bound approval
+    d = experiment_dir(ws, exp) / "results"
+    original = (d / "PATH_DIAGNOSTICS.json").read_text()
+    (d / "PATH_DIAGNOSTICS.json").write_text(original.replace("\"promotion_eligible\":false", "\"promotion_eligible\":true", 1))
+    with pytest.raises(ApprovalError, match="PATH_DIAGNOSTICS.json changed"):
+        validate_approval(ws, exp)
+    (d / "PATH_DIAGNOSTICS.json").write_text(original)
+    assert validate_approval(ws, exp)["approved_target_side_groups"] == order
+
+    # (b) drastic rewrite of every diagnostic number, consistently re-hashed and regenerated: formal results do not move
+    rep = json.loads(original)
+    for ctx in rep["contexts"].values():
+        for cell in ctx.get("bracket_surface", []):
+            cell.update(mean_gross_points=1e6, mean_R=1e3, median_gross_points=1e6, win_rate={"n": 1, "denominator": 1, "rate": 1.0})
+        for h in ctx.get("continuation", {}):
+            ctx["continuation"][h]["continuation"] = {"n": 1, "denominator": 1, "rate": 1.0}
+    txt = json.dumps(rep, separators=(",", ":"), sort_keys=True)
+    (d / "PATH_DIAGNOSTICS.json").write_text(txt)
+    import hashlib
+    res = json.loads((d / "results.json").read_text())
+    res["path_diagnostics"]["sha256"] = hashlib.sha256(txt.encode()).hexdigest()
+    (d / "results.json").write_text(json.dumps(res, indent=2, sort_keys=True))
+    write_is_report(ws, exp)
+    after = formal()
+    assert after == before                                                                     # status, ranks, top-5, eligibility, trial rows: identical
+    new_hash = approval_hashes(ws, exp)["is_report_sha256"]
+    assert new_hash != old_report_hash                                                         # but the artifact hash moved ...
+    with pytest.raises(ApprovalError, match="is_report_sha256 does not match"):
+        validate_approval(ws, exp)                                                             # ... so the OLD approval is no longer valid
+    human_approval(ws, exp, order)                                                             # a NEW human approval over the new hashes accepts the SAME groups
+    assert validate_approval(ws, exp)["approved_target_side_groups"] == order
+    with pytest.raises(ApprovalError, match="not in the frozen IS shortlist"):                 # an attractive-looking non-eligible group is refused
+        human_approval(ws, exp, ["DIR_RETURN_60|UPPER_HALF"])
+        validate_approval(ws, exp)
+    human_approval(ws, exp, order)
+    doc = freeze_campaign_oos(ws, "C001")
+    assert doc["experiments"][0]["approved_target_side_groups"] == order and doc["n_oos_confirmations"] == 6   # OOS group order = the human's order of eligible groups
+
+
 # ---------------- documented hard failure: mixed-direction events ----------------
 def test_mixed_direction_events_are_a_hard_event_contract_failure_before_any_result(tmp_path):
     """Same planted structure, but the event alternates direction. v1 refuses it outright instead of hiding an effect."""

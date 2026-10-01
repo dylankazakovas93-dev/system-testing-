@@ -144,7 +144,7 @@ def to_long(targets: dict[str, pd.DataFrame]) -> pd.DataFrame:
 
 def compute_diagnostic_targets(bars: pd.DataFrame, events: pd.DataFrame, frozen: Frozen,
                                sigma: np.ndarray | None = None) -> pd.DataFrame:
-    """Report-only diagnostics. ``sigma`` = RV_60 at each event (known at event time) for first passage.
+    """Report-only diagnostics. ``sigma`` = sigma_ref = RV_60/sqrt(60) at each event (known at event time) for first passage.
 
     Returns one row per event; NaN when the required forward window is not yet complete.
     These columns can NEVER promote a candidate.

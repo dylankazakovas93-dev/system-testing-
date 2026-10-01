@@ -23,7 +23,7 @@ def main():
     ap.add_argument("--timestamp-col", default="timestamp")
     ap.add_argument("--mode", choices=["fast", "standard", "strong"], default="strong")
     ap.add_argument("--models", nargs="*", choices=["RIDGE", "SPLINE", "XGB"], help="default: all three")
-    ap.add_argument("--targets", nargs="*", help="default: targets of every candidate group")
+    ap.add_argument("--targets", nargs="*", help="default: ALL 4 primary targets (every promotion-capable target); a subset leaves paths unverified")
     ap.add_argument("--skip-verifier-tests", action="store_true")
     ap.add_argument("--workspace")
     a = ap.parse_args()
