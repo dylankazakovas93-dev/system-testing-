@@ -315,3 +315,222 @@ class TestCampaignFreezeAndSingleOpening:
         assert chk["experiments"] == 3 and chk["selection_trials"] == 72 and chk["revealed_trials"] == 72
         s = reg.campaign_summary(ws, "C001")
         assert s["campaign_status"] == "OOS_SPENT" and s["campaign_oos_spent"] is True and s["oos_unlocks"] == 1
+
+
+# ================================================== MAX_OOS_GROUPS_PER_CAMPAIGN = 6 (=> at most 18 OOS confirmations) ========
+import hashlib  # noqa: E402
+
+CAMP_CAP = F.trial_policy["oos"]["max_groups_per_campaign"]
+EXP_CAP = F.trial_policy["oos"]["max_groups_per_experiment"]
+
+
+def tree_snapshot(ws):
+    """Byte-level fingerprint of the whole workspace (registry, experiments, approvals, results): proves atomic refusals."""
+    return {str(p.relative_to(ws.root)): hashlib.sha256(p.read_bytes()).hexdigest()
+            for p in sorted(ws.root.rglob("*")) if p.is_file() and "verification/stage" not in str(p)}
+
+
+def test_the_caps_are_frozen_constants_in_the_v1_policy():
+    assert (EXP_CAP, CAMP_CAP) == (2, 6) and F.trial_policy["oos"]["models_per_group"] == 3
+    assert 3 * CAMP_CAP == 18
+    from engine.oos_stage import assert_campaign_group_cap
+    ent = lambda *n: [{"experiment_id": f"E{i}", "approved_target_side_groups": ["g"] * k} for i, k in enumerate(n)]   # noqa: E731
+    assert assert_campaign_group_cap(ent(2, 2, 2), F) == 6 and assert_campaign_group_cap(ent(1, 1, 1, 1, 1, 1), F) == 6
+    with pytest.raises(ApprovalError, match="MAX_OOS_GROUPS_PER_CAMPAIGN = 6"):
+        assert_campaign_group_cap(ent(2, 2, 2, 1), F)
+    with pytest.raises(ApprovalError, match="MAX_OOS_GROUPS_PER_EXPERIMENT = 2"):
+        assert_campaign_group_cap(ent(3), F)
+
+
+def test_the_full_eighteen_confirmation_family_is_corrected_jointly_including_losers():
+    rows = []
+    for i in range(6):                                    # 6 groups x 3 models; the last two groups are clear losers
+        loser = i >= 4
+        for m in ("RIDGE", "SPLINE", "XGB"):
+            rows.append(_row(f"EXP_{i // 2 + 1:04d}", f"G{i}|U", m, 0.9 if loser else 0.0005 * (i + 1),
+                             **({"selected_effect": -0.2} if loser else {})))
+    out = oos_confirmations(rows, RULE)
+    p = np.array([r["raw_p"] for r in rows])
+    assert len(out) == 18 and {r["oos_trials_in_family"] for r in out} == {18}
+    assert np.allclose([r["oos_bonferroni_p"] for r in out], np.minimum(p * 18, 1.0))                  # multiplier = the FULL family size
+    assert np.allclose([r["oos_q"] for r in out], benjamini_hochberg(p))                                # BH over all 18 incl. losers
+    assert not np.allclose(benjamini_hochberg(p[:12]), [r["oos_q"] for r in out[:12]])                  # dropping the losers WOULD change q
+    assert [r["oos_bonferroni_p"] for r in out[:3]] == pytest.approx([0.009] * 3)                       # 0.0005 * 18, not * 3 or * 6
+
+
+class TestCampaignGroupCap:
+    @pytest.fixture(scope="class")
+    def four(self, tmp_path_factory):
+        """Four IS-complete, verified experiments (A..D) in one campaign; each could have 2 approved groups (max 8 > 6)."""
+        ws = reg.Workspace(tmp_path_factory.mktemp("capcamp")).init()
+        ids, tabs = [], {}
+        for seed in (21, 22, 23, 24):
+            t = make_event_tables(years=range(2015, 2021), events_per_week=9, signal="linear", slope=0.4, seed=seed)
+            exp, _, _ = run_is_tables(ws, t, campaign="C001", partitions=LIFE_PARTS)
+            prepare_for_approval(ws, exp)
+            ids.append(exp)
+            tabs[exp] = t
+        return ws, ids, tabs
+
+    @staticmethod
+    def approve(ws, ids, counts):
+        for e, n in zip(ids, counts):
+            if n:
+                human_approval(ws, e, top_group_ids(ws, e)[:n])
+
+    @pytest.fixture
+    def forbid_oos_data(self, monkeypatch):
+        import engine.oos_stage as o
+
+        def boom(*a, **k):
+            raise AssertionError("a campaign freeze must not touch OOS data")
+        monkeypatch.setattr(o, "oos_view", boom)
+        monkeypatch.setattr(o, "build_event_tables", boom)
+
+    def test_all_four_experiments_are_eligible_so_the_cap_is_the_only_obstacle(self, four):
+        ws, ids, _ = four
+        assert {reg.experiment_row(ws, e)["status"] for e in ids} == {"AWAITING_HUMAN_OOS_APPROVAL"}
+        assert all(len(top_group_ids(ws, e)) >= 2 for e in ids)
+
+    def test_seven_campaign_groups_are_refused_atomically(self, four, tmp_path, forbid_oos_data):
+        ws = clone(four[0], tmp_path)
+        ids = four[1]
+        self.approve(ws, ids, (2, 2, 2, 1))
+        before = tree_snapshot(ws)
+        with pytest.raises(ApprovalError, match="7 approved target/side groups across the campaign > MAX_OOS_GROUPS_PER_CAMPAIGN = 6"):
+            freeze_campaign_oos(ws, "C001")
+        assert tree_snapshot(ws) == before                                         # nothing at all changed: registry, statuses, files, approvals
+        assert not freeze_path(ws, "C001").exists() and reg.read_oos_access(ws).empty and reg.read_oos_trials(ws).empty
+        assert reg.campaign_row(ws, "C001")["status"] == "OPEN" and reg.campaign_row(ws, "C001")["oos_freeze_hash"] == ""
+        assert {reg.experiment_row(ws, e)["status"] for e in ids} == {"AWAITING_HUMAN_OOS_APPROVAL"}
+        # the human may fix it (drop one group) and the very same campaign then freezes
+        human_approval(ws, ids[3], top_group_ids(ws, ids[3])[:1], approved=False)
+        assert freeze_campaign_oos(ws, "C001")["n_approved_groups"] == 6
+
+    def test_exactly_six_campaign_groups_are_accepted_giving_18_confirmations(self, four, tmp_path, forbid_oos_data):
+        ws = clone(four[0], tmp_path)
+        ids = four[1]
+        self.approve(ws, ids, (2, 2, 2, 0))
+        doc = freeze_campaign_oos(ws, "C001")
+        assert doc["n_approved_groups"] == 6 and doc["n_oos_confirmations"] == 18
+        assert doc["experiments_not_included"] == {ids[3]: "NO_HUMAN_APPROVAL"} and reg.experiment_row(ws, ids[3])["status"] == "OOS_NOT_APPROVED"
+        assert reg.campaign_row(ws, "C001")["status"] == "OOS_FROZEN"
+
+    def test_six_groups_are_accepted_for_any_split_across_experiments(self, four, tmp_path, forbid_oos_data):
+        ws = clone(four[0], tmp_path)
+        self.approve(ws, four[1], (2, 1, 2, 1))
+        assert freeze_campaign_oos(ws, "C001")["n_oos_confirmations"] == 18
+
+    def test_the_per_experiment_cap_of_two_still_applies(self, four, tmp_path, forbid_oos_data):
+        ws = clone(four[0], tmp_path)
+        ids = four[1]
+        self.approve(ws, ids, (2, 0, 0, 0))
+        human_approval(ws, ids[1], top_group_ids(ws, ids[1])[:3])                 # 3 groups for one experiment, only 5 campaign-wide
+        before = tree_snapshot(ws)
+        with pytest.raises(ApprovalError, match="MAX_OOS_GROUPS_PER_EXPERIMENT = 2"):
+            freeze_campaign_oos(ws, "C001")
+        assert tree_snapshot(ws) == before and reg.campaign_row(ws, "C001")["status"] == "OPEN"
+
+    def test_zero_approved_groups_never_freeze_or_open_oos(self, four, tmp_path, forbid_oos_data):
+        ws = clone(four[0], tmp_path)
+        ids = four[1]
+        before = tree_snapshot(ws)
+        with pytest.raises(EngineError, match="nothing to freeze"):
+            freeze_campaign_oos(ws, "C001")
+        for e in ids:                                                             # every approval negative
+            human_approval(ws, e, top_group_ids(ws, e)[:1], approved=False)
+        before = tree_snapshot(ws)
+        with pytest.raises(EngineError, match="nothing to freeze"):
+            freeze_campaign_oos(ws, "C001")
+        assert tree_snapshot(ws) == before and reg.read_oos_access(ws).empty
+        campaign_open_approval(ws, "C001", oos_freeze_sha256="0" * 64)
+        with pytest.raises(ApprovalError, match="must first be frozen"):
+            validate_campaign_open(ws, "C001")
+
+    @pytest.fixture(scope="class")
+    def six_frozen(self, four, tmp_path_factory):
+        ws = clone(four[0], tmp_path_factory.mktemp("six"), "ws")
+        self.approve(ws, four[1], (2, 2, 2, 0))
+        doc = freeze_campaign_oos(ws, "C001")
+        return ws, doc
+
+    def test_an_already_frozen_campaign_cannot_bypass_the_cap(self, four, six_frozen, tmp_path):
+        ws = clone(six_frozen[0], tmp_path)
+        ids = four[1]
+        human_approval(ws, ids[3], top_group_ids(ws, ids[3])[:1])                 # a 7th group, approved after the freeze
+        before = tree_snapshot(ws)
+        with pytest.raises(reg.CampaignClosed):
+            freeze_campaign_oos(ws, "C001")
+        assert tree_snapshot(ws) == before
+        campaign_open_approval(ws, "C001")
+        doc, _, aps = validate_campaign_open(ws, "C001")                          # the late approval is simply not part of the frozen set
+        assert doc["n_oos_confirmations"] == 18 and set(aps) == set(ids[:3])
+        assert reg.experiment_row(ws, ids[3])["status"] == "OOS_NOT_APPROVED"
+
+    def test_editing_the_freeze_json_to_add_a_seventh_group_fails_integrity(self, four, six_frozen, tmp_path):
+        ids = four[1]
+        # (a) plain edit: the registry-recorded hash no longer matches
+        ws = clone(six_frozen[0], tmp_path, "a")
+        campaign_open_approval(ws, "C001")
+        doc = json.loads(freeze_path(ws, "C001").read_text())
+        doc["experiments"][0]["approved_target_side_groups"].append("DIR_RETURN_15|UPPER_HALF")
+        doc["n_approved_groups"], doc["n_oos_confirmations"] = 7, 21
+        freeze_path(ws, "C001").write_text(json.dumps(doc, indent=2, sort_keys=True))
+        with pytest.raises(ApprovalError, match="missing or was edited after the freeze"):
+            validate_campaign_open(ws, "C001")
+        # (b) the forger also re-hashes the file in the registry and re-writes the open approval: the cap still holds
+        ws = clone(six_frozen[0], tmp_path, "b")
+        doc = json.loads(freeze_path(ws, "C001").read_text())
+        doc["experiments"].append({**doc["experiments"][0], "experiment_id": ids[3], "approved_target_side_groups": ["DIR_RETURN_15|UPPER_HALF"]})
+        doc["n_approved_groups"], doc["n_oos_confirmations"] = 7, 21
+        freeze_path(ws, "C001").write_text(json.dumps(doc, indent=2, sort_keys=True))
+        from engine.common import sha256_file
+        reg.update_campaign(ws, "C001", oos_freeze_hash=sha256_file(freeze_path(ws, "C001")))
+        campaign_open_approval(ws, "C001")
+        with pytest.raises(ApprovalError, match="MAX_OOS_GROUPS_PER_CAMPAIGN = 6"):
+            validate_campaign_open(ws, "C001")
+        # (c) re-hashed edit that pushes ONE experiment over 2 groups
+        ws = clone(six_frozen[0], tmp_path, "c")
+        doc = json.loads(freeze_path(ws, "C001").read_text())
+        doc["experiments"][0]["approved_target_side_groups"] = doc["experiments"][0]["approved_target_side_groups"] + ["x|y"]
+        doc["experiments"][1]["approved_target_side_groups"] = doc["experiments"][1]["approved_target_side_groups"][:1]
+        freeze_path(ws, "C001").write_text(json.dumps(doc, indent=2, sort_keys=True))
+        reg.update_campaign(ws, "C001", oos_freeze_hash=sha256_file(freeze_path(ws, "C001")))
+        campaign_open_approval(ws, "C001")
+        with pytest.raises(ApprovalError, match="MAX_OOS_GROUPS_PER_EXPERIMENT = 2"):
+            validate_campaign_open(ws, "C001")
+        # (d) re-hashed edit with inconsistent counts (cap respected) is still caught
+        ws = clone(six_frozen[0], tmp_path, "d")
+        doc = json.loads(freeze_path(ws, "C001").read_text())
+        doc["n_oos_confirmations"] = 12
+        freeze_path(ws, "C001").write_text(json.dumps(doc, indent=2, sort_keys=True))
+        reg.update_campaign(ws, "C001", oos_freeze_hash=sha256_file(freeze_path(ws, "C001")))
+        campaign_open_approval(ws, "C001")
+        with pytest.raises(ApprovalError, match="internally inconsistent"):
+            validate_campaign_open(ws, "C001")
+        assert reg.read_oos_access(ws).empty
+
+    @pytest.fixture(scope="class")
+    def opened18(self, four, six_frozen, tmp_path_factory):
+        ws = clone(six_frozen[0], tmp_path_factory.mktemp("open18"), "ws")
+        return ws, open_campaign_oos(ws, "C001", four[2])
+
+    def test_the_maximum_family_is_18_and_every_confirmation_is_corrected_jointly(self, opened18):
+        ws, res = opened18
+        led = reg.read_oos_access(ws)
+        assert len(led) == 1 and led.iloc[0]["n_oos_confirmations"] == "18" and len(led.iloc[0]["approved_experiment_groups"].split(";")) == 6
+        rows = reg.read_oos_trials(ws)
+        assert len(rows) == 18 == res["family_size"] and (rows["oos_trials_in_family"].astype(int) == 18).all()
+        p = rows["raw_p"].astype(float).to_numpy()
+        assert np.allclose(rows["oos_bonferroni_p"].astype(float), np.minimum(p * 18, 1.0))             # full-family multiplier, never relaxed
+        assert np.allclose(rows["oos_q"].astype(float), benjamini_hochberg(p))                          # BH over all 18
+        assert set(rows["model"]) == {"RIDGE", "SPLINE", "XGB"} and rows["experiment_id"].nunique() == 3
+
+    def test_a_spent_campaign_cannot_bypass_the_cap_or_reopen(self, four, opened18):
+        ws, _ = opened18
+        human_approval(ws, four[1][3], top_group_ids(ws, four[1][3])[:1])
+        with pytest.raises(OOSContaminated, match="CAMPAIGN OOS HAS BEEN SPENT"):
+            freeze_campaign_oos(ws, "C001")
+        with pytest.raises(OOSContaminated, match="CAMPAIGN OOS HAS BEEN SPENT"):
+            validate_campaign_open(ws, "C001")
+        assert len(reg.read_oos_access(ws)) == 1 and len(reg.read_oos_trials(ws)) == 18

@@ -36,7 +36,7 @@ python scripts/verify_experiment.py --verifier-repo ../engine-verification- --ex
 python scripts/show_approval_hashes.py --experiment EXP_0001     # read-only: the hashes a human approval must cite
 #   --- HUMAN reads IS_REPORT.md and, if desired, writes approvals/EXP_0001_OOS_APPROVAL.yaml (never a script / LLM) ---
 #   (repeat new/freeze/run/verify for EVERY experiment of the campaign; all IS stages must be complete)
-python scripts/freeze_campaign_oos.py --campaign C001           # HUMAN-run: closes the campaign, freezes all approved groups together
+python scripts/freeze_campaign_oos.py --campaign C001           # HUMAN-run: closes the campaign, freezes all approved groups together (≤ 6 groups per campaign = ≤ 18 confirmations)
 python scripts/show_approval_hashes.py --campaign C001          # read-only: the freeze hash the campaign-open approval must cite
 #   --- HUMAN writes approvals/CAMPAIGN_C001_OOS_OPEN_APPROVAL.yaml ---
 python scripts/run_campaign_oos.py --campaign C001 --data /path/NQ_1m.parquet   # opens the shared OOS ONCE; BH/Bonferroni over the whole campaign

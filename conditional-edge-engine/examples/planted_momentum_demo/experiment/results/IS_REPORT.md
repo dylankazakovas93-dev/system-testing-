@@ -1148,16 +1148,16 @@ How this configuration emerged
 
 | item | sha256 |
 |---|---|
-| manifest_sha256 | 0dc2d4aae44fe2ceaf261ad282ea739fe844099f7425018ae9f5541f332e4757 |
-| manifest_hash | ad26f7d1b5977e883081b567b6c856c513ec95f91695d98b975f4c28dc67aff5 |
+| manifest_sha256 | 2712904b9243048a87c0428ba3e351af1c4843813dfa04d15f8f0388e46127c1 |
+| manifest_hash | 8bff93da2b38be54175c57ee8c7c3edf9fbf88ba6842f11e09b2b4da75a96ed4 |
 | event_hash | dd3dc43384677409442cf430c5708bf8e5f0fafe10f4b6665c2cdd5d0e61e2e4 |
 | event_py | 47e3f563c012e50b1a7f8a30d8bf81e106793a1d594ffd5bb2d922660ad10585 |
 | event_spec | 9b17cc874e0a2d4b7c58b552bf3df5b87a5978ec80ba401beb10e063a0de22eb |
 | partitions_hash | 8e35ba8724b68cc65dde56ecb0259a4e687efe4410d7ae4449d58d79e2abf4fd |
-| frozen_bundle_hash | 65d7d0ad47aa1748956b2d5503c3cf532cf130627355cfdbd143bac001adec6d |
-| engine_code_hash | c66f17efa976366e426023e1b7da97e3e30bc95e51936cfc61677ee404f57942 |
-| engine_version | v1.1.0 |
-| trial_ledger_hash | dbe6c2d6e86d29bb8805be8fdb829d930de87c17405a6d64ae93814717a7c0e5 |
+| frozen_bundle_hash | a45f9572af6be39082f664da88c88cf4410f2bf6d5c2c0a23b4ac38004a7d8cf |
+| engine_code_hash | a524a8ca65db960d8e165b2c28269a8d428579e0151315ad29e912c1f2549cd1 |
+| engine_version | v1.0.0 |
+| trial_ledger_hash | 973d335c3fbb56960411678237befbb68ea4bfbad3883397c9369bcf274271a5 |
 | is_data_fingerprint | 99deba244cd2790651042661941d558e73e3f0c42b3f508c0acf26dee9be2371 |
 | results_sha256 | 9f044b2747e12236011fd6fadf42566f681010ad3c0ebe304984f4ecbded0ad8 |
 | verifier_pin | 624c8b7f0502abf6c5d453d501e96e3172367035 |
@@ -1166,5 +1166,5 @@ How this configuration emerged
 
 **OOS status = NOT ACCESSED**
 
-OOS requires a manual human approval file. Compute the hashes to reference with `python scripts/show_approval_hashes.py --experiment EXP_0001`. The LLM / scripts never create `approvals/EXP_0001_OOS_APPROVAL.yaml`; at most 2 TARGET|SIDE groups from the top-5 list may be approved and every approved group runs all three frozen models.
+The campaign-level OOS requires manual human approval files (per experiment, then the campaign-open approval after `freeze_campaign_oos.py`). Compute the hashes to reference with `python scripts/show_approval_hashes.py --experiment EXP_0001`. The LLM / scripts never create `approvals/EXP_0001_OOS_APPROVAL.yaml`; at most 2 TARGET|SIDE groups from the top-5 list may be approved and every approved group runs all three frozen models.
 

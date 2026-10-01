@@ -41,7 +41,8 @@ single_direction_events_only: true   # all events of one v1 experiment share one
 shortlist:
   top_groups_reported: 5
 oos:
-  max_target_side_groups: 2          # MAX_OOS_TARGET_SIDE_GROUPS
+  max_groups_per_experiment: 2       # MAX_OOS_GROUPS_PER_EXPERIMENT
+  max_groups_per_campaign: 6         # MAX_OOS_GROUPS_PER_CAMPAIGN: 6 groups x 3 frozen models = 18 OOS confirmations at most; never relaxed dynamically
   models_per_group: 3                # every approved group includes RIDGE, SPLINE and XGB
   one_shot: true
   approval_dir: approvals

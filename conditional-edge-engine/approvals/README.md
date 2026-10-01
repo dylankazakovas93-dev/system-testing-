@@ -13,7 +13,7 @@ The approval is valid only for the EXACT frozen state it references:
 | `is_report_sha256` | sha256 of the exact `results/IS_REPORT.json` (which embeds the IS_REPORT.md and results.json hashes) |
 | `approved_by` | exactly `HUMAN_USER` |
 | `approved` | `true` (`false` records OOS_NOT_APPROVED) |
-| `approved_target_side_groups` | 1–2 ids `TARGET|STATE` taken from the report's TOP 5 IS GROUPS; all 3 models run for each |
+| `approved_target_side_groups` | 1–2 ids (and ≤ 6 groups summed over the whole campaign at freeze) `TARGET|STATE` taken from the report's TOP 5 IS GROUPS; all 3 models run for each |
 | `approval_note` | non-empty |
 
 Changing event.py, EVENT_SPEC.yaml, frozen specs, partitions, the IS results or regenerating the IS report invalidates the

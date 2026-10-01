@@ -1,0 +1,1 @@
+campaign_id,experiment_id,oos_trial_id,group_id,target,state,model,n_parent_events,n_selected_events,parent_frequency,selected_frequency,retention_ratio,parent_effect,selected_effect,uplift,standardized_uplift,bootstrap_ci_low,bootstrap_ci_high,raw_p,oos_q,oos_bonferroni_p,oos_trials_in_family,gates_pass,decision,rejection_reason,revealed_at

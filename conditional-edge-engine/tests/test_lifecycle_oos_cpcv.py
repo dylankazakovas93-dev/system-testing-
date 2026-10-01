@@ -130,7 +130,7 @@ class TestStableEffect:
         three = top_group_ids(ws, exp)[:3]
         assert len(three) == 3
         human_approval(ws, exp, three)
-        with pytest.raises(ApprovalError, match="MAX_OOS_TARGET_SIDE_GROUPS = 2"):
+        with pytest.raises(ApprovalError, match="MAX_OOS_GROUPS_PER_EXPERIMENT = 2"):
             validate_approval(ws, exp)
         human_approval(ws, exp, three[:2])
         assert validate_approval(ws, exp)["approved_target_side_groups"] == three[:2]              # exactly 2 is fine

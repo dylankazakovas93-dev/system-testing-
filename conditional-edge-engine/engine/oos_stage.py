@@ -73,6 +73,21 @@ def mark_contamination_if_mutated(ws: reg.Workspace, experiment_id: str) -> bool
     return False
 
 
+def assert_campaign_group_cap(entries: list[dict], frozen: Frozen) -> int:
+    """MAX_OOS_GROUPS_PER_CAMPAIGN (and the per-experiment cap) over ALL positively approved groups. Returns the group count.
+    The cap is a frozen constant: it is never relaxed because Bonferroni becomes strict."""
+    pol = frozen.trial_policy["oos"]
+    per_exp, per_camp = pol["max_groups_per_experiment"], pol["max_groups_per_campaign"]
+    for e in entries:
+        if len(e["approved_target_side_groups"]) > per_exp:
+            raise ApprovalError(f"{e['experiment_id']}: {len(e['approved_target_side_groups'])} groups approved; MAX_OOS_GROUPS_PER_EXPERIMENT = {per_exp}")
+    total = sum(len(e["approved_target_side_groups"]) for e in entries)
+    if total > per_camp:
+        raise ApprovalError(f"{total} approved target/side groups across the campaign > MAX_OOS_GROUPS_PER_CAMPAIGN = {per_camp} "
+                            f"(max {per_camp} x 3 models = {3 * per_camp} OOS confirmations); the campaign OOS freeze is refused and nothing was changed")
+    return total
+
+
 def campaign_approval_path(ws: reg.Workspace, campaign_id: str) -> Path:
     return ws.approvals / f"CAMPAIGN_{campaign_id}_OOS_OPEN_APPROVAL.yaml"
 
@@ -133,12 +148,12 @@ def validate_approval(ws: reg.Workspace, experiment_id: str, frozen: Frozen | No
     if exp["is_report_sha256"] and exp["is_report_sha256"] != sha256_file(rep):
         errs.append("IS_REPORT.json differs from the registry")
     groups = ap["approved_target_side_groups"]
-    mx = frozen.trial_policy["oos"]["max_target_side_groups"]
+    mx = frozen.trial_policy["oos"]["max_groups_per_experiment"]
     if not (isinstance(groups, list) and groups and all(isinstance(g, str) for g in groups)):
         errs.append("approved_target_side_groups must be a non-empty list of 'TARGET|STATE' ids")
     else:
         if len(groups) > mx:
-            errs.append(f"{len(groups)} target/side groups approved; MAX_OOS_TARGET_SIDE_GROUPS = {mx}")
+            errs.append(f"{len(groups)} target/side groups approved; MAX_OOS_GROUPS_PER_EXPERIMENT = {mx}")
         if len(set(groups)) != len(groups):
             errs.append("duplicate approved groups")
         allowed = {g["group_id"] for g in J["I_top_configurations"]["top_groups"]}
@@ -252,7 +267,7 @@ def freeze_campaign_oos(ws: reg.Workspace, campaign_id: str, frozen: Frozen | No
                              "verification_hash": hashlib.sha256((reg.experiment_row(ws, e)["verification_json"] or "{}").encode()).hexdigest()})
     if not included:
         raise EngineError(f"nothing to freeze for {campaign_id}: no experiment has a valid positive human approval")
-    n_groups = sum(len(i["approved_target_side_groups"]) for i in included)
+    n_groups = assert_campaign_group_cap(included, frozen)                    # BEFORE any state change or file write
     doc = {"campaign_id": campaign_id, "partitions": parts, "frozen_at": now_utc_iso(), "experiments": included,
            "experiments_not_included": excluded, "n_approved_groups": n_groups,
            "n_oos_confirmations": 3 * n_groups, "code_hash": engine_code_hash(),
@@ -287,6 +302,11 @@ def validate_campaign_open(ws: reg.Workspace, campaign_id: str, frozen: Frozen |
     if not fp.exists() or sha256_file(fp) != c["oos_freeze_hash"]:
         raise ApprovalError("the campaign OOS freeze document is missing or was edited after the freeze")
     doc = json.loads(fp.read_text())
+    n = assert_campaign_group_cap(doc["experiments"], frozen)                  # integrity: a (re-hashed) tampered freeze cannot exceed the cap
+    if doc["n_approved_groups"] != n or doc["n_oos_confirmations"] != 3 * n:
+        raise ApprovalError("freeze document is internally inconsistent (group / confirmation counts)")
+    if {e["experiment_id"] for e in doc["experiments"]} - set(reg.read_experiments(ws).query("campaign_id == @campaign_id")["experiment_id"]):
+        raise ApprovalError("freeze document references experiments outside the campaign")
     p = campaign_approval_path(ws, campaign_id)
     if not p.exists():
         raise ApprovalError(f"no human campaign-open approval file: {p}. The shared OOS stays sealed. (Written by the human only; "
@@ -401,6 +421,7 @@ def execute_campaign_oos(ws: reg.Workspace, campaign_id: str, cap: dict, items: 
     c = reg.campaign_row(ws, campaign_id)
     parts = parse_partitions(reg.campaign_partitions(ws, campaign_id))
     pairs = [(e, g) for e, ap, _, _ in items for g in ap["approved_target_side_groups"]]
+    assert_campaign_group_cap([{"experiment_id": e, "approved_target_side_groups": ap["approved_target_side_groups"]} for e, ap, _, _ in items], frozen)
     # --- spend the OOS: ONE permanent ledger entry for the whole campaign, written BEFORE any OOS data is analysed
     reg.append_oos_access(ws, campaign_id=campaign_id, freeze_hash=c["oos_freeze_hash"], open_approval_file_hash=cap["_file_sha256"],
                           experiments=";".join(e for e, *_ in items), approved_experiment_groups=";".join(f"{e}:{g}" for e, g in pairs),

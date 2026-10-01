@@ -30,6 +30,6 @@ EXP_0001_T23 DIR_PATH_SKEW_60    XGB UPPER_HALF           19.068702             
 EXP_0001_T24 DIR_PATH_SKEW_60    XGB LOWER_HALF           17.320611             0.131717         0.002005 0.0005                 0.011994               0.011994         REJECTED_INSTABILITY
 
 EXPERIMENT SELECTION TRIALS: 24 / 24    CAMPAIGN REVEALED SELECTION TRIALS: 24 / 480
-IS report: /tmp/claude-0/-home-user-system-testing-/44f75ef0-b797-500f-8d39-c3bc796688cd/scratchpad/planted3_ws/experiments/EXP_0001/results/IS_REPORT.md
+IS report: WS/experiments/EXP_0001/results/IS_REPORT.md
 status: IS_PROVISIONAL_CANDIDATE  (OOS NOT ACCESSED; stopped for human review)
 IS done

@@ -49,7 +49,7 @@ def test_frozen_targets_models_policy_acceptance_values():
     cv = p["development_cv"]
     assert (cv["K"], cv["min_outer_train_events"], cv["inner_blocks"], cv["min_inner_train_events"], cv["min_inner_oof_events"]) == (5, 300, 5, 50, 30)
     assert cv["label"] == "DEVELOPMENT_CV" and "walkforward" not in p
-    assert p["oos"]["max_target_side_groups"] == 2 and p["oos"]["models_per_group"] == 3 and p["oos"]["one_shot"] is True
+    assert p["oos"]["max_groups_per_experiment"] == 2 and p["oos"]["max_groups_per_campaign"] == 6 and p["oos"]["models_per_group"] == 3 and p["oos"]["one_shot"] is True
     assert (p["cpcv"]["n_groups"], p["cpcv"]["n_test_groups"], p["cpcv"]["n_splits"]) == (6, 2, 15) and 15 == len(list(__import__("itertools").combinations(range(6), 2)))
     assert p["single_direction_events_only"] is True and p["shortlist"]["top_groups_reported"] == 5
     a = F.acceptance
@@ -183,3 +183,10 @@ def test_seeds_are_fixed_everywhere_no_unseeded_randomness():
         for node in ast.walk(tree):
             if isinstance(node, ast.Call) and getattr(node.func, "attr", "") == "default_rng":
                 assert node.args or node.keywords, (p, "default_rng() without a seed")
+
+
+def test_frozen_v1_release_version_and_verifier_pin_are_exact():
+    assert (CODE_ROOT / "ENGINE_VERSION").read_text().strip() == "v1.0.0"
+    pin = F.__class__ and __import__("engine.verifier_bridge", fromlist=["x"]).verifier_pin()
+    assert pin["commit"] == "624c8b7f0502abf6c5d453d501e96e3172367035" and pin["required_mode"] == "strong"
+    assert pin["required_models"] == ["RIDGE", "SPLINE", "XGB"]
