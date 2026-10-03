@@ -1,0 +1,9 @@
+# Versions this repository was built and tested with (Python 3.11). Other versions are untested.
+numpy==2.4.6
+pandas==3.0.6
+scikit-learn==1.9.1
+xgboost==3.2.0
+PyYAML==6.0.1
+pyarrow==25.0.1
+pytest==9.1.1
+pytest-xdist   # optional: parallelise the slow synthetic scenarios (-n 4 --dist loadscope)

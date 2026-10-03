@@ -1,0 +1,14 @@
+# TEMPLATE for the HUMAN. Copy to approvals/EXP_XXXX_SELECTION_HOLDOUT_APPROVAL.yaml after reading IS_REPORT.md (CONFIGURATION UNCERTAINTY / NEAR-TIES).
+# An LLM / the engine must never create this file. Only a near-tie cluster's top-2 (by the frozen IS ranking) may be proposed; at most 2 configs per
+# experiment and 6 per campaign. The selection holdout is SELECTION DATA used to choose among these configs - it is NOT final confirmation.
+experiment_id: EXP_XXXX
+campaign_id: C001
+manifest_sha256: "<sha256 of FROZEN_MANIFEST.json from scripts/show_approval_hashes.py>"
+is_report_sha256: "<sha256 of results/IS_REPORT.json from scripts/show_approval_hashes.py>"
+near_tie_cluster_id: NEAR_TIE_CLUSTER_01
+approved: true
+approved_by: HUMAN_USER
+approved_configs:                 # config ids "<experiment>|<TARGET>|<STATE>"; each runs RIDGE, SPLINE and XGB
+  - "EXP_XXXX|DIR_RETURN_30|UPPER_HALF"
+  - "EXP_XXXX|DIR_RETURN_60|UPPER_HALF"
+approval_note: "why I am spending part of the selection holdout on these near-tied configurations"

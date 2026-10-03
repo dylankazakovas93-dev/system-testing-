@@ -1,0 +1,37 @@
+# FROZEN MODEL BANK v1. Exactly three models. No tuning, no early stopping, no search.
+# All models consume the ENTIRE frozen feature bank. day_of_week is one-hot encoded with
+# fixed categories 0..6 (no splines on it). Continuous features = all other features.
+#
+# SPEC CLARIFICATION (documented in RESEARCH_RULES.md, "Spec issues found during the build"):
+# target_transform: the literal XGB settings (reg_alpha=1.0, reg_lambda=20.0) are ABSOLUTE regularizers, so the
+# model is not invariant to the unit of the target. On realistic log-return targets (sd ~1e-3) it fits a constant
+# (1 unique prediction). Every model therefore fits on a TRAIN-ONLY standardized target
+# y' = (y - mean_train)/sd_train and its predictions are mapped back to raw target units. This is not tuning.
+# It leaves RIDGE and SPLINE predictions unchanged (they are exactly equivariant) and only makes XGB functional.
+# Set to `none` to reproduce the literal specification.
+version: v1
+target_transform: train_only_standardization
+day_of_week_categories: [0, 1, 2, 3, 4, 5, 6]
+models:
+  RIDGE:
+    kind: ridge
+    standardize: train_only
+    params: {alpha: 10.0, fit_intercept: true}
+  SPLINE:
+    kind: additive_spline_ridge
+    spline: {degree: 3, n_knots: 4, knots: quantile, include_bias: false}
+    params: {alpha: 10.0, fit_intercept: true}
+  XGB:
+    kind: xgboost_regressor
+    params:
+      objective: "reg:squarederror"
+      max_depth: 2
+      learning_rate: 0.03
+      n_estimators: 300
+      min_child_weight: 20
+      subsample: 0.80
+      colsample_bytree: 0.80
+      reg_lambda: 20.0
+      reg_alpha: 1.0
+      random_state: 1729
+      tree_method: hist

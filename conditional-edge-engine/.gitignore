@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+experiments/EXP_*/verification/stage/
+experiments/EXP_*/verification/data_*.parquet

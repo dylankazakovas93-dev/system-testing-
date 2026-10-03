@@ -1,0 +1,64 @@
+# FROZEN SELECTION PROCESS v1.2 — lifecycle terminology and configuration-uncertainty rules. Hashed into every manifest.
+# Governing lifecycle:
+#   DEVELOPMENT/IS -> IS SHORTLIST + NEAR-TIE DETECTION -> HUMAN DECISION -> optional 1-2 year SELECTION_HOLDOUT
+#   -> HUMAN CHOOSES EXACTLY ONE FINAL CONFIG -> AUTOMATIC CPCV (POST-SELECTION ROBUSTNESS) -> AWAITING_FINAL_LOCKBOX_APPROVAL
+#   -> HUMAN LOCKBOX APPROVAL -> FINAL UNTOUCHED CONFIRMATION (never implemented here).
+# The selection holdout is DATA USED TO CHOOSE a configuration. It is NOT independent confirmation. Only the final lockbox is.
+version: v1
+unit_of_configuration: "TARGET x SIDE group (all 3 frozen models; 2-of-3 model agreement); config_id = '<experiment_id>|<TARGET>|<STATE>'"
+selection_holdout:
+  duration_years_allowed: [1, 2]               # chosen BEFORE any IS result; no duration search
+  starts_at: development_end
+  lockbox_starts_at: selection_holdout_end
+  max_configs_per_experiment: 2
+  max_configs_per_campaign: 6                   # 6 configs x 3 models = at most 18 holdout model evaluations
+  models_per_config: 3
+  opening_unit: campaign                        # all approved configs of all experiments frozen together, opened once
+  evidence_names: [raw_p, selection_holdout_q, selection_holdout_bonferroni_p]   # NEVER called confirmation p-values
+  banner: "SELECTION DATA — USED TO CHOOSE FINAL CONFIGURATION / NOT FINAL CONFIRMATION"
+near_tie:
+  # two groups form a NEAR_TIE only if ALL hold; none of these numbers is tuned or searched
+  both_is_shortlist_eligible: true
+  same_experiment: true
+  same_side: true                               # UPPER_HALF with UPPER_HALF, LOWER_HALF with LOWER_HALF
+  max_abs_diff_median_standardized_uplift: 0.03
+  paired_bootstrap:
+    statistic: "difference of the groups' median (over their eligible models) standardized uplift, A - B, on the SAME DEVELOPMENT_CV validation observations"
+    block: trading_week
+    repetitions: 2000
+    seed: 1729
+    ci_level: 0.95
+    near_tie_if: "the paired weekly-block CI of the difference contains 0"
+  clustering: connected_components             # A~B and B~C => one cluster {A,B,C}; members ranked by the existing frozen IS group ranking
+  max_configs_proposed_per_cluster: 2          # only the top 2 (by the frozen IS group rank) may enter the holdout
+  creates_selection_trials: false
+  can_promote_a_rejected_config: false
+holdout_preference:                             # ADVISORY only; the human chooses
+  requires: [selected_effect_gt_0, selected_frequency_per_week_ge_1, at_least_2_of_3_models_positive_uplift]
+  rank_by: [median_standardized_uplift_desc, median_selected_effect_desc, frequency_desc, frozen_is_rank_asc, config_id_asc]
+  unresolved_if: "the SAME near-tie rule (|diff of median std uplift| <= 0.03 and paired weekly-block CI contains 0) holds between the two configs in the holdout"
+final_config:
+  exactly_one: true
+  decline_value: DECLINE
+  must_be_frozen_before_holdout_opening_and_evaluated_if_holdout_used: true
+  holdout_skipped: "selection_holdout_report_sha256 is null; the config must be one of the deterministic IS-eligible top groups; the unused holdout stays unread"
+  no_fallback_to_runner_up: true
+  viability_floor_after_holdout:      # a human may choose a config only if it meets ALL of these in the selection holdout; no override, no other gate
+    selected_effect_gt: 0
+    selected_frequency_per_week_ge: 1.0
+    models_with_positive_uplift_ge: 2   # of the 3 frozen models
+    none_viable: NO_FINAL_CONFIG        # the experiment stops; CPCV never runs
+cpcv:
+  automatic_after_final_config_frozen: true
+  human_approval_required: false
+  data_if_holdout_used: DEVELOPMENT_plus_SELECTION_HOLDOUT
+  data_if_holdout_skipped: DEVELOPMENT_only
+  label: "POST-SELECTION ROBUSTNESS — NOT INDEPENDENT CONFIRMATION"
+  failure: "CPCV_REJECTED ends the lineage; no fallback, no replacement, no retuning"
+human_approval_table:
+  define_confirm_event_premise: true
+  run_development_is: "explicit run"
+  open_selection_holdout: true
+  choose_final_config: true
+  run_fixed_cpcv: false
+  open_final_lockbox: true

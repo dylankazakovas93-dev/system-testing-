@@ -1,0 +1,34 @@
+experiment_id: EXP_0001
+campaign_id: C001
+hypothesis: Planted AR(1) momentum makes recent path informative.
+partitions:
+  development_end: '2019-01-01'
+  selection_holdout_end: '2020-01-01'
+  lockbox_start: '2020-01-01'
+instrument: NQ_1m
+data_interval: 1min
+eligible_session:
+  start: 09:31
+  end: '15:00'
+direction_definition:
+  rule: long only
+  values:
+  - 1
+event_condition:
+  description: every n-th bar of the supplied history
+  parameters_used:
+  - every_n_bars
+  - direction_period
+  - direction
+deduplication_rule: keep_first_per_event_time
+cooldown:
+  bars: 0
+base_parameters:
+  every_n_bars: 45
+  direction_period: 1
+  direction: 1
+sensitivity_parameters:
+- every_n_bars
+expected_information_time:
+  rule: completion time of the n-th bar
+  confirmation_delay_bars: 0

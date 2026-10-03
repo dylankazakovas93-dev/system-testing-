@@ -1,0 +1,11 @@
+# Frozen instrument configuration: NQ 1-minute bars (v1).
+instrument: NQ_1m
+symbol: NQ
+bar_interval: 1min
+timezone: America/New_York
+rth:
+  open: "09:30"
+  close: "16:00"
+  minutes: 390
+eth_session_start: "18:00"   # ETH session begins 18:00 local time on the previous calendar day
+tick_size: 0.25          # points; the only source of tick conversions (never hard-coded in generic code)

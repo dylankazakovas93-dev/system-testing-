@@ -1,0 +1,53 @@
+# FROZEN ACCEPTANCE RULES v1.
+# IS shortlist eligibility of ONE model trial = ALL of the following (the numeric constants are unchanged from before):
+version: v1
+min_selected_frequency_per_week: 1.0
+min_standardized_uplift: 0.10
+selected_effect_must_exceed: 0.0           # ABSOLUTE selected effect in the candidate action direction must be positive
+bootstrap_ci_lower_bound_must_exceed: 0.0
+max_experiment_q: 0.05                     # BH over the experiment's 24 trials
+max_campaign_q: 0.05                       # BH over every revealed trial of the campaign (retroactive)
+bonferroni:
+  max_experiment_p: 0.05                   # min(raw_p * 24, 1)
+  max_campaign_p: 0.05                     # min(raw_p * 24E, 1) over all revealed trials of E experiments (retroactive)
+year_consistency:
+  min_selected_events_for_eligible_year: 20
+  min_positive_effect_year_fraction: 0.70      # MIN_POSITIVE_EFFECT_YEAR_FRACTION
+  min_positive_uplift_year_fraction: 0.70      # MIN_POSITIVE_UPLIFT_YEAR_FRACTION
+  concentration_warning_share: 0.35            # warning only (v1 does not reject on it)
+fold_consistency:
+  required_folds: 5                            # fewer -> INSUFFICIENT_DEVELOPMENT_FOLD_EVIDENCE (never relaxed)
+  min_folds_positive_uplift: 4
+  min_folds_positive_effect: 4
+model_agreement:
+  min_models_passing: 2
+verification:
+  required_mode: strong
+  accepted_labels: [VERIFIED, RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE]
+sensitivity:
+  max_reversing_probes: 1      # FAIL if MORE than this many probes reverse the uplift sign
+  min_probe_frequency_per_week: 1.0
+  agreement_rule: probe_ok_if_at_least_2_of_3_models_satisfy   # mirrors model agreement
+decision_priority:
+  - REJECTED_LOW_FREQUENCY
+  - REJECTED_INSUFFICIENT_UPLIFT
+  - DIAGNOSTIC_CONDITIONAL_IMPROVEMENT
+  - REJECTED_STATISTICAL
+  - REJECTED_INSTABILITY
+# One-shot selection-holdout EVIDENCE gates (informational; SELECTION DATA, never confirmation) for each of the 3 x G approved model evaluations.
+selection_holdout_evidence:
+  min_selected_frequency_per_week: 1.0
+  min_standardized_uplift: 0.10
+  selected_effect_must_exceed: 0.0
+  bootstrap_ci_lower_bound_must_exceed: 0.0
+  max_selection_holdout_bh_q: 0.05            # BH over all 3G approved model evaluations
+  max_selection_holdout_bonferroni_p: 0.05    # min(raw_p * 3G, 1)
+  min_models_passing: 2         # per target/side group
+# Final CPCV robustness (veto only), per candidate model; a group needs >= 2 of 3 models CPCV_PASS.
+cpcv:
+  n_splits: 15
+  median_selected_effect_must_exceed: 0.0
+  median_uplift_must_exceed: 0.0
+  min_splits_positive_effect: 12
+  min_splits_positive_uplift: 12
+  min_models_passing: 2

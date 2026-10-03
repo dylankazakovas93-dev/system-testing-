@@ -1,0 +1,29 @@
+# FROZEN TARGET BANK v1. Forward bars = the first bars whose OPEN >= event_time.
+# P0 = open of the first forward bar. The event/signal bar never enters a target.
+# All targets are in the EVENT's direction d in {-1,+1}.
+#   DIR_RETURN_N   = d * log(close_of_Nth_forward_bar / P0)
+#   MFE60 = max over the 60 forward bars of  (d=+1: log(high/P0) ; d=-1: -log(low/P0))
+#   MAE60 = min over the 60 forward bars of  (d=+1: log(low/P0)  ; d=-1: -log(high/P0))   (<= 0)
+#   DIR_PATH_SKEW_60 = MFE60 + MAE60
+version: v1
+forward_bar_rule: first_bars_with_open_ge_event_time
+reference_price: open_of_first_forward_bar
+# SAME-SESSION RULE (v1): every primary target window must resolve inside the event's own RTH session.
+# An event whose max-horizon window would end after the RTH close (event_time + max_horizon_bars*interval > close)
+# is TARGET_TIMESTAMP_INELIGIBLE and is not an event of the experiment (decided from timestamps/session rules only,
+# never from outcomes). No primary window may cross the RTH close, the ETH maintenance halt or a session boundary.
+session_rule: primary_targets_must_resolve_inside_event_rth_session
+primary_targets:
+  - {name: DIR_RETURN_15,     kind: directional_return, horizon_bars: 15}
+  - {name: DIR_RETURN_30,     kind: directional_return, horizon_bars: 30}
+  - {name: DIR_RETURN_60,     kind: directional_return, horizon_bars: 60}
+  - {name: DIR_PATH_SKEW_60,  kind: path_skew,          horizon_bars: 60}
+# Diagnostic targets: report only. They can NEVER promote a candidate.
+diagnostic_targets:
+  return_horizons_bars: [5, 120]
+  excursion_horizons_bars: [15, 30, 60, 120]
+  first_passage:
+    horizon_bars: 60
+    sigma: RV_60_over_sqrt_60   # sigma_ref = RV_60 / sqrt(60) at the event (one-bar RMS scale; same unit as PATH_DIAGNOSTICS.yaml)
+    multiples: [1.0, 0.5]
+  path_horizon_bars: 60     # path length, path efficiency, forward realized vol
