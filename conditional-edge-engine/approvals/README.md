@@ -37,6 +37,6 @@ opened exactly once per campaign (≤ 6 configs × 3 models = 18 evaluations, on
 ## 3. `EXP_xxxx_FINAL_CONFIG_SELECTION.yaml`
 Template `templates/approval/FINAL_CONFIG_SELECTION.template.yaml`; hashes from `show_approval_hashes.py --experiment EXP_xxxx --final`. Exactly ONE
 `selected_config_id` (or `DECLINE`). If the holdout was used it must have been frozen and evaluated there (`selection_holdout_report_sha256` = the report
-the human saw; `HOLDOUT_PREFERRED_CONFIG` is advisory only). If the holdout was skipped the config must be IS-eligible and `selection_holdout_report_sha256`
+the human saw; `HOLDOUT_PREFERRED_CONFIG` is advisory only). After a holdout the chosen config must also meet the viability floor (selected effect > 0, frequency ≥ 1/week, ≥ 2 of 3 models with positive uplift); if no config does the status is `NO_FINAL_CONFIG` and nothing can be selected. If the holdout was skipped the config must be IS-eligible and `selection_holdout_report_sha256`
 is `null` (`SELECTION_HOLDOUT_SKIPPED`; the unused holdout stays unread). `scripts/finalize_final_config.py` validates, freezes
 (`FINAL_CONFIG_FROZEN`, ledger `registry/final_configs.csv`) and then runs CPCV automatically. There is never a fallback to a runner-up after a CPCV failure.

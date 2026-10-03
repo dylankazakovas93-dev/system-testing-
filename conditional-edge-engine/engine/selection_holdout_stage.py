@@ -550,6 +550,10 @@ def execute_campaign_selection_holdout(ws: reg.Workspace, campaign_id: str, cap:
             [{"config_id": c_["config_id"], "is_rank": c_["is_rank"], "model_rows": c_["model_rows"]} for c_ in configs], frozen,
             series_of=lambda cid_, series=series: [(s["week_keys"], s["y"], s["selected"], s["sign"], s["sd"]) for (g, mm), s in sorted(series.items())
                                                    if g == nt.split_config_id(cid_)[1]])
+        viable = [c_["config_id"] for c_ in pref["cards"] if c_["qualifies"]]           # minimum viability floor: the human may choose only among these
+        no_final = not viable
+        if no_final:
+            reg.set_status(ws, e, "NO_FINAL_CONFIG", "no frozen config meets the minimum viability floor in the selection holdout: the experiment stops, CPCV never runs")
         ptxt, psha, pinfo = "", "", {"status": "NOT_COMPUTED_NO_BARS"}
         if bars is not None:
             sel_ids = {f"{c_['config_id']}|{r['model']}": series[(c_["group_id"], r["model"])]["selected_ids"] for c_ in configs for r in c_["model_rows"]
@@ -565,7 +569,9 @@ def execute_campaign_selection_holdout(ws: reg.Workspace, campaign_id: str, cap:
             else:
                 pinfo = {"status": prep.get("status", "NOT_COMPUTED")}
         d = experiment_dir(ws, e)
-        report = {"experiment_id": e, "campaign_id": campaign_id, "status": "SELECTION_HOLDOUT_SPENT", "label": HOLDOUT_BANNER,
+        report = {"experiment_id": e, "campaign_id": campaign_id, "status": "NO_FINAL_CONFIG" if no_final else "SELECTION_HOLDOUT_SPENT", "label": HOLDOUT_BANNER,
+                  "viable_configs": viable, "no_final_config": no_final,
+                  "viability_floor": "selected effect > 0, selected frequency >= 1.0/week, positive uplift in >= 2 of 3 models (no human override)",
                   "is_independent_confirmation": False, "approved_configs": list(ap["approved_configs"]), "near_tie_cluster_id": ap["near_tie_cluster_id"],
                   "selection_holdout_period": [f"{parts.development_end:%Y-%m-%d}", f"{parts.selection_holdout_end:%Y-%m-%d}"],
                   "selection_holdout_years": parts.selection_holdout_years, "selection_holdout_bars_fingerprint": fingerprint,
@@ -611,6 +617,9 @@ def _holdout_md(r: dict) -> str:
                  f"{f(c, 'standardized_uplift', '{:+.3f}')} | {f(c, 'bootstrap_ci_low')} | {f(c, 'raw_p', '{:.4f}')} | {f(c, 'selection_holdout_q', '{:.4f}')} | "
                  f"{f(c, 'selection_holdout_bonferroni_p', '{:.4f}')} | {c['gates_pass']} | {c['rejection_reason'] or '-'} |")
     p = r["preference"]
+    L += ["", "## Minimum viability floor (no human override)", "",
+          "A config may be chosen as the final config only if: selected effect > 0, selected frequency >= 1.0/week and positive uplift in >= 2 of 3 models.",
+          f"Viable configs: {', '.join(r['viable_configs']) or '**none -> NO_FINAL_CONFIG: the experiment stops, CPCV does not run**'}", ""]
     L += ["", "## Deterministic holdout preference (ADVISORY — the human decides)", "",
           f"**{p['status']}**" + (f": `{p['holdout_preferred_config']}`" if p.get("holdout_preferred_config") else ""), "", p["note"], ""]
     if p.get("ranking_leader_advisory"):
@@ -660,6 +669,8 @@ def validate_final_selection(ws: reg.Workspace, experiment_id: str, frozen: Froz
         raise ApprovalError(f"{experiment_id} already froze its final configuration; it can never be replaced and there is no fallback to a runner-up")
     if st == "SELECTION_HOLDOUT_CONTAMINATED":
         raise SelectionHoldoutContaminated(f"{experiment_id} is SELECTION_HOLDOUT_CONTAMINATED")
+    if st == "NO_FINAL_CONFIG":
+        raise ApprovalError(f"{experiment_id} is NO_FINAL_CONFIG: no frozen config met the minimum viability floor in the selection holdout; the experiment stopped and the human cannot override this")
     if st == "SELECTION_HOLDOUT_FROZEN":
         raise ApprovalError(f"{experiment_id}'s configs are frozen for the selection holdout: open the campaign holdout first (or decline); the holdout cannot be skipped after the freeze")
     if st not in PENDING_FINAL + ("SELECTION_HOLDOUT_SPENT",):
@@ -716,6 +727,9 @@ def validate_final_selection(ws: reg.Workspace, experiment_id: str, frozen: Froz
             frz = json.loads(freeze_path(ws, exp["campaign_id"]).read_text())
             if cfg not in next((x["approved_configs"] for x in frz["experiments"] if x["experiment_id"] == experiment_id), []):
                 errs.append(f"{cfg} is not in the campaign freeze record")
+            card = next((c_ for c_ in H["preference"]["cards"] if c_["config_id"] == cfg), None)
+            if card is None or not card["qualifies"]:
+                errs.append(f"{cfg} fails the minimum viability floor in the selection holdout ({'; '.join(card['disqualified_because']) if card else 'not evaluated'}); it cannot be selected and the human cannot override this")
             rk = H["preference"].get("ranking", [])
             holdout_rank = str(rk.index(cfg) + 1) if cfg in rk else "not qualifying"
     else:

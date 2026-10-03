@@ -1,9 +1,9 @@
 {
   "campaign_id": "C001",
-  "engine_version": "v1.2.0",
+  "engine_version": "v1.2.1",
   "event_hash": "33075c486274c70b10d1ed5b04172844c3d6c631d92aec62a9fd87eaac5fc0c9",
   "experiment_id": "EXP_0001",
-  "frozen_at": "2026-10-03T15:23:40Z",
+  "frozen_at": "2026-10-03T17:40:13Z",
   "frozen_spec_hashes": {
     "acceptance_rules_hash": "5dac4a98fc381d4739002dfe23f2e6467da8d9b7154fe71fdca0c09bc378f0fd",
     "feature_bank_hash": "300ce5991f52cad544bbf6b84652d739db8d92e12ab32bc1583ee9ac5282fc6a",
@@ -12,16 +12,16 @@
     "trial_policy_hash": "19b31dc49d28785ad046fc4eb4940a33430930ed619ddb866e2f5a352fa9d425"
   },
   "hashes": {
-    "engine_code_hash": "5616e5ae123194e5dd009e4c83202adb8aec4a2f2df07fe2894bbac6f2c71b23",
+    "engine_code_hash": "536d6977433d09f4ba6a71c602799ac9ebfaf448e7c42b840d62fa21adc5db1a",
     "event_py": "47e3f563c012e50b1a7f8a30d8bf81e106793a1d594ffd5bb2d922660ad10585",
     "event_spec": "7bf96905a5ea2dc0858450aaeca0a92da9c1bf43bde56ffecf5e1fa6de774d55",
-    "frozen_bundle_hash": "3231a012098534c9a93a5cb33736281e140b424831866e6bb872fbf47224f5f9",
+    "frozen_bundle_hash": "e9b842adaa84ffaa5166c6a0407bbfee9c85317e328379b2edabfd3137f061e0",
     "frozen_files": {
       "frozen/v1/ACCEPTANCE_RULES.yaml": "5dac4a98fc381d4739002dfe23f2e6467da8d9b7154fe71fdca0c09bc378f0fd",
       "frozen/v1/FEATURE_BANK.yaml": "300ce5991f52cad544bbf6b84652d739db8d92e12ab32bc1583ee9ac5282fc6a",
       "frozen/v1/MODEL_BANK.yaml": "2c578364b2b07ac5eb1454911a3391a2796b03c097e5d9f8f28e8863ad17e569",
       "frozen/v1/PATH_DIAGNOSTICS.yaml": "d3c37882df15175fdf029e731d5a94c50f40441b601c50837c26569071f05114",
-      "frozen/v1/SELECTION_PROCESS.yaml": "8e335d4c674c6022f22c8e3bebc310788845f3139da8fef2797ac39a40269831",
+      "frozen/v1/SELECTION_PROCESS.yaml": "89000508db5a6c89cdac9c00dab5e9d9fe5ca6846d1b2179b1bb707fb5821319",
       "frozen/v1/TARGET_BANK.yaml": "68f517dd0f6d21dbe88934f26f5a86edb71d2b7641971720468ff9714cb1fe68",
       "frozen/v1/TRIAL_POLICY.yaml": "19b31dc49d28785ad046fc4eb4940a33430930ed619ddb866e2f5a352fa9d425",
       "frozen/v1/VERIFIER_PIN.yaml": "7d65952eb728a5a042589cca4c1f81697a3b6ed33a087165ed3783f5b294d0f6",
@@ -32,7 +32,7 @@
     "HYPOTHESIS.md": "bc254e46b0a767ef6cfd9b5ffc5cda99d329ad916dc9c0e6027f3dfdfe7822d0",
     "reference.pine": "08245a3ca8dc625b1a2513f5a3121cd7030ed464bf924ca1c8590765e56400f2"
   },
-  "manifest_hash": "2446fb431d641fd54318310b3a642c0b24c2a743e4bc4db692b6fdf68df57bfc",
+  "manifest_hash": "1e9de0712bf357f0683a28f9acf9ff874af2f5ec0a23ba32e5fd4231e341b7b7",
   "partitions": {
     "development_end": "2019-01-01",
     "lockbox_start": "2020-01-01",

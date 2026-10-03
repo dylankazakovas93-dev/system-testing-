@@ -33,5 +33,5 @@ lockbox stays sealed.**
 ## Lifecycle you must respect
 `DRAFT -> FROZEN -> IS run (stops) -> [IS_REJECTED | AWAITING_HUMAN_FINAL_CONFIG_SELECTION | NEAR_TIE_REVIEW_REQUIRED (= AWAITING_HUMAN_SELECTION_HOLDOUT_APPROVAL)]
  -> HUMAN: (A) final config directly -> SELECTION_HOLDOUT_SKIPPED | (B) holdout approval -> campaign freeze (SELECTION_HOLDOUT_FROZEN) -> human open approval -> ONE campaign-wide opening (SELECTION_HOLDOUT_SPENT) | (C) HUMAN_DECLINED
- -> HUMAN final-config selection (exactly one) -> FINAL_CONFIG_FROZEN -> AUTOMATIC CPCV -> [CPCV_REJECTED (lineage ends, no fallback) | CPCV_CONFIRMED -> AWAITING_FINAL_LOCKBOX_APPROVAL]`
+ -> HUMAN final-config selection (exactly one, and it must meet the holdout viability floor; none viable -> NO_FINAL_CONFIG, stop) -> FINAL_CONFIG_FROZEN -> AUTOMATIC CPCV -> [CPCV_REJECTED (lineage ends, no fallback) | CPCV_CONFIRMED -> AWAITING_FINAL_LOCKBOX_APPROVAL]`
 (`HUMAN_DECLINED`, `SELECTION_HOLDOUT_CONTAMINATED`, `CPCV_REJECTED` are terminal. The engine never enters `LOCKBOX_*`.) Internal cross-validation is called `DEVELOPMENT_CV`, never SELECTION HOLDOUT. Nothing but the final lockbox may be called confirmation.

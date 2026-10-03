@@ -858,22 +858,25 @@ class TestScenarioE_CurveFitCollapsesInTheHoldout:
         assert h["preference"]["status"] == "NO_QUALIFYING_CONFIG" and h["preference"]["holdout_preferred_config"] is None
         assert not any(v["evidence_gates_met"] for v in h["evidence_gate_verdicts"].values())
 
-    def test_the_human_declines_so_there_is_no_cpcv_and_no_lockbox(self, scen_e, tmp_path):
+    def test_nothing_is_viable_so_the_experiment_stops_with_no_final_config_and_no_cpcv(self, scen_e, tmp_path):
         ws = clone(scen_e["ws"], tmp_path)
         exp = scen_e["exp"]
-        human_final_selection(ws, exp, "DECLINE")
-        assert freeze_final_config(ws, exp)["decline"] and reg.experiment_row(ws, exp)["status"] == "HUMAN_DECLINED"
+        assert scen_e["holdout"]["no_final_config"] is True and scen_e["holdout"]["viable_configs"] == [] and reg.experiment_row(ws, exp)["status"] == "NO_FINAL_CONFIG"
+        for choice in (scen_e["cfgs"][0], "DECLINE"):
+            human_final_selection(ws, exp, choice)
+            with pytest.raises(ApprovalError, match="NO_FINAL_CONFIG"):
+                freeze_final_config(ws, exp)
         assert reg.read_cpcv(ws).empty and reg.read_final_configs(ws).empty
         with pytest.raises(EngineError, match="no FINAL_CONFIG_FROZEN ledger row"):
             run_cpcv_stage(ws, exp, scen_e["tables"])
-        assert not any(h.startswith(("CPCV", "AWAITING_FINAL_LOCKBOX", "LOCKBOX")) for h in history(ws, exp))
+        assert not any(h.startswith(("CPCV", "AWAITING_FINAL_LOCKBOX", "LOCKBOX", "FINAL_CONFIG")) for h in history(ws, exp))
 
     def test_the_engine_does_not_pick_even_a_collapsed_config_for_the_human(self, scen_e, tmp_path):
         ws = clone(scen_e["ws"], tmp_path)
         exp = scen_e["exp"]
-        with pytest.raises(ApprovalError, match="no human final-configuration selection file"):
+        with pytest.raises(ApprovalError, match="NO_FINAL_CONFIG|no human final-configuration selection file"):
             freeze_final_config(ws, exp)
-        assert reg.read_final_configs(ws).empty and reg.experiment_row(ws, exp)["status"] == "SELECTION_HOLDOUT_SPENT"
+        assert reg.read_final_configs(ws).empty
 
 
 # ============================================================ final lockbox + wording guards
@@ -928,6 +931,6 @@ class TestFinalLockboxAndWording:
     def test_the_documented_lifecycle_statuses_exist(self):
         want = ["DRAFT", "FROZEN", "IS_REJECTED", "IS_SHORTLIST_ELIGIBLE", "NEAR_TIE_REVIEW_REQUIRED", "AWAITING_HUMAN_SELECTION_HOLDOUT_APPROVAL",
                 "SELECTION_HOLDOUT_FROZEN", "SELECTION_HOLDOUT_SPENT", "AWAITING_HUMAN_FINAL_CONFIG_SELECTION", "SELECTION_HOLDOUT_SKIPPED", "FINAL_CONFIG_FROZEN",
-                "CPCV_REJECTED", "CPCV_CONFIRMED", "AWAITING_FINAL_LOCKBOX_APPROVAL", "LOCKBOX_REJECTED", "LOCKBOX_CONFIRMED"]
+                "CPCV_REJECTED", "CPCV_CONFIRMED", "AWAITING_FINAL_LOCKBOX_APPROVAL", "LOCKBOX_REJECTED", "LOCKBOX_CONFIRMED", "NO_FINAL_CONFIG"]
         assert set(want) <= set(reg.LIFECYCLE) and not [s for s in reg.LIFECYCLE if "OOS" in s]
         assert reg.STATUS_ALIASES["AWAITING_HUMAN_SELECTION_HOLDOUT_APPROVAL"] == "NEAR_TIE_REVIEW_REQUIRED"

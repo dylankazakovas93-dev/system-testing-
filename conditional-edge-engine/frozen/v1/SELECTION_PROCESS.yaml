@@ -43,6 +43,11 @@ final_config:
   must_be_frozen_before_holdout_opening_and_evaluated_if_holdout_used: true
   holdout_skipped: "selection_holdout_report_sha256 is null; the config must be one of the deterministic IS-eligible top groups; the unused holdout stays unread"
   no_fallback_to_runner_up: true
+  viability_floor_after_holdout:      # a human may choose a config only if it meets ALL of these in the selection holdout; no override, no other gate
+    selected_effect_gt: 0
+    selected_frequency_per_week_ge: 1.0
+    models_with_positive_uplift_ge: 2   # of the 3 frozen models
+    none_viable: NO_FINAL_CONFIG        # the experiment stops; CPCV never runs
 cpcv:
   automatic_after_final_config_frozen: true
   human_approval_required: false

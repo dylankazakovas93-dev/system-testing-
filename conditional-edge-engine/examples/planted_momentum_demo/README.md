@@ -1,9 +1,9 @@
 # SYNTHETIC DATA — NOT REAL NQ
 
-Canonical snapshot of one IS run through the real CLIs with **engine v1.2.0** on **synthetic** 1-minute bars with a planted AR(1) momentum
+Canonical snapshot of one IS run through the real CLIs with **engine v1.2.1** on **synthetic** 1-minute bars with a planted AR(1) momentum
 (`make_bars(1100, seed=7, phi=0.8)`, 2016-01-04 … 2020-03). It shows that the pipeline runs end to end. It says nothing about real NQ.
 
-* **Engine**: `FROZEN_MANIFEST.json` records `engine_version v1.2.0`, the engine code hash and the frozen specs incl. `frozen/v1/SELECTION_PROCESS.yaml` (checked equal to the final code when built).
+* **Engine**: `FROZEN_MANIFEST.json` records `engine_version v1.2.1`, the engine code hash and the frozen specs incl. `frozen/v1/SELECTION_PROCESS.yaml` (checked equal to the final code when built).
 * **Partitions** (frozen in the manifest; `new_experiment.py --development-end 2019-01-01 --selection-holdout-years 1`): DEVELOPMENT < 2019-01-01 · SELECTION_HOLDOUT 2019-01-01 … 2020-01-01 (1 calendar year; selection data, not confirmation) · FINAL_LOCKBOX from 2020-01-01. The IS run read **only** development rows.
 * **Campaign state** (`registry/campaigns.csv`): `C001` is `OPEN`; no freeze hash; `registry/selection_holdout_access.csv` (one row per *campaign*) and `registry/final_configs.csv` are header-only; the IS report says `SELECTION HOLDOUT status = NOT ACCESSED`; the lockbox was never read.
 * **Lifecycle**: `EXP_0001` stopped at `NEAR_TIE_REVIEW_REQUIRED` (`IS_SHORTLIST_ELIGIBLE` after strong-mode verification) because the IS report found one near-tie cluster
