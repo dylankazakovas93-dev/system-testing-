@@ -2,7 +2,7 @@
 [EXP_0001] event causality pre-check passed at 8 cutoffs
 [EXP_0001] base events: 5,728 (36.48/week); TARGET_TIMESTAMP_INELIGIBLE removed: 0
 [EXP_0001] EXPERIMENT SELECTION TRIALS: 24 / 24 ; CAMPAIGN REVEALED SELECTION TRIALS: 24 / 480
-[EXP_0001] STOP: status IS_PROVISIONAL_CANDIDATE - OOS NOT ACCESSED; OOS needs a manual human approval file (approvals/EXP_0001_OOS_APPROVAL.yaml)
+[EXP_0001] STOP: status IS_PROVISIONAL_CANDIDATE - SELECTION HOLDOUT NOT ACCESSED; SELECTION HOLDOUT needs a manual human approval file (approvals/EXP_0001_SELECTION_HOLDOUT_APPROVAL.yaml)
     trial_id           target  model      state  selected_frequency  standardized_uplift  selected_effect  raw_p  experiment_bonferroni_p  campaign_bonferroni_p                     decision
 EXP_0001_T01    DIR_RETURN_15  RIDGE UPPER_HALF           17.992366             0.211830         0.001429 0.0005                 0.011994               0.011994     IS_PROVISIONAL_CANDIDATE
 EXP_0001_T02    DIR_RETURN_15  RIDGE LOWER_HALF           18.396947             0.207172         0.001337 0.0005                 0.011994               0.011994     IS_PROVISIONAL_CANDIDATE
@@ -31,5 +31,5 @@ EXP_0001_T24 DIR_PATH_SKEW_60    XGB LOWER_HALF           17.320611             
 
 EXPERIMENT SELECTION TRIALS: 24 / 24    CAMPAIGN REVEALED SELECTION TRIALS: 24 / 480
 IS report: WS/experiments/EXP_0001/results/IS_REPORT.md
-status: IS_PROVISIONAL_CANDIDATE  (OOS NOT ACCESSED; stopped for human review)
-IS done
+status: IS_PROVISIONAL_CANDIDATE  (SELECTION HOLDOUT NOT ACCESSED; stopped for human review)
+IS done exit 0

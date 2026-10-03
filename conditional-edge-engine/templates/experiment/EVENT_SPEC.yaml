@@ -6,8 +6,8 @@ hypothesis: >-
   bars the market state at confirmation contains information about the next 15-60 minutes.
 partitions:                      # frozen in the manifest BEFORE any result; must equal the campaign's partitions
   development_end: "DEV_END_XXXX"    # DEVELOPMENT / IS = bars opening before this date (the only data the IS stage receives)
-  oos_end: "OOS_END_XXXX"            # CONFIRMATION OOS = [development_end, oos_end), human unlock only
-  lockbox_start: "LOCKBOX_XXXX"      # FINAL LOCKBOX = bars from this date on (sealed)
+  selection_holdout_end: "SELECTION_HOLDOUT_END_XXXX"            # SELECTION HOLDOUT = [development_end, selection_holdout_end): exactly 1 or 2 calendar years of SELECTION data, human unlock only
+  lockbox_start: "LOCKBOX_XXXX"      # FINAL LOCKBOX = bars from this date on (= selection_holdout_end; sealed; never opened by any code path)
 instrument: NQ_1m
 data_interval: 1min
 eligible_session:                # exchange-local time; event_time must fall in [start, end)

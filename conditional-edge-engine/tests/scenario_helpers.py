@@ -19,7 +19,7 @@ from engine.partitions import parse_partitions
 from engine.synthetic import make_event_tables
 
 FROZEN = load_frozen()
-PARTS = {"development_end": "2023-01-01", "oos_end": "2024-01-01", "lockbox_start": "2024-01-01"}
+PARTS = {"development_end": "2023-01-01", "selection_holdout_end": "2024-01-01", "lockbox_start": "2024-01-01"}
 
 
 def new_frozen_experiment(ws, campaign="C001", partitions=None):
@@ -103,8 +103,8 @@ def fake_results(ws, exp, p_by_pair=None, default_p=0.9, good=True, **over):
     return out
 
 
-# ============================ lifecycle helpers (IS -> human approval -> OOS -> CPCV) ============================
-LIFE_PARTS = {"development_end": "2020-01-01", "oos_end": "2021-01-01", "lockbox_start": "2021-01-01"}
+# ============================ lifecycle helpers (IS -> human approval -> SELECTION HOLDOUT -> CPCV) ============================
+LIFE_PARTS = {"development_end": "2020-01-01", "selection_holdout_end": "2021-01-01", "lockbox_start": "2021-01-01"}
 
 
 def prepare_for_approval(ws, exp):
@@ -122,17 +122,32 @@ def top_group_ids(ws, exp):
     return [g["group_id"] for g in j["I_top_configurations"]["top_groups"]]
 
 
-def human_approval(ws, exp, groups, **override):
-    """TEST CODE PLAYING THE HUMAN: writes approvals/EXP_xxxx_OOS_APPROVAL.yaml for the exact frozen state.
-    (No production script or LLM may do this - AGENTS.md rule 1.)"""
+def cluster_of(ws, exp, config_id):
+    """The IS-report near-tie cluster id containing ``config_id`` (read from the report the human saw)."""
+    import json
+    j = json.loads((experiment_dir(ws, exp) / "results" / "IS_REPORT.json").read_text())
+    return next((c["cluster_id"] for c in j["NT_configuration_uncertainty"]["clusters"] if config_id in c["members"]), None)
+
+
+def proposable(ws, exp, cluster_index=0):
+    """The (up to 2) configs the IS report allows to be proposed for the selection holdout, from the cluster_index-th near-tie cluster."""
+    import json
+    j = json.loads((experiment_dir(ws, exp) / "results" / "IS_REPORT.json").read_text())
+    return list(j["NT_configuration_uncertainty"]["clusters"][cluster_index]["proposable_for_holdout"])
+
+
+def human_approval(ws, exp, configs, **override):
+    """TEST CODE PLAYING THE HUMAN: writes approvals/EXP_xxxx_SELECTION_HOLDOUT_APPROVAL.yaml for the exact frozen state.
+    (No production script or LLM may do this - AGENTS.md rule 1.)  ``configs`` are config ids '<exp>|<TARGET>|<STATE>'."""
     import yaml
 
-    from engine.oos_stage import approval_hashes, approval_path
+    from engine.selection_holdout_stage import approval_hashes, approval_path
     h = approval_hashes(ws, exp)
     doc = {"experiment_id": exp, "campaign_id": reg.experiment_row(ws, exp)["campaign_id"],
-           "experiment_manifest_sha256": h["experiment_manifest_sha256"], "is_report_sha256": h["is_report_sha256"],
-           "approved_by": "HUMAN_USER", "approved": True, "approved_target_side_groups": list(groups),
-           "approval_note": "test: human approves the one-shot OOS for these groups"}
+           "manifest_sha256": h["manifest_sha256"], "is_report_sha256": h["is_report_sha256"],
+           "near_tie_cluster_id": cluster_of(ws, exp, list(configs)[0]) if configs else None,
+           "approved": True, "approved_by": "HUMAN_USER", "approved_configs": list(configs),
+           "approval_note": "test: human approves the near-tied configs for the one-shot SELECTION HOLDOUT"}
     doc.update(override)
     ws.approvals.mkdir(parents=True, exist_ok=True)
     p = approval_path(ws, exp)
@@ -140,13 +155,29 @@ def human_approval(ws, exp, groups, **override):
     return p
 
 
-def campaign_open_approval(ws, campaign_id, /, **override):
-    """TEST CODE PLAYING THE HUMAN: writes approvals/CAMPAIGN_xxxx_OOS_OPEN_APPROVAL.yaml citing the exact freeze hash."""
+def human_final_selection(ws, exp, config, **override):
+    """TEST CODE PLAYING THE HUMAN: writes approvals/EXP_xxxx_FINAL_CONFIG_SELECTION.yaml (exactly one config or DECLINE)."""
     import yaml
 
-    from engine.oos_stage import campaign_approval_path
-    doc = {"campaign_id": campaign_id, "oos_freeze_sha256": reg.campaign_row(ws, campaign_id)["oos_freeze_hash"],
-           "approved_by": "HUMAN_USER", "approved": True, "approval_note": "test: human opens the shared campaign OOS once"}
+    from engine.selection_holdout_stage import approval_hashes, final_selection_path
+    h = approval_hashes(ws, exp)
+    doc = {"experiment_id": exp, "campaign_id": reg.experiment_row(ws, exp)["campaign_id"], "manifest_sha256": h["manifest_sha256"],
+           "is_report_sha256": h["is_report_sha256"], "selection_holdout_report_sha256": h.get("selection_holdout_report_sha256"),
+           "selected_config_id": config, "selected_by": "HUMAN_USER", "selection_note": "test: the human chooses exactly one configuration"}
+    doc.update(override)
+    ws.approvals.mkdir(parents=True, exist_ok=True)
+    p = final_selection_path(ws, exp)
+    p.write_text(yaml.safe_dump(doc))
+    return p
+
+
+def campaign_open_approval(ws, campaign_id, /, **override):
+    """TEST CODE PLAYING THE HUMAN: writes approvals/CAMPAIGN_xxxx_SELECTION_HOLDOUT_OPEN_APPROVAL.yaml citing the exact freeze hash."""
+    import yaml
+
+    from engine.selection_holdout_stage import campaign_approval_path
+    doc = {"campaign_id": campaign_id, "selection_holdout_freeze_sha256": reg.campaign_row(ws, campaign_id)["selection_holdout_freeze_hash"],
+           "approved_by": "HUMAN_USER", "approved": True, "approval_note": "test: human opens the shared campaign SELECTION HOLDOUT once"}
     doc.update(override)
     ws.approvals.mkdir(parents=True, exist_ok=True)
     p = campaign_approval_path(ws, campaign_id)
@@ -154,33 +185,71 @@ def campaign_open_approval(ws, campaign_id, /, **override):
     return p
 
 
-def open_campaign_oos(ws, campaign_id, tables_by_exp, parts=LIFE_PARTS, *, freeze=True):
-    """Freeze (optional; the experiments' human approvals must already exist) and open the campaign OOS from table-level data.
+def open_campaign_selection_holdout(ws, campaign_id, tables_by_exp, parts=LIFE_PARTS, *, freeze=True):
+    """Freeze (optional; the experiments' human approvals must already exist) and open the campaign SELECTION HOLDOUT from table-level data.
     ``tables_by_exp`` = {experiment_id: tables}. Returns the campaign result dict (per-experiment reports under 'reports')."""
-    from engine.oos_stage import execute_campaign_oos, freeze_campaign_oos, validate_campaign_open
-    from engine.oos_stage import campaign_approval_path
+    from engine.selection_holdout_stage import execute_campaign_selection_holdout, freeze_campaign_selection_holdout, validate_campaign_open
+    from engine.selection_holdout_stage import campaign_approval_path
     if freeze and reg.campaign_row(ws, campaign_id)["status"] == "OPEN":
-        freeze_campaign_oos(ws, campaign_id)
+        freeze_campaign_selection_holdout(ws, campaign_id)
     if not campaign_approval_path(ws, campaign_id).exists():
         campaign_open_approval(ws, campaign_id)
     doc, cap, aps = validate_campaign_open(ws, campaign_id)
     items = []
     for e, ap in aps.items():
-        ev, ft, el, tg, cal = slice_tables(tables_by_exp[e], parts["oos_end"])
-        items.append((e, ap, (lambda ev=ev, ft=ft, el=el, tg=tg: (ev, ft, el, tg)), cal))
-    return execute_campaign_oos(ws, campaign_id, cap, items, "fingerprint-synthetic", verbose=False)
+        ev, ft, el, tg, cal = slice_tables(tables_by_exp[e], parts["selection_holdout_end"])
+        items.append((e, ap, (lambda ev=ev, ft=ft, el=el, tg=tg: (ev, ft, el, tg)), cal, None))
+    return execute_campaign_selection_holdout(ws, campaign_id, cap, items, "fingerprint-synthetic", verbose=False)
 
 
-def spend_oos(ws, exp, tables, parts=LIFE_PARTS):
-    """Single-experiment campaign convenience: freeze + open the experiment's campaign. Returns that experiment's OOS report."""
-    r = open_campaign_oos(ws, reg.experiment_row(ws, exp)["campaign_id"], {exp: tables}, parts)
+def spend_selection_holdout(ws, exp, tables, parts=LIFE_PARTS):
+    """Single-experiment campaign convenience: freeze + open the experiment's campaign. Returns that experiment's SELECTION HOLDOUT report."""
+    r = open_campaign_selection_holdout(ws, reg.experiment_row(ws, exp)["campaign_id"], {exp: tables}, parts)
     return r["reports"][exp]
 
 
-def run_cpcv_stage(ws, exp, tables, parts=LIFE_PARTS):
-    from engine.cpcv import execute_cpcv
-    ev, ft, el, tg, cal = slice_tables(tables, parts["oos_end"])
+def run_cpcv_stage(ws, exp, tables):
+    """The automatic CPCV on table-level data: exactly the data CPCV would load (development [+ selection holdout]); never the lockbox."""
+    from engine.cpcv import cpcv_cutoff, execute_cpcv
+    cutoff, _ = cpcv_cutoff(ws, exp)
+    ev, ft, el, tg, cal = slice_tables(tables, cutoff)
     return execute_cpcv(ws, exp, ev, ft, tg, el, cal, verbose=False)
+
+
+def finalize_config(ws, exp, tables, config, *, run_cpcv=True, **override):
+    """The human writes the final-config file; the engine validates + freezes it; fixed CPCV then runs automatically (no approval)."""
+    from engine.selection_holdout_stage import freeze_final_config
+    human_final_selection(ws, exp, config, **override)
+    info = freeze_final_config(ws, exp)
+    return info, (run_cpcv_stage(ws, exp, tables) if run_cpcv and not info["decline"] else None)
+
+
+# table fixtures: which targets carry the planted relation (target_scale) -------------------------------------------------------------------------
+CLEAR_WINNER = dict(signal="linear", slope=0.35, target_scale={"DIR_RETURN_15": 0.0, "DIR_RETURN_60": 0.0, "DIR_PATH_SKEW_60": 0.0})   # only DIR_RETURN_30 eligible
+NEAR_TIE_PAIR = dict(signal="linear", slope=0.35, target_scale={"DIR_RETURN_30": 0.0, "DIR_PATH_SKEW_60": 0.0})                         # 15 and 60 near-tie per side
+
+
+def make_tie_tables(**kw):
+    """Event tables where DIR_RETURN_15 and DIR_RETURN_60 carry the same planted relation AND the same noise (60's labels are 15's): the pair is
+    near-tied on both sides by construction, for any seed. DIR_RETURN_30 / path-skew carry no effect."""
+    kw.setdefault("signal", "linear")
+    kw["target_scale"] = {"DIR_RETURN_30": 0.0, "DIR_PATH_SKEW_60": 0.0}
+    events, features, eligible, targets, cal = make_event_tables(**kw)
+    targets = {k: v.copy() for k, v in targets.items()}
+    targets["DIR_RETURN_60"]["value"] = targets["DIR_RETURN_15"]["value"].to_numpy().copy()
+    return events, features, eligible, targets, cal
+
+
+def weaken(tables, target, years, frac, slope=0.35, feature="ER_60"):
+    """Test-only: remove ``frac`` of the planted relation of ``target`` for events of ``years`` (used to shape SELECTION HOLDOUT outcomes)."""
+    events, features, eligible, targets, cal = tables
+    tg = {k: v.copy() for k, v in targets.items()}
+    yrs = pd.DatetimeIndex(events["event_time"]).year
+    m = np.isin(yrs, list(years))
+    v = tg[target]["value"].to_numpy().copy()
+    v[m] = v[m] - frac * slope * features[feature].to_numpy()[m]
+    tg[target]["value"] = v
+    return events, features, eligible, tg, cal
 
 
 def lifecycle_workspace(root, **table_kw):

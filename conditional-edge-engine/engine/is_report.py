@@ -1,7 +1,7 @@
-"""IS_REPORT.json / IS_REPORT.md: everything a human needs to understand how a candidate arose WITHOUT opening OOS.
+"""IS_REPORT.json / IS_REPORT.md: everything a human needs to understand how a candidate arose WITHOUT opening SELECTION HOLDOUT.
 
-The report is built only from development-stage artifacts (results.json, the registry) and is sealed once OOS is unlocked:
-``oos_status_label`` is the single source of the "OOS status" line, so "NOT ACCESSED" cannot be printed after OOS has run.
+The report is built only from development-stage artifacts (results.json, the registry) and is sealed once SELECTION HOLDOUT is unlocked:
+``selection_holdout_status_label`` is the single source of the "SELECTION HOLDOUT status" line, so "NOT ACCESSED" cannot be printed after SELECTION HOLDOUT has run.
 """
 from __future__ import annotations
 
@@ -22,17 +22,18 @@ DECILE_NOTE = ("These bins were not selection trials and cannot promote a candid
                "Using them to construct a rule requires a new registered experiment.")
 DIAG_BANNER = "DIAGNOSTIC ONLY — NOT A SELECTION TRIAL"
 NOT_ACCESSED = "NOT ACCESSED"
+NT_LABEL = "CONFIGURATION UNCERTAINTY / NEAR-TIES"
 
 
 class ReportSealedError(EngineError):
     pass
 
 
-def oos_status_label(ws: reg.Workspace, experiment_id: str) -> str:
-    """'NOT ACCESSED' iff the OOS ledger has no entry for the experiment and no OOS artifact exists."""
+def selection_holdout_status_label(ws: reg.Workspace, experiment_id: str) -> str:
+    """'NOT ACCESSED' iff the SELECTION HOLDOUT ledger has no entry for the experiment and no SELECTION HOLDOUT artifact exists."""
     d = experiment_dir(ws, experiment_id) / "results"
-    if reg.oos_spent(ws, experiment_id) or (d / "OOS_REPORT.json").exists():
-        return "OOS SPENT — ACCESSED (see registry/oos_access.csv); this IS report is sealed"
+    if reg.selection_holdout_spent(ws, experiment_id) or (d / "SELECTION_HOLDOUT_REPORT.json").exists():
+        return "SELECTION HOLDOUT SPENT — ACCESSED (see registry/selection_holdout_access.csv); this IS report is sealed"
     return NOT_ACCESSED
 
 
@@ -93,14 +94,68 @@ def _json_safe(o):
     return o
 
 
+def _near_tie_md(res: dict, cards: dict) -> list[str]:
+    """Report lines of the near-tie section. Every number comes from the frozen trial rows / DEVELOPMENT_CV panels; nothing is chosen for the human."""
+    r = res["rule"]
+    L = [f"Frozen rule (frozen/v1/SELECTION_PROCESS.yaml, not tuned): two IS-shortlist-eligible TARGET x SIDE groups of this experiment on the SAME side are a "
+         f"NEAR-TIE iff |difference of median standardized uplift| <= {r['max_abs_diff']} AND the {int(r['ci_level'] * 100)}% paired weekly-block bootstrap CI "
+         f"({r['reps']} repetitions, seed {r['seed']}) of the difference contains 0. Near-tie edges form connected clusters ranked by the existing frozen IS group "
+         "ranking; only the top 2 of a cluster may be proposed for the selection holdout. This is a diagnostic: it creates no selection trial and never promotes a "
+         "rejected configuration. The engine does not choose a configuration for you.\n"]
+    if not res["available"]:
+        return L + ["Near-tie analysis not available (DEVELOPMENT_CV panels not on disk for this run); no cluster is reported.\n"]
+    if len(res["eligible_groups"]) < 2:
+        return L + [f"Fewer than 2 IS-shortlist-eligible configurations ({len(res['eligible_groups'])}): no near-tie is possible.\n"]
+    if not res["clusters"]:
+        L.append(f"No near-tie among the {len(res['eligible_groups'])} eligible configurations: " +
+                 "; ".join(f"{p['a'].split('|', 1)[1]} vs {p['b'].split('|', 1)[1]}: {p['reason']}" for p in res["pairs"]) + ".\n")
+        return L
+    for k, c in enumerate(res["clusters"], 1):
+        L.append(f"### NEAR-TIE CLUSTER {k:02d}  (`{c['cluster_id']}`, side {c['side']})\n")
+        hdr = ["config ID", "target", "side", "freq/wk", "median std uplift", "median selected effect", "campaign BH q", "campaign Bonf p",
+               "positive years", "positive folds", "IS rank", "proposable"]
+        rows_ = []
+        for cid in c["members"]:
+            g = cards[cid.split("|", 1)[1]]
+            rows_.append([cid, g["target"], g["side"], _n(g["frequency_per_week"], "{:.2f}"), _n(g["median_standardized_uplift"], "{:+.3f}"),
+                          _n(g["median_selected_effect"], "{:+.6f}"), _n(g["median_campaign_q"], "{:.4g}"), _n(g["median_campaign_bonferroni_p"], "{:.4g}"),
+                          " ".join(g["positive_years"]), " ".join(g["positive_folds"]), g["is_rank"], "yes" if cid in c["proposable_for_holdout"] else "no (outside top 2)"])
+        L.append(_table(hdr, rows_))
+        for i, cid in enumerate(c["members"]):
+            g = cards[cid.split("|", 1)[1]]
+            L.append(f"{chr(65 + i)}: {g['target']} × {g['side']} — std uplift = {g['median_standardized_uplift']:.3f}, frequency = {g['frequency_per_week']:.1f}/week")
+        L.append("")
+        L.append(_table(["pair", "median std uplift difference", "median selected-effect difference", f"{int(r['ci_level'] * 100)}% paired weekly-block CI", "reason classified as near-tie"],
+                        [[f"{p['a']} vs {p['b']}", _n(p.get("paired_difference"), "{:+.4f}"),
+                          _n(cards[p["a"].split("|", 1)[1]]["median_selected_effect"] - cards[p["b"].split("|", 1)[1]]["median_selected_effect"], "{:+.6f}"),
+                          f"[{p['ci_low']:+.4f}, {p['ci_high']:+.4f}]", p["reason"]] for p in c["pairs"]]))
+        L.append("**Conclusion: IS evidence does not clearly distinguish these configurations.** The engine does not choose one automatically. "
+                 f"Human options: (A) choose one configuration directly and skip the selection holdout; (B) approve at most the top 2 (`{', '.join(c['proposable_for_holdout'])}`) "
+                 "for the selection holdout; (C) decline the experiment.\n")
+    return L
+
+
+def _holdout_recommendation(res: dict) -> dict:
+    """Whether a selection holdout is recommended / available for this experiment (information for the human; never a decision)."""
+    clusters = res["clusters"]
+    if not res["eligible_groups"]:
+        return {"available": False, "recommended": False, "reason": "no IS-shortlist-eligible configuration: nothing can be proposed"}
+    if not clusters:
+        return {"available": False, "recommended": False,
+                "reason": "no near-tie cluster: the selection holdout can only compare near-tied configs; a clearly preferred eligible config may be chosen directly"}
+    return {"available": True, "recommended": True, "clusters": {c["cluster_id"]: c["proposable_for_holdout"] for c in clusters},
+            "reason": "IS evidence does not clearly distinguish the configurations of the listed near-tie cluster(s); the holdout may compare at most the top 2 of one cluster. "
+                      "The human may instead choose one config directly or decline."}
+
+
 def build_is_report(ws: reg.Workspace, experiment_id: str, bundle: dict, trials: pd.DataFrame, obs: pd.DataFrame,
                     frozen: Frozen) -> tuple[dict, str]:
-    status = oos_status_label(ws, experiment_id)
+    status = selection_holdout_status_label(ws, experiment_id)
     if status != NOT_ACCESSED:
         raise ReportSealedError(f"{experiment_id}: {status}. The IS report can no longer be (re)generated.")
     cstat = reg.campaign_row(ws, reg.experiment_row(ws, experiment_id)["campaign_id"])["status"]
     if cstat != "OPEN":
-        raise ReportSealedError(f"{experiment_id}: the campaign OOS is {cstat}; IS reports are frozen with the campaign")
+        raise ReportSealedError(f"{experiment_id}: the campaign SELECTION HOLDOUT is {cstat}; IS reports are frozen with the campaign")
     d = experiment_dir(ws, experiment_id)
     exp = reg.experiment_row(ws, experiment_id)
     summ = reg.campaign_summary(ws, exp["campaign_id"], frozen)
@@ -119,8 +174,11 @@ def build_is_report(ws: reg.Workspace, experiment_id: str, bundle: dict, trials:
     cumulative = int(trials["cumulative_campaign_selection_trials"].iloc[0]) if len(trials) else 0
     first_opp, last_opp = int(trials["selection_opportunity_number"].min()), int(trials["selection_opportunity_number"].max())
 
+    from engine import near_tie as near_tie_mod
     from engine import path_report as path_report_mod
     path_rep = path_report_mod.load_path_file(d / "results", bundle)
+    nt_res = near_tie_mod.detect(ws, experiment_id, frozen)
+    nt_cards = {g["group_id"]: near_tie_mod.group_card(rows, g) for g in nt_res["eligible_groups"]}
     # ---------------------------------------------------------------- JSON
     J: dict = {
         "experiment_id": experiment_id, "campaign_id": exp["campaign_id"],
@@ -167,7 +225,10 @@ def build_is_report(ws: reg.Workspace, experiment_id: str, bundle: dict, trials:
                      "verifier_pin": load_yaml(CODE_ROOT / "frozen/v1/VERIFIER_PIN.yaml")["commit"]},
         "Z_forward_path_diagnostics": (path_report_mod.compact_json(path_rep, bundle["path_diagnostics"]) if path_rep else
                                        {"status": "NOT_COMPUTED_NO_BARS", "promotion_eligible": False, "selection_trials_affected": 0}),
-        "Y_oos_status": status,
+        "NT_configuration_uncertainty": {**nt_res, "group_cards": nt_cards, "label": NT_LABEL,
+                                         "note": "DIAGNOSTIC FOR THE HUMAN - creates no selection trial, promotes no rejected configuration, ranks nothing new"},
+        "Y_selection_holdout_status": status,
+        "Y_selection_holdout_recommendation": _holdout_recommendation(nt_res),
         "is_status": exp["is_status"], "lifecycle_status": exp["status"],
     }
     # ---------------------------------------------------------------- narrative helpers
@@ -180,7 +241,7 @@ def build_is_report(ws: reg.Workspace, experiment_id: str, bundle: dict, trials:
     L.append(f"**CAMPAIGN REVEALED SELECTION TRIALS: {n_rev} / {cap}**\n")
     L.append(f"**Number of statistical selection opportunities exposed so far: {n_rev}** (campaign {exp['campaign_id']}; this experiment "
              f"carries selection opportunity numbers {first_opp}–{last_opp}; cumulative count when it was revealed: {cumulative}).\n")
-    L.append(f"**OOS status = {status}**\n")
+    L.append(f"**SELECTION HOLDOUT status = {status}**\n")
     L.append(f"* IS status (retroactive, as of campaign universe {n_rev}): **{exp['is_status']}**; lifecycle status: **{exp['status']}**")
     L.append(f"* external verification: **{exp['research_verification']}** (a model path counts toward 2-of-3 only if verified in strong mode)")
     L.append("* The campaign-adjusted values below are RETROACTIVE: later experiments in the campaign enlarge the multiplicity universe and may remove eligibility.\n")
@@ -206,13 +267,13 @@ def build_is_report(ws: reg.Workspace, experiment_id: str, bundle: dict, trials:
         L.append(f"\n**{b['flag']}** — a fixed half-state cannot realistically keep >= 1/week. The 50% threshold is NOT changed.\n")
     L.append("## E. Data period used\n")
     L.append(f"* DEVELOPMENT only: bars {b['first_bar']} … {b['last_bar']} ({b['development_bars']:,} bars). Partitions (frozen in the manifest): {bundle['partitions']}")
-    L.append(f"* OOS and lockbox rows removed before research code was called: {b['rows_removed_before_research']:,}")
+    L.append(f"* SELECTION HOLDOUT and lockbox rows removed before research code was called: {b['rows_removed_before_research']:,}")
     L.append(f"* training history: {bundle['train_period']}; DEVELOPMENT_CV validation: {bundle['validation_period']}\n")
     L.append("## F. Exact selection trial count\n")
     L.append(f"4 targets × 3 models × 2 states = **24** pre-registered selection trials (no threshold, feature, parameter or filter search). "
              f"Campaign {exp['campaign_id']}: {n_rev} revealed of {cap} possible.\n")
     L.append("## G. All 24 trial results (M–Q: frequency, retention, parent/selected effect, uplift, CI)\n")
-    L.append("All statistics are on pooled DEVELOPMENT_CV validation predictions (5 purged chronological folds). Nothing here is OOS.\n")
+    L.append("All statistics are on pooled DEVELOPMENT_CV validation predictions (5 purged chronological folds). Nothing here is SELECTION HOLDOUT.\n")
     L.append(_table(TRIAL_HEADER, [_trial_row(r) for r in trials.to_dict("records")]))
     L.append("## H. Multiplicity adjustments\n")
     L.append(f"* `experiment_bonferroni_p = min(raw_p × 24, 1)`; `experiment_q` = BH over all 24 trials.")
@@ -221,7 +282,7 @@ def build_is_report(ws: reg.Workspace, experiment_id: str, bundle: dict, trials:
     L.append("## I. Top configurations (deterministic ranking, no subjective choice)\n")
     L.append("Eligibility is the full hard IS gate set; ranking = standardized uplift DESC, campaign_bonferroni_p ASC, selected frequency DESC, trial_id ASC.\n")
     L.append(_table(TRIAL_HEADER, [_trial_row(r) for r in top_trials]))
-    L.append("### TOP 5 IS GROUPS (the human may unlock at most 2 for OOS; each approved group runs all 3 models)\n")
+    L.append("### TOP 5 IS GROUPS (deterministic IS ranking; a human may choose one directly, or approve at most the top 2 of a near-tie cluster for the SELECTION HOLDOUT)\n")
     L.append(_table(["rank", "group (TARGET|SIDE)", "models eligible", "median std uplift", "median campaign Bonf p", "median sel f/wk"],
                     [[g["rank"], g["group_id"], ", ".join(g["models"]), _n(g["median_standardized_uplift"], "{:+.3f}"),
                       _n(g["median_campaign_bonferroni_p"], "{:.4f}"), _n(g["median_selected_frequency"], "{:.2f}")] for g in top_groups]))
@@ -237,7 +298,7 @@ def build_is_report(ws: reg.Workspace, experiment_id: str, bundle: dict, trials:
         L.append(_table(["year", "eligible", "N parent", "N selected", "selected f/wk", "parent effect", "selected effect", "uplift"],
                         [[y["year"], "yes" if y["eligible"] else "no", y["n_parent"], y["n_selected"], _n(y["selected_frequency"], "{:.2f}"),
                           _n(y["parent_effect"], "{:+.5f}"), _n(y["selected_effect"], "{:+.5f}"), _n(y["uplift"], "{:+.5f}")] for y in yl]))
-    L.append("## L. All 5 purged DEVELOPMENT_CV folds (internal cross-validation — NOT OOS)\n")
+    L.append("## L. All 5 purged DEVELOPMENT_CV folds (internal cross-validation — NOT SELECTION HOLDOUT)\n")
     seen_fold_records = set()
     for r in rows:
         key = f"{r['target']}|{r['model']}"
@@ -343,6 +404,8 @@ def build_is_report(ws: reg.Workspace, experiment_id: str, bundle: dict, trials:
     shortlisted = {r["trial_id"] for g in top_groups for r in rows if r["target"] == g["target"] and r["state"] == g["state"] and r["decision"] == SHORTLIST}
     L.append(_table(["trial", "target/model/state", "decision", "reason"], [[r["trial_id"], f"{r['target']}/{r['model']}/{r['state']}", r["decision"], r["rejection_reason"] or "-"]
                                                                           for r in rows if r["trial_id"] not in shortlisted]))
+    L.append(f"## NT. {NT_LABEL}\n")
+    L += _near_tie_md(nt_res, nt_cards)
     L.append("## W. Non-promotable interesting observations (registry/observations.csv)\n")
     L.append(f"**{DIAG_BANNER}.** Anything here can only inspire a NEW registered experiment (which adds 24 selection trials to the campaign universe).\n")
     L.append(_table(["id", "category", "description"], [[r["observation_id"], r["category"], r["description"]] for _, r in my_obs.iterrows()]))
@@ -350,11 +413,14 @@ def build_is_report(ws: reg.Workspace, experiment_id: str, bundle: dict, trials:
     L.append("")
     L.append("## X. Exact hashes\n")
     L.append(_table(["item", "sha256"], [[k, v] for k, v in J["X_hashes"].items()]))
-    L.append("## Y. OOS status\n")
-    L.append(f"**OOS status = {status}**\n")
-    L.append("The campaign-level OOS requires manual human approval files (per experiment, then the campaign-open approval after `freeze_campaign_oos.py`). Compute the hashes to reference with `python scripts/show_approval_hashes.py --experiment "
-             f"{experiment_id}`. The LLM / scripts never create `approvals/{experiment_id}_OOS_APPROVAL.yaml`; at most 2 TARGET|SIDE groups from the "
-             "top-5 list may be approved and every approved group runs all three frozen models.\n")
+    L.append("## Y. SELECTION HOLDOUT status\n")
+    L.append(f"**SELECTION HOLDOUT status = {status}**\n")
+    rec = J["Y_selection_holdout_recommendation"]
+    L.append(f"* Selection holdout available: **{'YES' if rec['available'] else 'NO'}**; recommended: **{'YES' if rec['recommended'] else 'NO'}** — {rec['reason']}")
+    L.append("The engine stops here. The human may (A) choose ONE eligible configuration directly (`approvals/<EXP>_FINAL_CONFIG_SELECTION.yaml`, selection holdout skipped), "
+             "(B) if a near-tie cluster exists, approve its top 2 configurations for the campaign SELECTION HOLDOUT (`approvals/<EXP>_SELECTION_HOLDOUT_APPROVAL.yaml`, then the campaign-open approval after "
+             "`freeze_campaign_selection_holdout.py`), or (C) decline. The SELECTION HOLDOUT is selection data, NOT final confirmation. Hashes to cite: "
+             f"`python scripts/show_approval_hashes.py --experiment {experiment_id}`. The LLM / scripts never create any file in `approvals/`; at most 2 configurations per experiment and 6 per campaign, each running all three frozen models.\n")
     md = "\n".join(L) + "\n"
     J["markdown_sha256"] = hashlib.sha256(md.encode()).hexdigest()
     return _json_safe(J), md
@@ -371,4 +437,6 @@ def write_is_report(ws: reg.Workspace, experiment_id: str) -> dict:
     jtxt = json.dumps(J, indent=2, sort_keys=True)
     (d / "IS_REPORT.json").write_text(jtxt)
     reg.update_experiment(ws, experiment_id, is_report_sha256=hashlib.sha256(jtxt.encode()).hexdigest())
+    if J["NT_configuration_uncertainty"]["clusters"] and reg.experiment_row(ws, experiment_id)["status"] == "AWAITING_HUMAN_FINAL_CONFIG_SELECTION":
+        reg.set_status(ws, experiment_id, "NEAR_TIE_REVIEW_REQUIRED", "IS found a near-tie cluster: the human decides (direct choice / holdout / decline)")
     return {"json": str(d / "IS_REPORT.json"), "md": str(d / "IS_REPORT.md")}

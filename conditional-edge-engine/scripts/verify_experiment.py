@@ -19,7 +19,7 @@ def main():
     ap.add_argument("--verifier-repo", required=True)
     ap.add_argument("--experiment", required=True)
     ap.add_argument("--data", required=True)
-    ap.add_argument("--stage", choices=["IS", "OOS"], default="IS")
+    ap.add_argument("--stage", choices=["IS", "SELECTION HOLDOUT"], default="IS")
     ap.add_argument("--timestamp-col", default="timestamp")
     ap.add_argument("--mode", choices=["fast", "standard", "strong"], default="strong")
     ap.add_argument("--models", nargs="*", choices=["RIDGE", "SPLINE", "XGB"], help="default: all three")

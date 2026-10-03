@@ -102,7 +102,7 @@ def test_campaign_rejects_experiment_21(ws):
     with pytest.raises(reg.CampaignLimitExceeded):
         create_experiment(ws, campaign_id="C001")
     # an explicit new campaign is the only way forward; numbering continues globally
-    assert create_experiment(ws, new_campaign="C002", partitions={"development_end": "2025-01-01", "oos_end": "2026-01-01", "lockbox_start": "2026-01-01"}) == "EXP_0021"
+    assert create_experiment(ws, new_campaign="C002", partitions={"development_end": "2025-01-01", "selection_holdout_end": "2026-01-01", "lockbox_start": "2026-01-01"}) == "EXP_0021"
     s = reg.campaign_summary(ws, "C001", F)
     assert s["experiments_used"] == 20 and s["selection_trials_max"] == 480 == 20 * 24
 
@@ -180,9 +180,9 @@ def test_spec_validation_rules(ws):
         assert any(needle in e for e in errs), (needle, errs)
     bad(lambda s: s.pop("cooldown"), "missing required keys")
     bad(lambda s: s.pop("partitions"), "missing required keys")
-    bad(lambda s: s["partitions"].update(oos_end="2022-06-01"), "development_end < oos_end <= lockbox_start")
-    bad(lambda s: s["partitions"].update(development_end="2024-06-01"), "development_end < oos_end <= lockbox_start")
-    bad(lambda s: s["partitions"].update(lockbox_start="2023-06-01"), "development_end < oos_end <= lockbox_start")
+    bad(lambda s: s["partitions"].update(selection_holdout_end="2022-06-01"), "1 or 2 calendar years")
+    bad(lambda s: s["partitions"].update(development_end="2024-06-01"), "1 or 2 calendar years")
+    bad(lambda s: s["partitions"].update(lockbox_start="2023-06-01"), "lockbox_start must equal selection_holdout_end")
     bad(lambda s: s["direction_definition"].update(values=[1, -1]), "ONE direction per experiment")
     bad(lambda s: s.update(filter_ladder=["CONDITION_1", "FINAL_EVENT"]), "filter_ladder")
     bad(lambda s: s.update(filter_ladder=["BASE_TRIGGER", "FINAL_EVENT", "BASE_TRIGGER"]), "filter_ladder")
@@ -221,7 +221,9 @@ def test_partitions_are_frozen_in_the_manifest_and_hashed(ws):
     assert parse_partitions(yaml.safe_load((d / "EVENT_SPEC.yaml").read_text())["partitions"]).hash() == man["partitions_hash"]
     # moving a boundary after freeze is detected (spec hash AND partitions hash)
     spec = d / "EVENT_SPEC.yaml"; os.chmod(spec, 0o644)
-    spec.write_text(spec.read_text().replace('development_end: "2023-01-01"', 'development_end: "2022-06-01"'))
+    moved = spec.read_text().replace('development_end: "2023-01-01"', 'development_end: "2022-06-01"')
+    moved = moved.replace('selection_holdout_end: "2024-01-01"', 'selection_holdout_end: "2023-06-01"').replace('lockbox_start: "2024-01-01"', 'lockbox_start: "2023-06-01"')
+    spec.write_text(moved)
     errs = verify_manifest(ws, exp, raise_on_error=False)["errors"]
     assert any("partitions changed after freeze" in e for e in errs) and any("EVENT_SPEC.yaml changed" in e for e in errs)
 
@@ -230,7 +232,7 @@ def test_experiment_partitions_must_equal_the_campaign_partitions(ws):
     exp = create_experiment(ws, new_campaign="C001", partitions=PARTS)
     d = make_valid(ws, exp)
     spec = d / "EVENT_SPEC.yaml"
-    spec.write_text(spec.read_text().replace('oos_end: "2024-01-01"', 'oos_end: "2023-09-01"'))
+    spec.write_text(spec.read_text().replace('selection_holdout_end: "2024-01-01"', 'selection_holdout_end: "2025-01-01"').replace('lockbox_start: "2024-01-01"', 'lockbox_start: "2025-01-01"'))
     with pytest.raises(EventSpecError, match="differ from the campaign"):
         freeze(ws, exp)
 
@@ -240,9 +242,9 @@ def test_new_campaign_requires_explicit_partitions_and_never_infers_them(ws):
         create_experiment(ws, new_campaign="C001")
     from engine.partitions import PartitionError
     with pytest.raises(PartitionError):
-        reg.create_campaign(ws, "C009", {"development_end": "2023-01-01", "oos_end": "2022-01-01", "lockbox_start": "2024-01-01"}, F)
+        reg.create_campaign(ws, "C009", {"development_end": "2023-01-01", "selection_holdout_end": "2022-01-01", "lockbox_start": "2024-01-01"}, F)
     with pytest.raises(PartitionError):
-        reg.create_campaign(ws, "C009", {"development_end": "2023-01-01", "oos_end": "2024-01-01"}, F)
+        reg.create_campaign(ws, "C009", {"development_end": "2023-01-01", "selection_holdout_end": "2024-01-01"}, F)
     assert reg.read_campaigns(ws).empty
 
 
@@ -295,7 +297,7 @@ def test_retroactive_campaign_adjustment_can_remove_eligibility_of_an_earlier_ca
     t = reg.experiment_trials(ws, e1)
     up = t[(t["target"] == "DIR_RETURN_30") & (t["state"] == "UPPER_HALF")]
     assert (up["decision"] == SHORTLIST).all()                                    # 0.0009 * 24 = 0.0216 <= 0.05
-    assert reg.experiment_row(ws, e1)["is_status"] == SHORTLIST and reg.experiment_row(ws, e1)["status"] == "AWAITING_HUMAN_OOS_APPROVAL"
+    assert reg.experiment_row(ws, e1)["is_status"] == SHORTLIST and reg.experiment_row(ws, e1)["status"] == "AWAITING_HUMAN_FINAL_CONFIG_SELECTION"
     for _ in range(2):                                                            # 2 more experiments with nothing significant
         e = new_frozen_experiment(ws)
         reg.reveal_experiment(ws, e, fake_results(ws, e, {}, default_p=0.5, good=False), train_period="a", validation_period="b", frozen=F)
@@ -304,7 +306,7 @@ def test_retroactive_campaign_adjustment_can_remove_eligibility_of_an_earlier_ca
     assert np.allclose(up["campaign_bonferroni_p"], 0.0009 * 72)                  # 0.0648 > 0.05 -> lost eligibility
     assert (up["decision"] == PROVISIONAL).all() and "campaign-level gates" in up["rejection_reason"].iloc[0]
     assert reg.experiment_row(ws, e1)["is_status"] == PROVISIONAL
-    assert reg.experiment_row(ws, e1)["status"] == "IS_PROVISIONAL_CANDIDATE"      # no longer awaiting OOS approval
+    assert reg.experiment_row(ws, e1)["status"] == "IS_PROVISIONAL_CANDIDATE"      # no longer awaiting SELECTION HOLDOUT approval
 
 
 def test_ledger_detects_missing_duplicate_extra_changed_and_edited_trials(ws):
@@ -341,29 +343,29 @@ def test_ledger_detects_missing_duplicate_extra_changed_and_edited_trials(ws):
     reg._write(path, good, reg.TRIAL_COLS)
 
 
-def test_oos_access_ledger_is_append_only_and_integrity_checked(ws):
+def test_selection_holdout_access_ledger_is_append_only_and_integrity_checked(ws):
     e1 = new_frozen_experiment(ws, "C001"); e2 = new_frozen_experiment(ws, "C001")
-    reg.create_campaign(ws, "C002", {"development_end": "2024-01-01", "oos_end": "2025-01-01", "lockbox_start": "2025-01-01"})
-    kw = dict(freeze_hash="a", open_approval_file_hash="b", experiments="E", approved_experiment_groups="E:G", n_oos_confirmations=3,
-              oos_start="2023-01-01", oos_end="2024-01-01", unlock_timestamp="t", code_hash="h")
-    r1 = reg.append_oos_access(ws, campaign_id="C001", **kw)
-    assert r1["prev_row_hash"] == "GENESIS" and reg.oos_spent(ws, e1) and reg.oos_spent(ws, e2)    # accounting is campaign-wide
-    with pytest.raises(EngineError, match="CAMPAIGN OOS HAS BEEN SPENT"):
-        reg.append_oos_access(ws, campaign_id="C001", **kw)                             # ONE opening per campaign, ever
-    r2 = reg.append_oos_access(ws, campaign_id="C002", **kw)
-    assert r2["prev_row_hash"] == r1["row_hash"] and reg.verify_oos_ledger(ws) == 2
-    reg.update_campaign(ws, "C001", status="OOS_SPENT"); reg.update_campaign(ws, "C002", status="OOS_SPENT")
-    good = reg.read_oos_access(ws)
-    path = ws.path("oos_access.csv")
+    reg.create_campaign(ws, "C002", {"development_end": "2024-01-01", "selection_holdout_end": "2025-01-01", "lockbox_start": "2025-01-01"})
+    kw = dict(freeze_hash="a", open_approval_file_hash="b", experiments="E", approved_experiment_groups="E:G", n_holdout_evaluations=3,
+              selection_holdout_start="2023-01-01", selection_holdout_end="2024-01-01", unlock_timestamp="t", code_hash="h")
+    r1 = reg.append_selection_holdout_access(ws, campaign_id="C001", **kw)
+    assert r1["prev_row_hash"] == "GENESIS" and reg.selection_holdout_spent(ws, e1) and reg.selection_holdout_spent(ws, e2)    # accounting is campaign-wide
+    with pytest.raises(EngineError, match="CAMPAIGN SELECTION HOLDOUT HAS BEEN SPENT"):
+        reg.append_selection_holdout_access(ws, campaign_id="C001", **kw)                             # ONE opening per campaign, ever
+    r2 = reg.append_selection_holdout_access(ws, campaign_id="C002", **kw)
+    assert r2["prev_row_hash"] == r1["row_hash"] and reg.verify_selection_holdout_ledger(ws) == 2
+    reg.update_campaign(ws, "C001", status="SELECTION_HOLDOUT_SPENT"); reg.update_campaign(ws, "C002", status="SELECTION_HOLDOUT_SPENT")
+    good = reg.read_selection_holdout_access(ws)
+    path = ws.path("selection_holdout_access.csv")
     for mut in (lambda d: d.loc[d.index[0], "freeze_hash"].__class__ and d.__setitem__("freeze_hash", ["x", "y"]),   # edited row
                 lambda d: d.drop(index=d.index[0], inplace=True),                                                            # removed row
                 lambda d: d.iloc[::-1].reset_index(drop=True).pipe(lambda x: [d.__setitem__(c, x[c].to_numpy()) for c in d.columns])):  # reordered
         df = good.copy(); mut(df)
-        reg._write(path, df, reg.OOS_ACCESS_COLS)
+        reg._write(path, df, reg.SELECTION_HOLDOUT_ACCESS_COLS)
         with pytest.raises(reg.RegistryIntegrityError):
             reg.integrity_check(ws)
-        reg._write(path, good, reg.OOS_ACCESS_COLS)
-    assert reg.integrity_check(ws)["oos_unlocks"] == 2
+        reg._write(path, good, reg.SELECTION_HOLDOUT_ACCESS_COLS)
+    assert reg.integrity_check(ws)["selection_holdout_unlocks"] == 2
 
 
 def test_exploratory_analysis_must_be_diagnostic_only_and_cannot_alter_status(ws):
@@ -393,5 +395,6 @@ def test_lifecycle_status_history_is_append_only_and_validated(ws):
     assert [h[0] for h in hist] == ["DRAFT", "FROZEN", "IS_REJECTED"]
     with pytest.raises(EngineError):
         reg.set_status(ws, exp, "TOTALLY_CONFIRMED")
-    assert set(reg.LIFECYCLE) >= {"IS_REJECTED", "IS_PROVISIONAL_CANDIDATE", "AWAITING_HUMAN_OOS_APPROVAL", "OOS_NOT_APPROVED", "OOS_REJECTED",
-                                  "OOS_CONFIRMED", "CPCV_REJECTED", "CPCV_CONFIRMED", "AWAITING_FINAL_LOCKBOX"}
+    assert set(reg.LIFECYCLE) >= {"IS_REJECTED", "IS_PROVISIONAL_CANDIDATE", "AWAITING_HUMAN_FINAL_CONFIG_SELECTION", "HUMAN_DECLINED", "SELECTION_HOLDOUT_SPENT",
+                                  "NEAR_TIE_REVIEW_REQUIRED", "SELECTION_HOLDOUT_FROZEN", "SELECTION_HOLDOUT_SKIPPED", "FINAL_CONFIG_FROZEN",
+                                  "CPCV_REJECTED", "CPCV_CONFIRMED", "AWAITING_FINAL_LOCKBOX_APPROVAL", "LOCKBOX_REJECTED", "LOCKBOX_CONFIRMED"}

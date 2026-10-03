@@ -1,0 +1,1 @@
+campaign_id,experiment_id,event,selected_config_id,is_rank,near_tie_cluster,selection_holdout_used,selection_holdout_rank,human_selection_file_hash,manifest_hash,frozen_at,cpcv_status,prev_row_hash,row_hash

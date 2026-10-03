@@ -58,7 +58,7 @@ def render(rep: dict | None, trials_rows: list[dict], my_obs, frozen_label: str)
           f"Horizons {rep['horizons_bars']} bars; tick size {rep['tick_size_points']} points (instrument config); {rep['sigma_ref_formula']} ({rep['sigma_ref']}); percentiles: {rep['percentile_method']}. "
           f"Events: {rep['counts']['model_eligible_events']:,} model-eligible of {rep['counts']['events_total']:,}; PATH_TIMESTAMP_INELIGIBLE per horizon: {rep['counts']['path_ineligible_by_horizon']}. "
           f"Contexts: ALL events and UPPER/LOWER_HALF of every target × model (DEVELOPMENT_CV pooled validation events; identical event sets are grouped). Full detail: `{'results/PATH_DIAGNOSTICS.json'}`. "
-          "No OOS or lockbox row entered any number below.\n"]
+          "No SELECTION HOLDOUT or lockbox row entered any number below.\n"]
     A = rep["contexts"]["ALL"]
     hs = [str(h) for h in rep["horizons_bars"]]
     L.append("### Z.1 Endpoint returns (ALL events; directional log return)\n")

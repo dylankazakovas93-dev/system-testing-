@@ -1,28 +1,29 @@
 {
   "campaign_id": "C001",
-  "engine_version": "v1.1.1",
-  "event_hash": "dd3dc43384677409442cf430c5708bf8e5f0fafe10f4b6665c2cdd5d0e61e2e4",
+  "engine_version": "v1.2.0",
+  "event_hash": "33075c486274c70b10d1ed5b04172844c3d6c631d92aec62a9fd87eaac5fc0c9",
   "experiment_id": "EXP_0001",
-  "frozen_at": "2026-10-01T21:19:08Z",
+  "frozen_at": "2026-10-03T15:23:40Z",
   "frozen_spec_hashes": {
-    "acceptance_rules_hash": "079d1b50aab323fdd6be9e7f98a62462816e4196a7bcaf08ea24503007d48853",
+    "acceptance_rules_hash": "5dac4a98fc381d4739002dfe23f2e6467da8d9b7154fe71fdca0c09bc378f0fd",
     "feature_bank_hash": "300ce5991f52cad544bbf6b84652d739db8d92e12ab32bc1583ee9ac5282fc6a",
     "model_bank_hash": "2c578364b2b07ac5eb1454911a3391a2796b03c097e5d9f8f28e8863ad17e569",
     "target_bank_hash": "68f517dd0f6d21dbe88934f26f5a86edb71d2b7641971720468ff9714cb1fe68",
-    "trial_policy_hash": "66f93646a7d4368a2b010680831902b7209d775ecd5f5024fc2c3a7a65f34528"
+    "trial_policy_hash": "19b31dc49d28785ad046fc4eb4940a33430930ed619ddb866e2f5a352fa9d425"
   },
   "hashes": {
-    "engine_code_hash": "b090f4dbb655e71a173bd25452d39e7fde06e1363893bb2e3c9feccf26ebea04",
+    "engine_code_hash": "5616e5ae123194e5dd009e4c83202adb8aec4a2f2df07fe2894bbac6f2c71b23",
     "event_py": "47e3f563c012e50b1a7f8a30d8bf81e106793a1d594ffd5bb2d922660ad10585",
-    "event_spec": "9b17cc874e0a2d4b7c58b552bf3df5b87a5978ec80ba401beb10e063a0de22eb",
-    "frozen_bundle_hash": "5b21a32341919b1c5f75a2afbb6da87e5a60f335c064fdea6fcb377116d162b0",
+    "event_spec": "7bf96905a5ea2dc0858450aaeca0a92da9c1bf43bde56ffecf5e1fa6de774d55",
+    "frozen_bundle_hash": "3231a012098534c9a93a5cb33736281e140b424831866e6bb872fbf47224f5f9",
     "frozen_files": {
-      "frozen/v1/ACCEPTANCE_RULES.yaml": "079d1b50aab323fdd6be9e7f98a62462816e4196a7bcaf08ea24503007d48853",
+      "frozen/v1/ACCEPTANCE_RULES.yaml": "5dac4a98fc381d4739002dfe23f2e6467da8d9b7154fe71fdca0c09bc378f0fd",
       "frozen/v1/FEATURE_BANK.yaml": "300ce5991f52cad544bbf6b84652d739db8d92e12ab32bc1583ee9ac5282fc6a",
       "frozen/v1/MODEL_BANK.yaml": "2c578364b2b07ac5eb1454911a3391a2796b03c097e5d9f8f28e8863ad17e569",
-      "frozen/v1/PATH_DIAGNOSTICS.yaml": "6d79dfb7da905ddf859c27ef808e865f9709b04f747c3f1b16b788802b8587b6",
+      "frozen/v1/PATH_DIAGNOSTICS.yaml": "d3c37882df15175fdf029e731d5a94c50f40441b601c50837c26569071f05114",
+      "frozen/v1/SELECTION_PROCESS.yaml": "8e335d4c674c6022f22c8e3bebc310788845f3139da8fef2797ac39a40269831",
       "frozen/v1/TARGET_BANK.yaml": "68f517dd0f6d21dbe88934f26f5a86edb71d2b7641971720468ff9714cb1fe68",
-      "frozen/v1/TRIAL_POLICY.yaml": "66f93646a7d4368a2b010680831902b7209d775ecd5f5024fc2c3a7a65f34528",
+      "frozen/v1/TRIAL_POLICY.yaml": "19b31dc49d28785ad046fc4eb4940a33430930ed619ddb866e2f5a352fa9d425",
       "frozen/v1/VERIFIER_PIN.yaml": "7d65952eb728a5a042589cca4c1f81697a3b6ed33a087165ed3783f5b294d0f6",
       "frozen/v1/instruments/NQ_1m.yaml": "5765e0f9756532085a7a4f061c42b3f38a75bc007c7b1fdf6807b2046ee29fab"
     }
@@ -31,13 +32,13 @@
     "HYPOTHESIS.md": "bc254e46b0a767ef6cfd9b5ffc5cda99d329ad916dc9c0e6027f3dfdfe7822d0",
     "reference.pine": "08245a3ca8dc625b1a2513f5a3121cd7030ed464bf924ca1c8590765e56400f2"
   },
-  "manifest_hash": "9d3c9129cba40603b8548efb35520c22fc7caac53fe2c9ef178bbabdf30d5cfc",
+  "manifest_hash": "2446fb431d641fd54318310b3a642c0b24c2a743e4bc4db692b6fdf68df57bfc",
   "partitions": {
     "development_end": "2019-01-01",
-    "lockbox_start": "2019-10-01",
-    "oos_end": "2019-07-01"
+    "lockbox_start": "2020-01-01",
+    "selection_holdout_end": "2020-01-01"
   },
-  "partitions_hash": "8e35ba8724b68cc65dde56ecb0259a4e687efe4410d7ae4449d58d79e2abf4fd",
+  "partitions_hash": "057e193f2d09a4751b8983471186cc6a4b3c1831ffbd0cfbd6f814c0c190235e",
   "selection_trials": [
     {
       "model": "RIDGE",

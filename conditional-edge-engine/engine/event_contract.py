@@ -91,7 +91,7 @@ def validate_spec(spec: dict, frozen: Frozen, *, experiment_id: str | None = Non
         if campaign_partitions is not None and {k: str(v) for k, v in spec["partitions"].items()} != \
                 {k: str(v) for k, v in campaign_partitions.items()}:
             errs.append(f"partitions {spec['partitions']} differ from the campaign's {campaign_partitions}; all experiments of a "
-                        f"campaign share one development/OOS/lockbox partition")
+                        f"campaign share one development/SELECTION HOLDOUT/lockbox partition")
     except PartitionError as e:
         errs.append(f"partitions: {e}")
     sess = spec["eligible_session"]

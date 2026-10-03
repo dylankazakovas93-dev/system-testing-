@@ -2,7 +2,7 @@
 
 Event-level tables with KNOWN structure run through the real freeze → DEVELOPMENT_CV (5 purged chronological folds) → 24 selection trials →
 statistics → acceptance → registry → IS report pipeline, on DEVELOPMENT-only tables. No frozen rule is adjusted per scenario; the scenario
-parameters in the table are the only thing that varies. Seeds are fixed. Everything below is IS-stage output (nothing here is OOS).
+parameters in the table are the only thing that varies. Seeds are fixed. Everything below is IS-stage output (nothing here is SELECTION HOLDOUT).
 
 Two views per scenario:
 
@@ -17,13 +17,13 @@ Numbers from the run of `scripts/synthetic_summary.py` (events are per DEVELOPME
 | scenario | planted structure | events (base /wk) | decisions before injection | decisions after injection → status | max std uplift | min exp q | min campaign Bonf. p | min selected /wk |
 |---|---|---|---|---|---|---|---|---|
 | 1_no_signal | `y = N(0,1)`; 10 events/week, 2015-2022 | 4165 (9.96) | REJECTED_INSUFFICIENT_UPLIFT ×24 | same → `IS_REJECTED` | 0.018 | 0.7301 | 1.0 | 4.48 |
-| 2_linear_edge | `y = 0.35·ER_60 + N(0,1)` | 4165 (9.96) | IS_PROVISIONAL_CANDIDATE ×24 | IS_SHORTLIST_ELIGIBLE ×24 (8 per model) → `AWAITING_HUMAN_OOS_APPROVAL` | 0.259 | 0.0005 | 0.012 | 4.72 |
-| 3_nonlinear_edge | `y = 0.35·(ER_60² − 1) + N(0,1)` (U-shape, no linear correlation) | 4165 (9.96) | PROVISIONAL ×16, REJECTED_INSUFFICIENT_UPLIFT ×8 | SHORTLIST_ELIGIBLE ×16 (SPLINE 8, XGB 8) + REJECTED_INSUFFICIENT_UPLIFT ×8 (Ridge) → `AWAITING_HUMAN_OOS_APPROVAL` | 0.300 | 0.0007 | 0.012 | 4.43 |
+| 2_linear_edge | `y = 0.35·ER_60 + N(0,1)` | 4165 (9.96) | IS_PROVISIONAL_CANDIDATE ×24 | IS_SHORTLIST_ELIGIBLE ×24 (8 per model) → `AWAITING_HUMAN_FINAL_CONFIG_SELECTION` | 0.259 | 0.0005 | 0.012 | 4.72 |
+| 3_nonlinear_edge | `y = 0.35·(ER_60² − 1) + N(0,1)` (U-shape, no linear correlation) | 4165 (9.96) | PROVISIONAL ×16, REJECTED_INSUFFICIENT_UPLIFT ×8 | SHORTLIST_ELIGIBLE ×16 (SPLINE 8, XGB 8) + REJECTED_INSUFFICIENT_UPLIFT ×8 (Ridge) → `AWAITING_HUMAN_FINAL_CONFIG_SELECTION` | 0.300 | 0.0007 | 0.012 | 4.43 |
 | 4a_low_frequency_strong_edge | `y = 0.6·ER_60 + N(0,1)`, 1.6 events/week, 2011-2022 | 969 (1.55) | REJECTED_LOW_FREQUENCY ×24 | same → `IS_REJECTED` | 0.446 | 0.0005 | 0.012 | 0.71 |
 | 4b_spurious_tail | `y = N(0,1) + 1.5` only when `ER_60 > 1.9` (~3% of events) | 4165 (9.96) | REJECTED_INSUFFICIENT_UPLIFT ×24 | same → `IS_REJECTED` | 0.052 | 0.009 | 0.036 | 4.49 |
 | 5_frequency_destroying_weak_filter | `y = 0.041 + 0.006·ER_60 + N(0,1)`, 4.3 events/week | 1831 (4.38) | REJECTED_INSUFFICIENT_UPLIFT ×24 | same → `IS_REJECTED` | 0.008 | 0.903 | 1.0 | 2.09 |
 | 6_unstable_regime | slope +1.0 in 2015-2018, −0.25 in 2019-2022 | 4165 (9.96) | REJECTED_INSTABILITY ×24 | same → `IS_REJECTED` | 0.166 | 0.0005 | 0.012 | 4.82 |
-| 7_conditional_improvement_only | `y = 0.35·ER_60 − 0.45 + N(0,1)` (parent effect strongly negative) | 4165 (9.96) | DIAGNOSTIC_CONDITIONAL_IMPROVEMENT ×12 (UPPER), PROVISIONAL ×12 (LOWER) | DIAGNOSTIC… ×12 + SHORTLIST_ELIGIBLE ×12 (4 per model) → `AWAITING_HUMAN_OOS_APPROVAL` | 0.259 | 0.0005 | 0.012 | 4.72 |
+| 7_conditional_improvement_only | `y = 0.35·ER_60 − 0.45 + N(0,1)` (parent effect strongly negative) | 4165 (9.96) | DIAGNOSTIC_CONDITIONAL_IMPROVEMENT ×12 (UPPER), PROVISIONAL ×12 (LOWER) | DIAGNOSTIC… ×12 + SHORTLIST_ELIGIBLE ×12 (4 per model) → `AWAITING_HUMAN_FINAL_CONFIG_SELECTION` | 0.259 | 0.0005 | 0.012 | 4.72 |
 
 Reading guide
 
@@ -34,14 +34,16 @@ Reading guide
 * Scenario 6: every statistical gate passes in the pooled data but the sign flips in the later years; rejected for instability (year/fold consistency).
 * Scenario 7: only the UPPER state has an uplift over a strongly negative parent effect while its absolute selected effect is not positive → `DIAGNOSTIC_CONDITIONAL_IMPROVEMENT`, never a candidate; the LOWER (fade) state has a positive absolute effect and is eligible.
 
-## Lifecycle scenarios (IS → human approval → one-shot OOS → CPCV), `tests/test_lifecycle_oos_cpcv.py`
+## Lifecycle scenarios A–E (IS → near-tie → human decision → [selection holdout] → final config → automatic CPCV), `tests/test_selection_lifecycle.py`
 
-| scenario | planted structure | IS | OOS | CPCV | final status |
-|---|---|---|---|---|---|
-| stable effect | `y = 0.35·ER_60 + N(0,1)` | eligible | `OOS_CONFIRMED` (3/3 models) | 15/15 splits with positive effect and positive uplift for all 3 models (≥ 12 required), `CPCV_CONFIRMED` | `AWAITING_FINAL_LOCKBOX` |
-| curve-fit | slope +0.6 in 2015-2019 (development), −0.3 in 2020 (the OOS year) | eligible (std uplift ≈ 0.41) | `OOS_REJECTED` | not run (CPCV never rescues) | `OOS_REJECTED` |
-| OOS-ok, CPCV-unstable | slope +1.0 in every development year except 2019 (−1.6) | eligible | `OOS_CONFIRMED` (3/3) | 10/15 splits positive (< 12) for every model, `CPCV_REJECTED` | `CPCV_REJECTED` |
+Table-level synthetic data, real engine code; the human's files are written by test code. Fixtures: `target_scale` plants the relation only on the named targets.
 
-IS tolerates the single bad development year (positive effect in 4 of 5 eligible years and 4 of 5 folds are required, ≥ 70% of years), OOS confirms, and CPCV rejects because
-only 10 of 15 splits have a positive selected effect and positive uplift (`n_effect_positive = n_uplift_positive = 10` for RIDGE, SPLINE and XGB, < 12 required). The medians are
-positive (≈ 0.49-0.55), so the veto comes from the ≥ 12/15 split rule alone. Real-verifier, bar-level OOS and bar-level CPCV runs are in `tests/test_end_to_end_bars.py`.
+| scenario | planted structure | IS / near-tie | selection holdout | final config | CPCV | final status |
+|---|---|---|---|---|---|---|
+| A — clear winner | only `DIR_RETURN_30` carries the effect | 2 eligible configs, opposite sides, no near-tie | **skipped** (stays unread) | human picks the top IS config directly (`SELECTION_HOLDOUT_SKIPPED`) | automatic, DEVELOPMENT only, passes | `AWAITING_FINAL_LOCKBOX_APPROVAL` |
+| B — genuine near tie | `DIR_RETURN_15` and `DIR_RETURN_60` carry the same effect; 60 loses half of it in the holdout year | near-tie cluster per side (|Δ| ≤ 0.03, paired CI ∋ 0) | both configs frozen together, one opening, family of 6 | `HOLDOUT_PREFERRED_CONFIG` = 15 (the IS rank-1 config 60 is not preferred); the human selects it | automatic, DEVELOPMENT + holdout, passes | `AWAITING_FINAL_LOCKBOX_APPROVAL` |
+| C — unresolved | as B but 15 loses 45% in the holdout year | near-tie | both evaluated | `HOLDOUT_UNRESOLVED` (|Δ| ≤ 0.03, CI ∋ 0): no winner is fabricated; the human may choose one or decline | — | `FINAL_CONFIG_FROZEN` (human choice) or `HUMAN_DECLINED` |
+| D — CPCV failure | slope +1.0 in every year except 2019 (−1.6) | near-tie | both pass the informational evidence gates | the human selects A | A fails (10/15 splits < 12) → **no fallback to B** | `CPCV_REJECTED` (lineage ends) |
+| E — curve fit | slope +0.6 in development, −0.3 in the holdout year | strong IS, near-tie | collapses (selected effect < 0, `NO_QUALIFYING_CONFIG`) | the human declines | not run | `HUMAN_DECLINED` (no CPCV, no lockbox) |
+
+Real-verifier, bar-level holdout and bar-level CPCV runs are in `tests/test_end_to_end_bars.py`.

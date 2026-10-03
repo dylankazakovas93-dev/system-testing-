@@ -1,7 +1,7 @@
 {
   "experiment_id": "EXP_0001",
   "stage": "IS",
-  "verifier_repo": "/home/user/dylankazakovas93-dev/engine-verification-",
+  "verifier_repo": "VERIFIER",
   "verifier_commit": "624c8b7f0502abf6c5d453d501e96e3172367035",
   "mode": "strong",
   "stage_cutoff": "2019-01-01",
@@ -45,7 +45,7 @@
       "stage": "IS",
       "command": [
         "/usr/local/bin/python",
-        "/home/user/dylankazakovas93-dev/engine-verification-/scripts/verify_research.py",
+        "VERIFIER/scripts/verify_research.py",
         "--adapter",
         "WS/experiments/EXP_0001/verification/stage/adapter_RIDGE.py",
         "--source",
@@ -69,7 +69,7 @@
         "--report-prefix",
         "WS/experiments/EXP_0001/verification/reports/research_IS_DIR_RETURN_15_RIDGE"
       ],
-      "stdout_tail": "[UNVERIFIED] contract_provenance (mandatory)\n[PASS      ] data_audit (mandatory)\n[PASS      ] lockbox (mandatory)\n[PASS      ] ml_leakage (mandatory)\n[PASS      ] ml_static_scan (mandatory)\n[PASS      ] repository_health (mandatory)\n[PASS      ] research_causality (mandatory)\n[PASS      ] research_contract (mandatory)\n[UNVERIFIED] static_scan (heuristic)\n[PASS      ] walkforward (mandatory)\nLOCKBOX: {'lockbox_start': '2018-09-13T00:00:00+00:00', 'development_event_count': 5156, 'withheld_lockbox_event_count': 572, 'withheld_boundary_event_count': 0}\nVERDICT: INCOMPLETE / UNVERIFIED\nJSON: WS/experiments/EXP_0001/verification/reports/research_IS_DIR_RETURN_15_RIDGE.json\nMARKDOWN: WS/experiments/EXP_0001/verification/reports/research_IS_DIR_RETURN_15_RIDGE.md\n",
+      "stdout_tail": "[UNVERIFIED] contract_provenance (mandatory)\n[PASS      ] data_audit (mandatory)\n[PASS      ] lockbox (mandatory)\n[PASS      ] ml_leakage (mandatory)\n[PASS      ] ml_static_scan (mandatory)\n[PASS      ] repository_health (mandatory)\n[PASS      ] research_causality (mandatory)\n[PASS      ] research_contract (mandatory)\n[UNVERIFIED] static_scan (heuristic)\n[PASS      ] walkforward (mandatory)\nLOCKBOX: {'lockbox_start': '2018-09-13T00:00:00+00:00', 'development_event_count': 5156, 'withheld_lockbox_event_count': 572, 'withheld_boundary_event_count': 0}\nVERDICT: INCOMPLETE / UNVERIFIED\nJSON: WS/experiments/EXP_0001/verification/reports/research_IS_DIR_RETURN_15_RIDGE.md\n",
       "stderr_tail": ""
     },
     {
@@ -97,7 +97,7 @@
       "stage": "IS",
       "command": [
         "/usr/local/bin/python",
-        "/home/user/dylankazakovas93-dev/engine-verification-/scripts/verify_research.py",
+        "VERIFIER/scripts/verify_research.py",
         "--adapter",
         "WS/experiments/EXP_0001/verification/stage/adapter_SPLINE.py",
         "--source",
@@ -122,7 +122,7 @@
         "WS/experiments/EXP_0001/verification/reports/research_IS_DIR_RETURN_15_SPLINE",
         "--skip-tests"
       ],
-      "stdout_tail": "[UNVERIFIED] contract_provenance (mandatory)\n[PASS      ] data_audit (mandatory)\n[PASS      ] lockbox (mandatory)\n[PASS      ] ml_leakage (mandatory)\n[PASS      ] ml_static_scan (mandatory)\n[UNVERIFIED] repository_health (mandatory)\n[PASS      ] research_causality (mandatory)\n[PASS      ] research_contract (mandatory)\n[UNVERIFIED] static_scan (heuristic)\n[PASS      ] walkforward (mandatory)\nLOCKBOX: {'lockbox_start': '2018-09-13T00:00:00+00:00', 'development_event_count': 5156, 'withheld_lockbox_event_count': 572, 'withheld_boundary_event_count': 0}\nVERDICT: INCOMPLETE / UNVERIFIED\nJSON: WS/experiments/EXP_0001/verification/reports/research_IS_DIR_RETURN_15_SPLINE.json\nMARKDOWN: WS/experiments/EXP_0001/verification/reports/research_IS_DIR_RETURN_15_SPLINE.md\n",
+      "stdout_tail": "[UNVERIFIED] contract_provenance (mandatory)\n[PASS      ] data_audit (mandatory)\n[PASS      ] lockbox (mandatory)\n[PASS      ] ml_leakage (mandatory)\n[PASS      ] ml_static_scan (mandatory)\n[UNVERIFIED] repository_health (mandatory)\n[PASS      ] research_causality (mandatory)\n[PASS      ] research_contract (mandatory)\n[UNVERIFIED] static_scan (heuristic)\n[PASS      ] walkforward (mandatory)\nLOCKBOX: {'lockbox_start': '2018-09-13T00:00:00+00:00', 'development_event_count': 5156, 'withheld_lockbox_event_count': 572, 'withheld_boundary_event_count': 0}\nVERDICT: INCOMPLETE / UNVERIFIED\nJSON: WS/experiments/EXP_0001/verification/reports/research_IS_DIR_RETURN_15_SPLINE.md\n",
       "stderr_tail": ""
     },
     {
@@ -150,7 +150,7 @@
       "stage": "IS",
       "command": [
         "/usr/local/bin/python",
-        "/home/user/dylankazakovas93-dev/engine-verification-/scripts/verify_research.py",
+        "VERIFIER/scripts/verify_research.py",
         "--adapter",
         "WS/experiments/EXP_0001/verification/stage/adapter_XGB.py",
         "--source",
@@ -175,7 +175,7 @@
         "WS/experiments/EXP_0001/verification/reports/research_IS_DIR_RETURN_15_XGB",
         "--skip-tests"
       ],
-      "stdout_tail": "[UNVERIFIED] contract_provenance (mandatory)\n[PASS      ] data_audit (mandatory)\n[PASS      ] lockbox (mandatory)\n[PASS      ] ml_leakage (mandatory)\n[PASS      ] ml_static_scan (mandatory)\n[UNVERIFIED] repository_health (mandatory)\n[PASS      ] research_causality (mandatory)\n[PASS      ] research_contract (mandatory)\n[UNVERIFIED] static_scan (heuristic)\n[PASS      ] walkforward (mandatory)\nLOCKBOX: {'lockbox_start': '2018-09-13T00:00:00+00:00', 'development_event_count': 5156, 'withheld_lockbox_event_count': 572, 'withheld_boundary_event_count': 0}\nVERDICT: INCOMPLETE / UNVERIFIED\nJSON: WS/experiments/EXP_0001/verification/reports/research_IS_DIR_RETURN_15_XGB.json\nMARKDOWN: WS/experiments/EXP_0001/verification/reports/research_IS_DIR_RETURN_15_XGB.md\n",
+      "stdout_tail": "[UNVERIFIED] contract_provenance (mandatory)\n[PASS      ] data_audit (mandatory)\n[PASS      ] lockbox (mandatory)\n[PASS      ] ml_leakage (mandatory)\n[PASS      ] ml_static_scan (mandatory)\n[UNVERIFIED] repository_health (mandatory)\n[PASS      ] research_causality (mandatory)\n[PASS      ] research_contract (mandatory)\n[UNVERIFIED] static_scan (heuristic)\n[PASS      ] walkforward (mandatory)\nLOCKBOX: {'lockbox_start': '2018-09-13T00:00:00+00:00', 'development_event_count': 5156, 'withheld_lockbox_event_count': 572, 'withheld_boundary_event_count': 0}\nVERDICT: INCOMPLETE / UNVERIFIED\nJSON: WS/experiments/EXP_0001/verification/reports/research_IS_DIR_RETURN_15_XGB.md\n",
       "stderr_tail": ""
     },
     {
@@ -203,7 +203,7 @@
       "stage": "IS",
       "command": [
         "/usr/local/bin/python",
-        "/home/user/dylankazakovas93-dev/engine-verification-/scripts/verify_research.py",
+        "VERIFIER/scripts/verify_research.py",
         "--adapter",
         "WS/experiments/EXP_0001/verification/stage/adapter_RIDGE.py",
         "--source",
@@ -228,7 +228,7 @@
         "WS/experiments/EXP_0001/verification/reports/research_IS_DIR_RETURN_30_RIDGE",
         "--skip-tests"
       ],
-      "stdout_tail": "[UNVERIFIED] contract_provenance (mandatory)\n[PASS      ] data_audit (mandatory)\n[PASS      ] lockbox (mandatory)\n[PASS      ] ml_leakage (mandatory)\n[PASS      ] ml_static_scan (mandatory)\n[UNVERIFIED] repository_health (mandatory)\n[PASS      ] research_causality (mandatory)\n[PASS      ] research_contract (mandatory)\n[UNVERIFIED] static_scan (heuristic)\n[PASS      ] walkforward (mandatory)\nLOCKBOX: {'lockbox_start': '2018-09-13T00:00:00+00:00', 'development_event_count': 5156, 'withheld_lockbox_event_count': 572, 'withheld_boundary_event_count': 0}\nVERDICT: INCOMPLETE / UNVERIFIED\nJSON: WS/experiments/EXP_0001/verification/reports/research_IS_DIR_RETURN_30_RIDGE.json\nMARKDOWN: WS/experiments/EXP_0001/verification/reports/research_IS_DIR_RETURN_30_RIDGE.md\n",
+      "stdout_tail": "[UNVERIFIED] contract_provenance (mandatory)\n[PASS      ] data_audit (mandatory)\n[PASS      ] lockbox (mandatory)\n[PASS      ] ml_leakage (mandatory)\n[PASS      ] ml_static_scan (mandatory)\n[UNVERIFIED] repository_health (mandatory)\n[PASS      ] research_causality (mandatory)\n[PASS      ] research_contract (mandatory)\n[UNVERIFIED] static_scan (heuristic)\n[PASS      ] walkforward (mandatory)\nLOCKBOX: {'lockbox_start': '2018-09-13T00:00:00+00:00', 'development_event_count': 5156, 'withheld_lockbox_event_count': 572, 'withheld_boundary_event_count': 0}\nVERDICT: INCOMPLETE / UNVERIFIED\nJSON: WS/experiments/EXP_0001/verification/reports/research_IS_DIR_RETURN_30_RIDGE.md\n",
       "stderr_tail": ""
     },
     {
@@ -256,7 +256,7 @@
       "stage": "IS",
       "command": [
         "/usr/local/bin/python",
-        "/home/user/dylankazakovas93-dev/engine-verification-/scripts/verify_research.py",
+        "VERIFIER/scripts/verify_research.py",
         "--adapter",
         "WS/experiments/EXP_0001/verification/stage/adapter_SPLINE.py",
         "--source",
@@ -281,7 +281,7 @@
         "WS/experiments/EXP_0001/verification/reports/research_IS_DIR_RETURN_30_SPLINE",
         "--skip-tests"
       ],
-      "stdout_tail": "[UNVERIFIED] contract_provenance (mandatory)\n[PASS      ] data_audit (mandatory)\n[PASS      ] lockbox (mandatory)\n[PASS      ] ml_leakage (mandatory)\n[PASS      ] ml_static_scan (mandatory)\n[UNVERIFIED] repository_health (mandatory)\n[PASS      ] research_causality (mandatory)\n[PASS      ] research_contract (mandatory)\n[UNVERIFIED] static_scan (heuristic)\n[PASS      ] walkforward (mandatory)\nLOCKBOX: {'lockbox_start': '2018-09-13T00:00:00+00:00', 'development_event_count': 5156, 'withheld_lockbox_event_count': 572, 'withheld_boundary_event_count': 0}\nVERDICT: INCOMPLETE / UNVERIFIED\nJSON: WS/experiments/EXP_0001/verification/reports/research_IS_DIR_RETURN_30_SPLINE.json\nMARKDOWN: WS/experiments/EXP_0001/verification/reports/research_IS_DIR_RETURN_30_SPLINE.md\n",
+      "stdout_tail": "[UNVERIFIED] contract_provenance (mandatory)\n[PASS      ] data_audit (mandatory)\n[PASS      ] lockbox (mandatory)\n[PASS      ] ml_leakage (mandatory)\n[PASS      ] ml_static_scan (mandatory)\n[UNVERIFIED] repository_health (mandatory)\n[PASS      ] research_causality (mandatory)\n[PASS      ] research_contract (mandatory)\n[UNVERIFIED] static_scan (heuristic)\n[PASS      ] walkforward (mandatory)\nLOCKBOX: {'lockbox_start': '2018-09-13T00:00:00+00:00', 'development_event_count': 5156, 'withheld_lockbox_event_count': 572, 'withheld_boundary_event_count': 0}\nVERDICT: INCOMPLETE / UNVERIFIED\nJSON: WS/experiments/EXP_0001/verification/reports/research_IS_DIR_RETURN_30_SPLINE.md\n",
       "stderr_tail": ""
     },
     {
@@ -309,7 +309,7 @@
       "stage": "IS",
       "command": [
         "/usr/local/bin/python",
-        "/home/user/dylankazakovas93-dev/engine-verification-/scripts/verify_research.py",
+        "VERIFIER/scripts/verify_research.py",
         "--adapter",
         "WS/experiments/EXP_0001/verification/stage/adapter_XGB.py",
         "--source",
@@ -334,7 +334,7 @@
         "WS/experiments/EXP_0001/verification/reports/research_IS_DIR_RETURN_30_XGB",
         "--skip-tests"
       ],
-      "stdout_tail": "[UNVERIFIED] contract_provenance (mandatory)\n[PASS      ] data_audit (mandatory)\n[PASS      ] lockbox (mandatory)\n[PASS      ] ml_leakage (mandatory)\n[PASS      ] ml_static_scan (mandatory)\n[UNVERIFIED] repository_health (mandatory)\n[PASS      ] research_causality (mandatory)\n[PASS      ] research_contract (mandatory)\n[UNVERIFIED] static_scan (heuristic)\n[PASS      ] walkforward (mandatory)\nLOCKBOX: {'lockbox_start': '2018-09-13T00:00:00+00:00', 'development_event_count': 5156, 'withheld_lockbox_event_count': 572, 'withheld_boundary_event_count': 0}\nVERDICT: INCOMPLETE / UNVERIFIED\nJSON: WS/experiments/EXP_0001/verification/reports/research_IS_DIR_RETURN_30_XGB.json\nMARKDOWN: WS/experiments/EXP_0001/verification/reports/research_IS_DIR_RETURN_30_XGB.md\n",
+      "stdout_tail": "[UNVERIFIED] contract_provenance (mandatory)\n[PASS      ] data_audit (mandatory)\n[PASS      ] lockbox (mandatory)\n[PASS      ] ml_leakage (mandatory)\n[PASS      ] ml_static_scan (mandatory)\n[UNVERIFIED] repository_health (mandatory)\n[PASS      ] research_causality (mandatory)\n[PASS      ] research_contract (mandatory)\n[UNVERIFIED] static_scan (heuristic)\n[PASS      ] walkforward (mandatory)\nLOCKBOX: {'lockbox_start': '2018-09-13T00:00:00+00:00', 'development_event_count': 5156, 'withheld_lockbox_event_count': 572, 'withheld_boundary_event_count': 0}\nVERDICT: INCOMPLETE / UNVERIFIED\nJSON: WS/experiments/EXP_0001/verification/reports/research_IS_DIR_RETURN_30_XGB.md\n",
       "stderr_tail": ""
     },
     {
@@ -362,7 +362,7 @@
       "stage": "IS",
       "command": [
         "/usr/local/bin/python",
-        "/home/user/dylankazakovas93-dev/engine-verification-/scripts/verify_research.py",
+        "VERIFIER/scripts/verify_research.py",
         "--adapter",
         "WS/experiments/EXP_0001/verification/stage/adapter_RIDGE.py",
         "--source",
@@ -387,7 +387,7 @@
         "WS/experiments/EXP_0001/verification/reports/research_IS_DIR_RETURN_60_RIDGE",
         "--skip-tests"
       ],
-      "stdout_tail": "[UNVERIFIED] contract_provenance (mandatory)\n[PASS      ] data_audit (mandatory)\n[PASS      ] lockbox (mandatory)\n[PASS      ] ml_leakage (mandatory)\n[PASS      ] ml_static_scan (mandatory)\n[UNVERIFIED] repository_health (mandatory)\n[PASS      ] research_causality (mandatory)\n[PASS      ] research_contract (mandatory)\n[UNVERIFIED] static_scan (heuristic)\n[PASS      ] walkforward (mandatory)\nLOCKBOX: {'lockbox_start': '2018-09-13T00:00:00+00:00', 'development_event_count': 5156, 'withheld_lockbox_event_count': 572, 'withheld_boundary_event_count': 0}\nVERDICT: INCOMPLETE / UNVERIFIED\nJSON: WS/experiments/EXP_0001/verification/reports/research_IS_DIR_RETURN_60_RIDGE.json\nMARKDOWN: WS/experiments/EXP_0001/verification/reports/research_IS_DIR_RETURN_60_RIDGE.md\n",
+      "stdout_tail": "[UNVERIFIED] contract_provenance (mandatory)\n[PASS      ] data_audit (mandatory)\n[PASS      ] lockbox (mandatory)\n[PASS      ] ml_leakage (mandatory)\n[PASS      ] ml_static_scan (mandatory)\n[UNVERIFIED] repository_health (mandatory)\n[PASS      ] research_causality (mandatory)\n[PASS      ] research_contract (mandatory)\n[UNVERIFIED] static_scan (heuristic)\n[PASS      ] walkforward (mandatory)\nLOCKBOX: {'lockbox_start': '2018-09-13T00:00:00+00:00', 'development_event_count': 5156, 'withheld_lockbox_event_count': 572, 'withheld_boundary_event_count': 0}\nVERDICT: INCOMPLETE / UNVERIFIED\nJSON: WS/experiments/EXP_0001/verification/reports/research_IS_DIR_RETURN_60_RIDGE.md\n",
       "stderr_tail": ""
     },
     {
@@ -415,7 +415,7 @@
       "stage": "IS",
       "command": [
         "/usr/local/bin/python",
-        "/home/user/dylankazakovas93-dev/engine-verification-/scripts/verify_research.py",
+        "VERIFIER/scripts/verify_research.py",
         "--adapter",
         "WS/experiments/EXP_0001/verification/stage/adapter_SPLINE.py",
         "--source",
@@ -440,7 +440,7 @@
         "WS/experiments/EXP_0001/verification/reports/research_IS_DIR_RETURN_60_SPLINE",
         "--skip-tests"
       ],
-      "stdout_tail": "[UNVERIFIED] contract_provenance (mandatory)\n[PASS      ] data_audit (mandatory)\n[PASS      ] lockbox (mandatory)\n[PASS      ] ml_leakage (mandatory)\n[PASS      ] ml_static_scan (mandatory)\n[UNVERIFIED] repository_health (mandatory)\n[PASS      ] research_causality (mandatory)\n[PASS      ] research_contract (mandatory)\n[UNVERIFIED] static_scan (heuristic)\n[PASS      ] walkforward (mandatory)\nLOCKBOX: {'lockbox_start': '2018-09-13T00:00:00+00:00', 'development_event_count': 5156, 'withheld_lockbox_event_count': 572, 'withheld_boundary_event_count': 0}\nVERDICT: INCOMPLETE / UNVERIFIED\nJSON: WS/experiments/EXP_0001/verification/reports/research_IS_DIR_RETURN_60_SPLINE.json\nMARKDOWN: WS/experiments/EXP_0001/verification/reports/research_IS_DIR_RETURN_60_SPLINE.md\n",
+      "stdout_tail": "[UNVERIFIED] contract_provenance (mandatory)\n[PASS      ] data_audit (mandatory)\n[PASS      ] lockbox (mandatory)\n[PASS      ] ml_leakage (mandatory)\n[PASS      ] ml_static_scan (mandatory)\n[UNVERIFIED] repository_health (mandatory)\n[PASS      ] research_causality (mandatory)\n[PASS      ] research_contract (mandatory)\n[UNVERIFIED] static_scan (heuristic)\n[PASS      ] walkforward (mandatory)\nLOCKBOX: {'lockbox_start': '2018-09-13T00:00:00+00:00', 'development_event_count': 5156, 'withheld_lockbox_event_count': 572, 'withheld_boundary_event_count': 0}\nVERDICT: INCOMPLETE / UNVERIFIED\nJSON: WS/experiments/EXP_0001/verification/reports/research_IS_DIR_RETURN_60_SPLINE.md\n",
       "stderr_tail": ""
     },
     {
@@ -468,7 +468,7 @@
       "stage": "IS",
       "command": [
         "/usr/local/bin/python",
-        "/home/user/dylankazakovas93-dev/engine-verification-/scripts/verify_research.py",
+        "VERIFIER/scripts/verify_research.py",
         "--adapter",
         "WS/experiments/EXP_0001/verification/stage/adapter_XGB.py",
         "--source",
@@ -493,7 +493,7 @@
         "WS/experiments/EXP_0001/verification/reports/research_IS_DIR_RETURN_60_XGB",
         "--skip-tests"
       ],
-      "stdout_tail": "[UNVERIFIED] contract_provenance (mandatory)\n[PASS      ] data_audit (mandatory)\n[PASS      ] lockbox (mandatory)\n[PASS      ] ml_leakage (mandatory)\n[PASS      ] ml_static_scan (mandatory)\n[UNVERIFIED] repository_health (mandatory)\n[PASS      ] research_causality (mandatory)\n[PASS      ] research_contract (mandatory)\n[UNVERIFIED] static_scan (heuristic)\n[PASS      ] walkforward (mandatory)\nLOCKBOX: {'lockbox_start': '2018-09-13T00:00:00+00:00', 'development_event_count': 5156, 'withheld_lockbox_event_count': 572, 'withheld_boundary_event_count': 0}\nVERDICT: INCOMPLETE / UNVERIFIED\nJSON: WS/experiments/EXP_0001/verification/reports/research_IS_DIR_RETURN_60_XGB.json\nMARKDOWN: WS/experiments/EXP_0001/verification/reports/research_IS_DIR_RETURN_60_XGB.md\n",
+      "stdout_tail": "[UNVERIFIED] contract_provenance (mandatory)\n[PASS      ] data_audit (mandatory)\n[PASS      ] lockbox (mandatory)\n[PASS      ] ml_leakage (mandatory)\n[PASS      ] ml_static_scan (mandatory)\n[UNVERIFIED] repository_health (mandatory)\n[PASS      ] research_causality (mandatory)\n[PASS      ] research_contract (mandatory)\n[UNVERIFIED] static_scan (heuristic)\n[PASS      ] walkforward (mandatory)\nLOCKBOX: {'lockbox_start': '2018-09-13T00:00:00+00:00', 'development_event_count': 5156, 'withheld_lockbox_event_count': 572, 'withheld_boundary_event_count': 0}\nVERDICT: INCOMPLETE / UNVERIFIED\nJSON: WS/experiments/EXP_0001/verification/reports/research_IS_DIR_RETURN_60_XGB.md\n",
       "stderr_tail": ""
     },
     {
@@ -521,7 +521,7 @@
       "stage": "IS",
       "command": [
         "/usr/local/bin/python",
-        "/home/user/dylankazakovas93-dev/engine-verification-/scripts/verify_research.py",
+        "VERIFIER/scripts/verify_research.py",
         "--adapter",
         "WS/experiments/EXP_0001/verification/stage/adapter_RIDGE.py",
         "--source",
@@ -546,7 +546,7 @@
         "WS/experiments/EXP_0001/verification/reports/research_IS_DIR_PATH_SKEW_60_RIDGE",
         "--skip-tests"
       ],
-      "stdout_tail": "[UNVERIFIED] contract_provenance (mandatory)\n[PASS      ] data_audit (mandatory)\n[PASS      ] lockbox (mandatory)\n[PASS      ] ml_leakage (mandatory)\n[PASS      ] ml_static_scan (mandatory)\n[UNVERIFIED] repository_health (mandatory)\n[PASS      ] research_causality (mandatory)\n[PASS      ] research_contract (mandatory)\n[UNVERIFIED] static_scan (heuristic)\n[PASS      ] walkforward (mandatory)\nLOCKBOX: {'lockbox_start': '2018-09-13T00:00:00+00:00', 'development_event_count': 5156, 'withheld_lockbox_event_count': 572, 'withheld_boundary_event_count': 0}\nVERDICT: INCOMPLETE / UNVERIFIED\nJSON: WS/experiments/EXP_0001/verification/reports/research_IS_DIR_PATH_SKEW_60_RIDGE.json\nMARKDOWN: WS/experiments/EXP_0001/verification/reports/research_IS_DIR_PATH_SKEW_60_RIDGE.md\n",
+      "stdout_tail": "[UNVERIFIED] contract_provenance (mandatory)\n[PASS      ] data_audit (mandatory)\n[PASS      ] lockbox (mandatory)\n[PASS      ] ml_leakage (mandatory)\n[PASS      ] ml_static_scan (mandatory)\n[UNVERIFIED] repository_health (mandatory)\n[PASS      ] research_causality (mandatory)\n[PASS      ] research_contract (mandatory)\n[UNVERIFIED] static_scan (heuristic)\n[PASS      ] walkforward (mandatory)\nLOCKBOX: {'lockbox_start': '2018-09-13T00:00:00+00:00', 'development_event_count': 5156, 'withheld_lockbox_event_count': 572, 'withheld_boundary_event_count': 0}\nVERDICT: INCOMPLETE / UNVERIFIED\nJSON: WS/experiments/EXP_0001/verification/reports/research_IS_DIR_PATH_SKEW_60_RIDGE.md\n",
       "stderr_tail": ""
     },
     {
@@ -574,7 +574,7 @@
       "stage": "IS",
       "command": [
         "/usr/local/bin/python",
-        "/home/user/dylankazakovas93-dev/engine-verification-/scripts/verify_research.py",
+        "VERIFIER/scripts/verify_research.py",
         "--adapter",
         "WS/experiments/EXP_0001/verification/stage/adapter_SPLINE.py",
         "--source",
@@ -599,7 +599,7 @@
         "WS/experiments/EXP_0001/verification/reports/research_IS_DIR_PATH_SKEW_60_SPLINE",
         "--skip-tests"
       ],
-      "stdout_tail": "[UNVERIFIED] contract_provenance (mandatory)\n[PASS      ] data_audit (mandatory)\n[PASS      ] lockbox (mandatory)\n[PASS      ] ml_leakage (mandatory)\n[PASS      ] ml_static_scan (mandatory)\n[UNVERIFIED] repository_health (mandatory)\n[PASS      ] research_causality (mandatory)\n[PASS      ] research_contract (mandatory)\n[UNVERIFIED] static_scan (heuristic)\n[PASS      ] walkforward (mandatory)\nLOCKBOX: {'lockbox_start': '2018-09-13T00:00:00+00:00', 'development_event_count': 5156, 'withheld_lockbox_event_count': 572, 'withheld_boundary_event_count': 0}\nVERDICT: INCOMPLETE / UNVERIFIED\nJSON: WS/experiments/EXP_0001/verification/reports/research_IS_DIR_PATH_SKEW_60_SPLINE.json\nMARKDOWN: WS/experiments/EXP_0001/verification/reports/research_IS_DIR_PATH_SKEW_60_SPLINE.md\n",
+      "stdout_tail": "[UNVERIFIED] contract_provenance (mandatory)\n[PASS      ] data_audit (mandatory)\n[PASS      ] lockbox (mandatory)\n[PASS      ] ml_leakage (mandatory)\n[PASS      ] ml_static_scan (mandatory)\n[UNVERIFIED] repository_health (mandatory)\n[PASS      ] research_causality (mandatory)\n[PASS      ] research_contract (mandatory)\n[UNVERIFIED] static_scan (heuristic)\n[PASS      ] walkforward (mandatory)\nLOCKBOX: {'lockbox_start': '2018-09-13T00:00:00+00:00', 'development_event_count': 5156, 'withheld_lockbox_event_count': 572, 'withheld_boundary_event_count': 0}\nVERDICT: INCOMPLETE / UNVERIFIED\nJSON: WS/experiments/EXP_0001/verification/reports/research_IS_DIR_PATH_SKEW_60_SPLINE.md\n",
       "stderr_tail": ""
     },
     {
@@ -627,7 +627,7 @@
       "stage": "IS",
       "command": [
         "/usr/local/bin/python",
-        "/home/user/dylankazakovas93-dev/engine-verification-/scripts/verify_research.py",
+        "VERIFIER/scripts/verify_research.py",
         "--adapter",
         "WS/experiments/EXP_0001/verification/stage/adapter_XGB.py",
         "--source",
@@ -652,7 +652,7 @@
         "WS/experiments/EXP_0001/verification/reports/research_IS_DIR_PATH_SKEW_60_XGB",
         "--skip-tests"
       ],
-      "stdout_tail": "[UNVERIFIED] contract_provenance (mandatory)\n[PASS      ] data_audit (mandatory)\n[PASS      ] lockbox (mandatory)\n[PASS      ] ml_leakage (mandatory)\n[PASS      ] ml_static_scan (mandatory)\n[UNVERIFIED] repository_health (mandatory)\n[PASS      ] research_causality (mandatory)\n[PASS      ] research_contract (mandatory)\n[UNVERIFIED] static_scan (heuristic)\n[PASS      ] walkforward (mandatory)\nLOCKBOX: {'lockbox_start': '2018-09-13T00:00:00+00:00', 'development_event_count': 5156, 'withheld_lockbox_event_count': 572, 'withheld_boundary_event_count': 0}\nVERDICT: INCOMPLETE / UNVERIFIED\nJSON: WS/experiments/EXP_0001/verification/reports/research_IS_DIR_PATH_SKEW_60_XGB.json\nMARKDOWN: WS/experiments/EXP_0001/verification/reports/research_IS_DIR_PATH_SKEW_60_XGB.md\n",
+      "stdout_tail": "[UNVERIFIED] contract_provenance (mandatory)\n[PASS      ] data_audit (mandatory)\n[PASS      ] lockbox (mandatory)\n[PASS      ] ml_leakage (mandatory)\n[PASS      ] ml_static_scan (mandatory)\n[UNVERIFIED] repository_health (mandatory)\n[PASS      ] research_causality (mandatory)\n[PASS      ] research_contract (mandatory)\n[UNVERIFIED] static_scan (heuristic)\n[PASS      ] walkforward (mandatory)\nLOCKBOX: {'lockbox_start': '2018-09-13T00:00:00+00:00', 'development_event_count': 5156, 'withheld_lockbox_event_count': 572, 'withheld_boundary_event_count': 0}\nVERDICT: INCOMPLETE / UNVERIFIED\nJSON: WS/experiments/EXP_0001/verification/reports/research_IS_DIR_PATH_SKEW_60_XGB.md\n",
       "stderr_tail": ""
     }
   ]

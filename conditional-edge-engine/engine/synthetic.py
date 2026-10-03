@@ -45,11 +45,12 @@ def make_bars(n_days: int = 260, start: str = "2016-01-04", seed: int = 7, vol: 
 def make_event_tables(*, years=range(2015, 2023), events_per_week: float = 10.0, seed: int = 11,
                       signal: str = "none", slope: float = 0.0, slope_by_year: dict | None = None,
                       tail_threshold: float = 1.9, tail_shift: float = 1.5, drift: float = 0.0,
-                      signal_feature: str = "ER_60", frozen: Frozen | None = None):
+                      signal_feature: str = "ER_60", target_scale: dict | None = None, frozen: Frozen | None = None):
     """Returns (events, features, eligible, targets, calendar_index).
 
     signal: none | linear | nonlinear (U-shape in the feature) | tail (rare extreme shift).
     Every primary target shares the planted relation (path-skew is scaled); noise is independent per target.
+    ``target_scale`` ({target: factor}) overrides the per-target scaling of the planted relation (default scale 1.0, path-skew 0.8).
     """
     frozen = frozen or load_frozen()
     rng = np.random.default_rng(seed)
@@ -85,7 +86,7 @@ def make_event_tables(*, years=range(2015, 2023), events_per_week: float = 10.0,
     direction = np.ones(n, dtype=int)                 # v1: single-direction experiments only
     events = pd.DataFrame({"event_id": [f"S{i:06d}" for i in range(n)], "event_time": t, "direction": direction})
     targets = {}
-    scale = {"DIR_RETURN_15": 1.0, "DIR_RETURN_30": 1.0, "DIR_RETURN_60": 1.0, "DIR_PATH_SKEW_60": 0.8}
+    scale = {"DIR_RETURN_15": 1.0, "DIR_RETURN_30": 1.0, "DIR_RETURN_60": 1.0, "DIR_PATH_SKEW_60": 0.8, **(target_scale or {})}
     for name in primary_target_names(frozen):
         y = drift + scale[name] * core + rng.normal(size=n)
         targets[name] = pd.DataFrame({

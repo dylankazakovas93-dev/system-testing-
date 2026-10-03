@@ -8,7 +8,7 @@ The model-eligible development events are cut (by event count, using timestamps 
 
 Inside each fold the nested calibration of score_calibration.py still applies (chronological inner OOF -> train-only
 median). A fold below any frozen minimum is SKIPPED / INSUFFICIENT_DATA (thresholds are never lowered). These folds are
-internal cross-validation; they are NEVER called OOS.
+internal cross-validation; they are NEVER called SELECTION HOLDOUT.
 """
 from __future__ import annotations
 

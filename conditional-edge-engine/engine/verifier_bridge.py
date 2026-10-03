@@ -8,8 +8,8 @@ The research engine is untrusted. After an experiment is frozen this module
      mode - with the correct --bar-interval --target --target-horizon --lockbox-start --mode flags;
   4. reports research-family status SEPARATELY from the global verdict. Exit code 2 is never a pass;
   5. refuses any verifier checkout that is not the commit pinned in frozen/v1/VERIFIER_PIN.yaml;
-  6. never hands the verifier OOS/lockbox rows: the data it receives is cut to the stage's partition (IS: rows before
-     development_end; OOS-stage: rows before oos_end). The verifier's lockbox audit needs rows to withhold, so the last
+  6. never hands the verifier SELECTION HOLDOUT/lockbox rows: the data it receives is cut to the stage's partition (IS: rows before
+     development_end; SELECTION HOLDOUT-stage: rows before selection_holdout_end). The verifier's lockbox audit needs rows to withhold, so the last
      ``stage_holdout_fraction`` of the staged span (frozen in VERIFIER_PIN.yaml) is passed as --lockbox-start.
 """
 from __future__ import annotations
@@ -105,7 +105,7 @@ def stage_holdout_start(first_bar, cutoff, pin: dict | None = None) -> str:
 
     The verifier never receives rows at/after the stage partition, yet its lockbox audit is UNVERIFIED when it has no events to
     withhold. A frozen holdout inside the staged span (the last ``stage_holdout_fraction``, >= ``stage_holdout_min_days``) solves
-    that without handing it any OOS/lockbox row. Deterministic: depends only on the first staged bar and the partition date."""
+    that without handing it any SELECTION HOLDOUT/lockbox row. Deterministic: depends only on the first staged bar and the partition date."""
     import pandas as pd
     pin = pin or verifier_pin()
     first = pd.Timestamp(first_bar).tz_convert("UTC").normalize()
@@ -226,7 +226,7 @@ def overall_label(results: list[dict]) -> str:
 
 def promotion_capable_targets(frozen) -> list[str]:
     """Every primary target takes part in the 24 selection trials, so every one of them can reach IS_SHORTLIST_ELIGIBLE,
-    AWAITING_HUMAN_OOS_APPROVAL and OOS_CONFIRMED (4 primary targets x 3 models = 12 strong-mode paths). Which targets happen to be
+    AWAITING_HUMAN_FINAL_CONFIG_SELECTION and SELECTION_HOLDOUT_SPENT (4 primary targets x 3 models = 12 strong-mode paths). Which targets happen to be
     rejected at IS time is NOT used to skip verification: a retroactive or later change must never find an unverified path."""
     return list(primary_target_names(frozen))
 
@@ -248,14 +248,14 @@ def run_verification(ws: reg.Workspace, experiment_id: str, verifier_repo: str |
     exp = reg.experiment_row(ws, experiment_id)
     if exp["status"] == "DRAFT":
         raise EngineError(f"{experiment_id} must be frozen before verification")
-    if stage_name not in ("IS", "OOS"):
-        raise EngineError("stage must be IS or OOS")
+    if stage_name not in ("IS", "SELECTION HOLDOUT"):
+        raise EngineError("stage must be IS or SELECTION HOLDOUT")
     d = experiment_dir(ws, experiment_id)
     spec = load_spec(d / "EVENT_SPEC.yaml")
     parts = parse_partitions(spec["partitions"])
-    cutoff = parts.development_end if stage_name == "IS" else parts.oos_end
-    if stage_name == "OOS" and not reg.oos_spent(ws, experiment_id):
-        raise EngineError("OOS-stage verification is only available after the human-approved OOS has been spent")
+    cutoff = parts.development_end if stage_name == "IS" else parts.selection_holdout_end
+    if stage_name == "SELECTION HOLDOUT" and not reg.selection_holdout_spent(ws, experiment_id):
+        raise EngineError("SELECTION HOLDOUT-stage verification is only available after the human-approved SELECTION HOLDOUT has been spent")
     models = models or model_names(frozen)
     all_targets = promotion_capable_targets(frozen)
     targets = targets or all_targets
@@ -308,7 +308,7 @@ def run_verification(ws: reg.Workspace, experiment_id: str, verifier_repo: str |
         paths = {f"{r['target']}|{r['model']}": {"label": r["label"], "mode": r["mode"], "research_families": r["research_families"],
                                                   "research_results_valid": r["research_results_valid"]} for r in results}
         reg.set_verification(ws, experiment_id, paths, summary["overall"], frozen)
-        if reg.is_revealed(exp) and not reg.oos_spent(ws, experiment_id) and (d / "results" / "results.json").exists():
+        if reg.is_revealed(exp) and not reg.selection_holdout_spent(ws, experiment_id) and (d / "results" / "results.json").exists():
             from engine import is_report
             is_report.write_is_report(ws, experiment_id)             # the IS report now shows the verification state
     return summary

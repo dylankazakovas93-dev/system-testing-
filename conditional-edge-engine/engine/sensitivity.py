@@ -8,7 +8,7 @@ replace the base parameter: they can only CONFIRM or VETO. A probe that performs
 Probe rules (mirroring the 2-of-3 model agreement, written in ACCEPTANCE_RULES.yaml):
   * a probe REVERSES the uplift sign if fewer than 2 of the 3 models have positive uplift in the
     candidate state;
-  * a probe fails FREQUENCY if fewer than 2 of the 3 models keep selected OOS frequency >= 1.0/week.
+  * a probe fails FREQUENCY if fewer than 2 of the 3 models keep selected SELECTION HOLDOUT frequency >= 1.0/week.
 A candidate FAILS if more than one probe reverses the sign or any probe fails frequency.
 """
 from __future__ import annotations

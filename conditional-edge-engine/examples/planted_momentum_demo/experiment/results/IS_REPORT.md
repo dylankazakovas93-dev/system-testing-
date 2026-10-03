@@ -6,9 +6,9 @@
 
 **Number of statistical selection opportunities exposed so far: 24** (campaign C001; this experiment carries selection opportunity numbers 1–24; cumulative count when it was revealed: 24).
 
-**OOS status = NOT ACCESSED**
+**SELECTION HOLDOUT status = NOT ACCESSED**
 
-* IS status (retroactive, as of campaign universe 24): **IS_SHORTLIST_ELIGIBLE**; lifecycle status: **AWAITING_HUMAN_OOS_APPROVAL**
+* IS status (retroactive, as of campaign universe 24): **IS_SHORTLIST_ELIGIBLE**; lifecycle status: **AWAITING_HUMAN_FINAL_CONFIG_SELECTION**
 * external verification: **RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE** (a model path counts toward 2-of-3 only if verified in strong mode)
 * The campaign-adjusted values below are RETROACTIVE: later experiments in the campaign enlarge the multiplicity universe and may remove eligibility.
 
@@ -22,7 +22,7 @@ Planted AR(1) momentum makes recent path informative.
 * base parameters: `{"every_n_bars": 45, "direction_period": 1, "direction": 1}`; sensitivity parameters: ['every_n_bars']
 * eligible session (exchange-local): {'start': '09:31', 'end': '15:00'}; deduplication: keep_first_per_event_time; cooldown: {'bars': 0}
 * information time: completion time of the n-th bar
-* event.py sha256 `47e3f563c012e50b1a7f8a30d8bf81e106793a1d594ffd5bb2d922660ad10585`; EVENT_SPEC sha256 `9b17cc874e0a2d4b7c58b552bf3df5b87a5978ec80ba401beb10e063a0de22eb`
+* event.py sha256 `47e3f563c012e50b1a7f8a30d8bf81e106793a1d594ffd5bb2d922660ad10585`; EVENT_SPEC sha256 `7bf96905a5ea2dc0858450aaeca0a92da9c1bf43bde56ffecf5e1fa6de774d55`
 
 ## C. Direction
 
@@ -41,8 +41,8 @@ All events: **+1** (long only). v1 allows one direction per experiment.
 
 ## E. Data period used
 
-* DEVELOPMENT only: bars 2016-01-04 14:30:00+00:00 … 2018-12-31 20:59:00+00:00 (304,590 bars). Partitions (frozen in the manifest): {'development_end': '2019-01-01', 'lockbox_start': '2019-10-01', 'oos_end': '2019-07-01'}
-* OOS and lockbox rows removed before research code was called: 0
+* DEVELOPMENT only: bars 2016-01-04 14:30:00+00:00 … 2018-12-31 20:59:00+00:00 (304,590 bars). Partitions (frozen in the manifest): {'development_end': '2019-01-01', 'lockbox_start': '2020-01-01', 'selection_holdout_end': '2020-01-01'}
+* SELECTION HOLDOUT and lockbox rows removed before research code was called: 0
 * training history: 2016-01-04..2016-07-05(exclusive; first fold's training = history before validation); DEVELOPMENT_CV validation: 2016-07-05..2018-12-31 DEVELOPMENT_CV folds [1, 2, 3, 4, 5]
 
 ## F. Exact selection trial count
@@ -51,7 +51,7 @@ All events: **+1** (long only). v1 allows one direction per experiment.
 
 ## G. All 24 trial results (M–Q: frequency, retention, parent/selected effect, uplift, CI)
 
-All statistics are on pooled DEVELOPMENT_CV validation predictions (5 purged chronological folds). Nothing here is OOS.
+All statistics are on pooled DEVELOPMENT_CV validation predictions (5 purged chronological folds). Nothing here is SELECTION HOLDOUT.
 
 | trial | opp # | target | model | state | N sel | parent f/wk | sel f/wk | retention | parent effect | selected effect | uplift | std uplift | 95% block-boot CI (uplift) | raw p | exp q | exp Bonf p | camp q | camp Bonf p | pos-eff yrs | pos-uplift yrs | pos-eff folds | pos-uplift folds | decision |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -108,7 +108,7 @@ Eligibility is the full hard IS gate set; ranking = standardized uplift DESC, ca
 | EXP_0001_T23 | 23 | DIR_PATH_SKEW_60 | XGB | UPPER_HALF | 2498 | 36.39 | 19.07 | 0.52 | +0.00012 | +0.00206 | +0.00193 | +0.120 | [+0.00148, +0.00236] | 0.0005 | 0.0005 | 0.0120 | 0.0005 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
 | EXP_0001_T22 | 22 | DIR_PATH_SKEW_60 | SPLINE | LOWER_HALF | 2473 | 36.39 | 18.88 | 0.52 | -0.00012 | +0.00176 | +0.00188 | +0.116 | [+0.00142, +0.00234] | 0.0005 | 0.0005 | 0.0120 | 0.0005 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
 
-### TOP 5 IS GROUPS (the human may unlock at most 2 for OOS; each approved group runs all 3 models)
+### TOP 5 IS GROUPS (deterministic IS ranking; a human may choose one directly, or approve at most the top 2 of a near-tie cluster for the SELECTION HOLDOUT)
 
 | rank | group (TARGET|SIDE) | models eligible | median std uplift | median campaign Bonf p | median sel f/wk |
 |---|---|---|---|---|---|
@@ -325,7 +325,7 @@ Eligibility is the full hard IS gate set; ranking = standardized uplift DESC, ca
 | 2017 | yes | 1907 | 864 | 16.62 | -0.00037 | +0.00234 | +0.00271 |
 | 2018 | yes | 1914 | 781 | 14.74 | +0.00018 | +0.00326 | +0.00308 |
 
-## L. All 5 purged DEVELOPMENT_CV folds (internal cross-validation — NOT OOS)
+## L. All 5 purged DEVELOPMENT_CV folds (internal cross-validation — NOT SELECTION HOLDOUT)
 
 **DIR_RETURN_15|RIDGE** fold records: fold 1: OK (train 951, validation 953); fold 2: OK (train 1904, validation 954); fold 3: OK (train 2858, validation 953); fold 4: OK (train 3811, validation 953); fold 5: OK (train 4764, validation 954)
 
@@ -1088,6 +1088,26 @@ How this configuration emerged
 | EXP_0001_T22 | DIR_PATH_SKEW_60/SPLINE/LOWER_HALF | IS_SHORTLIST_ELIGIBLE | - |
 | EXP_0001_T24 | DIR_PATH_SKEW_60/XGB/LOWER_HALF | REJECTED_INSTABILITY | [REJECTED_INSTABILITY] positive selected-effect years 2/3 < 70% |
 
+## NT. CONFIGURATION UNCERTAINTY / NEAR-TIES
+
+Frozen rule (frozen/v1/SELECTION_PROCESS.yaml, not tuned): two IS-shortlist-eligible TARGET x SIDE groups of this experiment on the SAME side are a NEAR-TIE iff |difference of median standardized uplift| <= 0.03 AND the 95% paired weekly-block bootstrap CI (2000 repetitions, seed 1729) of the difference contains 0. Near-tie edges form connected clusters ranked by the existing frozen IS group ranking; only the top 2 of a cluster may be proposed for the selection holdout. This is a diagnostic: it creates no selection trial and never promotes a rejected configuration. The engine does not choose a configuration for you.
+
+### NEAR-TIE CLUSTER 01  (`NEAR_TIE_CLUSTER_01`, side UPPER_HALF)
+
+| config ID | target | side | freq/wk | median std uplift | median selected effect | campaign BH q | campaign Bonf p | positive years | positive folds | IS rank | proposable |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| EXP_0001|DIR_RETURN_30|UPPER_HALF | DIR_RETURN_30 | UPPER_HALF | 17.23 | +0.142 | +0.001446 | 0.0004998 | 0.01199 | 3/3 3/3 3/3 | 5/5 5/5 5/5 | 3 | yes |
+| EXP_0001|DIR_PATH_SKEW_60|UPPER_HALF | DIR_PATH_SKEW_60 | UPPER_HALF | 17.51 | +0.125 | +0.002153 | 0.0004998 | 0.01199 | 3/3 3/3 3/3 | 5/5 5/5 5/5 | 5 | yes |
+
+A: DIR_RETURN_30 × UPPER_HALF — std uplift = 0.142, frequency = 17.2/week
+B: DIR_PATH_SKEW_60 × UPPER_HALF — std uplift = 0.125, frequency = 17.5/week
+
+| pair | median std uplift difference | median selected-effect difference | 95% paired weekly-block CI | reason classified as near-tie |
+|---|---|---|---|---|
+| EXP_0001|DIR_RETURN_30|UPPER_HALF vs EXP_0001|DIR_PATH_SKEW_60|UPPER_HALF | +0.0163 | -0.000707 | [-0.0087, +0.0380] | |difference| 0.0163 <= 0.03 and the 95% paired weekly-block CI [-0.0087, +0.0380] contains 0 |
+
+**Conclusion: IS evidence does not clearly distinguish these configurations.** The engine does not choose one automatically. Human options: (A) choose one configuration directly and skip the selection holdout; (B) approve at most the top 2 (`EXP_0001|DIR_RETURN_30|UPPER_HALF, EXP_0001|DIR_PATH_SKEW_60|UPPER_HALF`) for the selection holdout; (C) decline the experiment.
+
 ## W. Non-promotable interesting observations (registry/observations.csv)
 
 **DIAGNOSTIC ONLY — NOT A SELECTION TRIAL.** Anything here can only inspire a NEW registered experiment (which adds 24 selection trials to the campaign universe).
@@ -1162,11 +1182,11 @@ Sections F–L and U–V above are the **PROMOTION EVIDENCE** (the 24 selection 
 
 > These statistics were viewed post-event-definition as diagnostics. They are not eligible to create or promote a candidate in this experiment. Any trading rule, threshold, bracket, horizon, percentile, or filter inspired by these diagnostics requires a NEW registered experiment or a separate monetisation study.
 
-**PATH DIAGNOSTICS ARE NON-PROMOTABLE: they never change candidate status, trial rank, group rank, the top-5 IS list, campaign BH/Bonferroni, human-approval eligibility or OOS group ordering.**
+**PATH DIAGNOSTICS ARE NON-PROMOTABLE: they never change candidate status, trial rank, group rank, the top-5 IS list, campaign BH/Bonferroni, human-approval eligibility or SELECTION HOLDOUT group ordering.**
 
 **Human interpretation rule.** A human may approve, decline, or approve fewer than the eligible maximum from the deterministic eligible list. A human may NOT use a visually attractive path or bracket diagnostic to substitute a non-eligible or lower-ranked configuration that the engine did not place in the approval-eligible set. If diagnostics inspire a different rule, bracket, horizon, threshold or filter, a NEW experiment or a SEPARATE MONETISATION STUDY is required; there is no current-experiment promotion.
 
-Horizons [5, 15, 30, 60, 120] bars; tick size 0.25 points (instrument config); sigma_ref = RV_60 / sqrt(60) (sigma_ref = RV_60 / sqrt(60), where RV_60 = sqrt(sum_{i=1..60} r_i^2) over the 60 one-minute log returns ending at the last bar completed by event_time (the frozen feature-engine RV_60); sigma_ref is the corresponding one-bar RMS log-return scale); percentiles: linear_interpolation. Events: 5,718 model-eligible of 5,728; PATH_TIMESTAMP_INELIGIBLE per horizon: {'120': 1040, '15': 0, '30': 0, '5': 0, '60': 0}. Contexts: ALL events and UPPER/LOWER_HALF of every target × model (DEVELOPMENT_CV pooled validation events; identical event sets are grouped). Full detail: `results/PATH_DIAGNOSTICS.json`. No OOS or lockbox row entered any number below.
+Horizons [5, 15, 30, 60, 120] bars; tick size 0.25 points (instrument config); sigma_ref = RV_60 / sqrt(60) (sigma_ref = RV_60 / sqrt(60), where RV_60 = sqrt(sum_{i=1..60} r_i^2) over the 60 one-minute log returns ending at the last bar completed by event_time (the frozen feature-engine RV_60); sigma_ref is the corresponding one-bar RMS log-return scale); percentiles: linear_interpolation. Events: 5,718 model-eligible of 5,728; PATH_TIMESTAMP_INELIGIBLE per horizon: {'120': 1040, '15': 0, '30': 0, '5': 0, '60': 0}. Contexts: ALL events and UPPER/LOWER_HALF of every target × model (DEVELOPMENT_CV pooled validation events; identical event sets are grouped). Full detail: `results/PATH_DIAGNOSTICS.json`. No SELECTION HOLDOUT or lockbox row entered any number below.
 
 ### Z.1 Endpoint returns (ALL events; directional log return)
 
@@ -1491,24 +1511,25 @@ _no filter_ladder declared_
 
 | item | sha256 |
 |---|---|
-| manifest_sha256 | 337046e5e067eb800a71d2741e6da0a58654b9e78d4c1945dc49edd2e0d6f5c7 |
-| manifest_hash | 9d3c9129cba40603b8548efb35520c22fc7caac53fe2c9ef178bbabdf30d5cfc |
-| event_hash | dd3dc43384677409442cf430c5708bf8e5f0fafe10f4b6665c2cdd5d0e61e2e4 |
+| manifest_sha256 | fe43e2a094205342ea7cb53da6e8c63ce7f1ac62c418cb2921bfb015bfcf2e4c |
+| manifest_hash | 2446fb431d641fd54318310b3a642c0b24c2a743e4bc4db692b6fdf68df57bfc |
+| event_hash | 33075c486274c70b10d1ed5b04172844c3d6c631d92aec62a9fd87eaac5fc0c9 |
 | event_py | 47e3f563c012e50b1a7f8a30d8bf81e106793a1d594ffd5bb2d922660ad10585 |
-| event_spec | 9b17cc874e0a2d4b7c58b552bf3df5b87a5978ec80ba401beb10e063a0de22eb |
-| partitions_hash | 8e35ba8724b68cc65dde56ecb0259a4e687efe4410d7ae4449d58d79e2abf4fd |
-| frozen_bundle_hash | 5b21a32341919b1c5f75a2afbb6da87e5a60f335c064fdea6fcb377116d162b0 |
-| engine_code_hash | b090f4dbb655e71a173bd25452d39e7fde06e1363893bb2e3c9feccf26ebea04 |
-| engine_version | v1.1.1 |
-| trial_ledger_hash | 6270253d32c835672c0d46b5b5040ad915ed2c15ab92d556b8ae4d396b6237d7 |
+| event_spec | 7bf96905a5ea2dc0858450aaeca0a92da9c1bf43bde56ffecf5e1fa6de774d55 |
+| partitions_hash | 057e193f2d09a4751b8983471186cc6a4b3c1831ffbd0cfbd6f814c0c190235e |
+| frozen_bundle_hash | 3231a012098534c9a93a5cb33736281e140b424831866e6bb872fbf47224f5f9 |
+| engine_code_hash | 5616e5ae123194e5dd009e4c83202adb8aec4a2f2df07fe2894bbac6f2c71b23 |
+| engine_version | v1.2.0 |
+| trial_ledger_hash | 1f1fbb616ec8e9426e1177e1c9e803208703edaae78e96f9ea89b17911208909 |
 | is_data_fingerprint | 99deba244cd2790651042661941d558e73e3f0c42b3f508c0acf26dee9be2371 |
-| results_sha256 | 32b0dab716c651b1cdf809e0c14ef0955ce7bd14907a849cb7f5feca1ea389d5 |
-| path_diagnostics_sha256 | 522420626a819ccebc2ff4033b9526ca31b6e8a1b75c5783971b749ee49938e0 |
+| results_sha256 | a9e99e7d8afaa8c9c1f92ef923c1f2c2c31e0005a19775b95304de3c585738ab |
+| path_diagnostics_sha256 | 6a071b13673aeb0589f9a75995effcb2565de9dfc8972cf8cd4b3394fd88ea2f |
 | verifier_pin | 624c8b7f0502abf6c5d453d501e96e3172367035 |
 
-## Y. OOS status
+## Y. SELECTION HOLDOUT status
 
-**OOS status = NOT ACCESSED**
+**SELECTION HOLDOUT status = NOT ACCESSED**
 
-The campaign-level OOS requires manual human approval files (per experiment, then the campaign-open approval after `freeze_campaign_oos.py`). Compute the hashes to reference with `python scripts/show_approval_hashes.py --experiment EXP_0001`. The LLM / scripts never create `approvals/EXP_0001_OOS_APPROVAL.yaml`; at most 2 TARGET|SIDE groups from the top-5 list may be approved and every approved group runs all three frozen models.
+* Selection holdout available: **YES**; recommended: **YES** — IS evidence does not clearly distinguish the configurations of the listed near-tie cluster(s); the holdout may compare at most the top 2 of one cluster. The human may instead choose one config directly or decline.
+The engine stops here. The human may (A) choose ONE eligible configuration directly (`approvals/<EXP>_FINAL_CONFIG_SELECTION.yaml`, selection holdout skipped), (B) if a near-tie cluster exists, approve its top 2 configurations for the campaign SELECTION HOLDOUT (`approvals/<EXP>_SELECTION_HOLDOUT_APPROVAL.yaml`, then the campaign-open approval after `freeze_campaign_selection_holdout.py`), or (C) decline. The SELECTION HOLDOUT is selection data, NOT final confirmation. Hashes to cite: `python scripts/show_approval_hashes.py --experiment EXP_0001`. The LLM / scripts never create any file in `approvals/`; at most 2 configurations per experiment and 6 per campaign, each running all three frozen models.
 

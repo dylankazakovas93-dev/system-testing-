@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from engine import experiment_runner, oos_stage, partitions, trial_registry as reg
+from engine import experiment_runner, selection_holdout_stage, partitions, trial_registry as reg
 from engine.acceptance import classify_trial, decide_experiment
 from engine.common import CODE_ROOT, frozen_files, load_frozen
 from engine.feature_engine import feature_names
@@ -49,7 +49,7 @@ def test_frozen_targets_models_policy_acceptance_values():
     cv = p["development_cv"]
     assert (cv["K"], cv["min_outer_train_events"], cv["inner_blocks"], cv["min_inner_train_events"], cv["min_inner_oof_events"]) == (5, 300, 5, 50, 30)
     assert cv["label"] == "DEVELOPMENT_CV" and "walkforward" not in p
-    assert p["oos"]["max_groups_per_experiment"] == 2 and p["oos"]["max_groups_per_campaign"] == 6 and p["oos"]["models_per_group"] == 3 and p["oos"]["one_shot"] is True
+    assert p["selection_holdout"]["max_groups_per_experiment"] == 2 and p["selection_holdout"]["max_groups_per_campaign"] == 6 and p["selection_holdout"]["models_per_group"] == 3 and p["selection_holdout"]["one_shot"] is True
     assert (p["cpcv"]["n_groups"], p["cpcv"]["n_test_groups"], p["cpcv"]["n_splits"]) == (6, 2, 15) and 15 == len(list(__import__("itertools").combinations(range(6), 2)))
     assert p["single_direction_events_only"] is True and p["shortlist"]["top_groups_reported"] == 5
     a = F.acceptance
@@ -60,7 +60,7 @@ def test_frozen_targets_models_policy_acceptance_values():
                                      "min_positive_uplift_year_fraction": 0.70, "concentration_warning_share": 0.35}
     assert a["fold_consistency"] == {"required_folds": 5, "min_folds_positive_uplift": 4, "min_folds_positive_effect": 4}
     assert a["model_agreement"]["min_models_passing"] == 2
-    assert a["oos_confirmation"]["min_models_passing"] == 2 and a["oos_confirmation"]["max_oos_bonferroni_p"] == 0.05
+    assert a["selection_holdout_evidence"]["min_models_passing"] == 2 and a["selection_holdout_evidence"]["max_selection_holdout_bonferroni_p"] == 0.05
     assert (a["cpcv"]["n_splits"], a["cpcv"]["min_splits_positive_effect"], a["cpcv"]["min_splits_positive_uplift"]) == (15, 12, 12)
     assert a["verification"]["required_mode"] == "strong"
     assert 4 * 3 * 2 == 24 == len(reg.trial_specs(F))
@@ -70,16 +70,18 @@ def test_required_repository_files_exist():
     need = ["README.md", "RESEARCH_RULES.md", "ENGINE_VERSION", "frozen/v1/FEATURE_BANK.yaml", "frozen/v1/TARGET_BANK.yaml",
             "frozen/v1/MODEL_BANK.yaml", "frozen/v1/TRIAL_POLICY.yaml", "frozen/v1/ACCEPTANCE_RULES.yaml",
             "frozen/v1/instruments/NQ_1m.yaml", "experiments/.gitkeep", "registry/experiments.csv",
-            "registry/selection_trials.csv", "registry/observations.csv", "registry/oos_access.csv", "AGENTS.md",
-            "approvals/README.md", "templates/approval/OOS_APPROVAL.template.yaml", "frozen/v1/VERIFIER_PIN.yaml", "docs/CPCV_PBO.md", "templates/experiment/HYPOTHESIS.md",
+            "registry/selection_trials.csv", "registry/observations.csv", "registry/selection_holdout_access.csv", "registry/final_configs.csv", "AGENTS.md",
+            "frozen/v1/SELECTION_PROCESS.yaml", "templates/approval/FINAL_CONFIG_SELECTION.template.yaml", "templates/approval/CAMPAIGN_SELECTION_HOLDOUT_OPEN_APPROVAL.template.yaml",
+            "scripts/finalize_final_config.py", "scripts/run_cpcv.py", "scripts/freeze_campaign_selection_holdout.py", "scripts/run_campaign_selection_holdout.py",
+            "approvals/README.md", "templates/approval/SELECTION_HOLDOUT_APPROVAL.template.yaml", "frozen/v1/VERIFIER_PIN.yaml", "docs/CPCV_PBO.md", "templates/experiment/HYPOTHESIS.md",
             "templates/experiment/EVENT_SPEC.yaml", "templates/experiment/event.py", "templates/experiment/reference.pine"]
     for e in ["feature_engine", "target_engine", "model_engine", "walkforward", "score_calibration", "statistics",
-              "multiplicity", "sensitivity", "trial_registry", "experiment_runner", "is_report", "partitions", "oos_stage",
-              "cpcv", "ladder", "acceptance"]:
+              "multiplicity", "sensitivity", "trial_registry", "experiment_runner", "is_report", "partitions", "selection_holdout_stage",
+              "cpcv", "ladder", "acceptance", "near_tie", "holdout_preference", "holdout_path"]:
         need.append(f"engine/{e}.py")
     for f in ["returns", "volatility", "kaufman_er", "brownian", "hurst", "candles", "range", "volume", "session"]:
         need.append(f"features/{f}.py")
-    for s in ["new_experiment", "freeze_experiment", "run_experiment", "verify_experiment", "campaign_status", "freeze_campaign_oos", "run_campaign_oos",
+    for s in ["new_experiment", "freeze_experiment", "run_experiment", "verify_experiment", "campaign_status", "freeze_campaign_selection_holdout", "run_campaign_selection_holdout",
               "run_cpcv", "make_report", "show_approval_hashes", "log_observation", "confirm_lockbox"]:
         need.append(f"scripts/{s}.py")
     missing = [n for n in need if not (CODE_ROOT / n).exists()]
@@ -140,12 +142,12 @@ def test_no_lockbox_evaluation_path():
 
 
 def test_final_lockbox_is_inaccessible_to_every_code_path():
-    """oos_view (the widest view any stage gets) never contains a lockbox row; there is no lockbox view at all."""
+    """selection_holdout_view (the widest view any stage gets) never contains a lockbox row; there is no lockbox view at all."""
     import pandas as pd
     idx = pd.date_range("2019-12-30", "2021-02-03", freq="1D", tz="UTC")
     bars = pd.DataFrame({"open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0, "volume": 1.0}, index=idx)
-    p = partitions.parse_partitions({"development_end": "2020-06-01", "oos_end": "2020-12-01", "lockbox_start": "2020-12-15"})
-    assert not (partitions.oos_view(bars, p).index >= p.oos_end).any()
+    p = partitions.parse_partitions({"development_end": "2019-01-01", "selection_holdout_end": "2020-01-01", "lockbox_start": "2020-01-01"})
+    assert not (partitions.selection_holdout_view(bars, p).index >= p.selection_holdout_end).any()
     assert not (partitions.development_view(bars, p).index >= p.development_end).any()
     assert "lockbox_view" not in dir(partitions) and not [n for n in dir(partitions) if "lockbox" in n.lower() and callable(getattr(partitions, n))]
     assert "not implemented" in (CODE_ROOT / "scripts/confirm_lockbox.py").read_text()
@@ -163,17 +165,17 @@ def test_scripts_and_engine_never_write_approval_files():
                     if name in ("write_text", "write_bytes", "open", "safe_dump", "dump", "copy", "copy2", "copyfile", "move"):
                         seg = ast.get_source_segment(src, node) or ""
                         assert "approval" not in seg.lower(), (pth.name, seg[:120])
-    src = (CODE_ROOT / "engine/oos_stage.py").read_text()
+    src = (CODE_ROOT / "engine/selection_holdout_stage.py").read_text()
     assert "approval_path(ws, experiment_id).write" not in src and "def write_approval" not in src and "def create_approval" not in src
 
 
-def test_campaign_oos_requires_human_approvals_before_any_data_is_read():
-    src = (CODE_ROOT / "scripts/run_campaign_oos.py").read_text()
+def test_campaign_selection_holdout_requires_human_approvals_before_any_data_is_read():
+    src = (CODE_ROOT / "scripts/run_campaign_selection_holdout.py").read_text()
     assert src.index("validate_campaign_open") < src.index("load_bars_before")
     import inspect
-    assert inspect.signature(oos_stage.run_campaign_oos).parameters.keys() == {"ws", "campaign_id", "bars", "verbose"}     # no skip-approval flag
-    assert not (CODE_ROOT / "scripts/run_oos.py").exists() and not hasattr(oos_stage, "run_oos")                           # no per-experiment OOS opening
-    assert not hasattr(oos_stage, "execute_oos")
+    assert inspect.signature(selection_holdout_stage.run_campaign_selection_holdout).parameters.keys() == {"ws", "campaign_id", "bars", "verbose"}     # no skip-approval flag
+    assert not (CODE_ROOT / "scripts/run_selection_holdout.py").exists() and not hasattr(selection_holdout_stage, "run_selection_holdout")                           # no per-experiment SELECTION HOLDOUT opening
+    assert not hasattr(selection_holdout_stage, "execute_selection_holdout")
 
 
 def test_seeds_are_fixed_everywhere_no_unseeded_randomness():
@@ -186,7 +188,7 @@ def test_seeds_are_fixed_everywhere_no_unseeded_randomness():
 
 
 def test_frozen_v1_release_version_and_verifier_pin_are_exact():
-    assert (CODE_ROOT / "ENGINE_VERSION").read_text().strip() == "v1.1.1"
+    assert (CODE_ROOT / "ENGINE_VERSION").read_text().strip() == "v1.2.0"
     pin = F.__class__ and __import__("engine.verifier_bridge", fromlist=["x"]).verifier_pin()
     assert pin["commit"] == "624c8b7f0502abf6c5d453d501e96e3172367035" and pin["required_mode"] == "strong"
     assert pin["required_models"] == ["RIDGE", "SPLINE", "XGB"]

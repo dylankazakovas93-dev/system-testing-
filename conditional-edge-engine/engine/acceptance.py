@@ -178,7 +178,7 @@ def is_status_of(decisions) -> str:
 
 
 def lifecycle_from_is_status(is_status: str) -> str:
-    return {SHORTLIST: "AWAITING_HUMAN_OOS_APPROVAL", PROVISIONAL: "IS_PROVISIONAL_CANDIDATE",
+    return {SHORTLIST: "AWAITING_HUMAN_FINAL_CONFIG_SELECTION", PROVISIONAL: "IS_PROVISIONAL_CANDIDATE",
             NO_CANDIDATE: "IS_REJECTED"}[is_status]
 
 

@@ -1,4 +1,4 @@
-"""Inference on pooled DEVELOPMENT_CV validation predictions (or, in the one-shot OOS stage, OOS events), clustered by trading week.
+"""Inference on pooled DEVELOPMENT_CV validation predictions (or, in the one-shot SELECTION HOLDOUT stage, SELECTION HOLDOUT events), clustered by trading week.
 
 * weekly-block bootstrap: trading weeks are resampled with replacement (2000 reps, seed 1729);
 * blocked permutation: COMPLETE trading-week outcome blocks are permuted relative to the frozen

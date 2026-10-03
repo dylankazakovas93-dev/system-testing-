@@ -79,6 +79,7 @@ class Frozen:
     acceptance: dict
     instrument: dict
     path_diagnostics: dict = field(default_factory=dict)
+    selection_process: dict = field(default_factory=dict)
 
     @property
     def interval(self) -> pd.Timedelta:
@@ -114,6 +115,7 @@ def load_frozen(version: str = FROZEN_VERSION, instrument: str = "NQ_1m") -> Fro
         acceptance=load_yaml(d / "ACCEPTANCE_RULES.yaml"),
         instrument=load_yaml(d / "instruments" / f"{instrument}.yaml"),
         path_diagnostics=load_yaml(d / "PATH_DIAGNOSTICS.yaml"),
+        selection_process=load_yaml(d / "SELECTION_PROCESS.yaml"),
     )
 
 

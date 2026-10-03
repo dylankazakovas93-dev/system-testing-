@@ -35,24 +35,24 @@ def create_experiment(ws: reg.Workspace, campaign_id: str | None = None, *, new_
                       partitions: dict | None = None, lineage_parent: str = "") -> str:
     """Register a new experiment (consumes one slot of the campaign) and copy the template.
 
-    A NEW campaign needs explicit ``partitions`` = {development_end, oos_end, lockbox_start}; nothing infers or moves them.
+    A NEW campaign needs explicit ``partitions`` = {development_end, selection_holdout_end, lockbox_start}; nothing infers or moves them.
     """
     frozen = load_frozen()
     if new_campaign:
         if not partitions:
-            raise EngineError("a new campaign needs explicit partitions: --development-end, --oos-end, --lockbox-start "
-                              "(DEVELOPMENT / CONFIRMATION OOS / FINAL LOCKBOX)")
+            raise EngineError("a new campaign needs explicit partitions: --development-end, --selection-holdout-years (1 or 2) "
+                              "(DEVELOPMENT / SELECTION HOLDOUT / FINAL LOCKBOX)")
         reg.create_campaign(ws, new_campaign, partitions, frozen)
         campaign_id = new_campaign
     if not campaign_id:
-        raise EngineError("specify --campaign <id> or --new-campaign <id> with --development-end --oos-end --lockbox-start")
+        raise EngineError("specify --campaign <id> or --new-campaign <id> with --development-end --selection-holdout-years")
     exp_id = reg.register_experiment(ws, campaign_id, lineage_parent, frozen)   # raises on experiment 21
     dest = experiment_dir(ws, exp_id)
     shutil.copytree(CODE_ROOT / "templates" / "experiment", dest)
     spec_path = dest / "EVENT_SPEC.yaml"
     parts = reg.campaign_partitions(ws, campaign_id)
     text = (spec_path.read_text().replace("EXP_XXXX", exp_id).replace("C_XXXX", campaign_id)
-            .replace("DEV_END_XXXX", parts["development_end"]).replace("OOS_END_XXXX", parts["oos_end"])
+            .replace("DEV_END_XXXX", parts["development_end"]).replace("SELECTION_HOLDOUT_END_XXXX", parts["selection_holdout_end"])
             .replace("LOCKBOX_XXXX", parts["lockbox_start"]))
     spec_path.write_text(text)
     hyp = dest / "HYPOTHESIS.md"

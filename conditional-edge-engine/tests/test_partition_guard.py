@@ -1,4 +1,4 @@
-"""Hard data-partition guard: DEVELOPMENT rows only reach research code; poisoned OOS / lockbox prices change nothing."""
+"""Hard data-partition guard: DEVELOPMENT rows only reach research code; poisoned SELECTION HOLDOUT / lockbox prices change nothing."""
 import hashlib
 import json
 import textwrap
@@ -12,37 +12,43 @@ import engine.experiment_runner as runner
 from engine import trial_registry as reg
 from engine.common import EngineError, load_frozen
 from engine.experiment_lifecycle import create_experiment, experiment_dir, freeze
-from engine.partitions import (PartitionError, Partitions, development_view, load_bars_before, oos_view, parse_partitions)
+from engine.partitions import (PartitionError, Partitions, development_view, load_bars_before, selection_holdout_view, parse_partitions)
 from engine.synthetic import make_bars
 
 F = load_frozen()
-P = {"development_end": "2018-01-01", "oos_end": "2018-07-01", "lockbox_start": "2018-10-01"}
+P = {"development_end": "2018-01-01", "selection_holdout_end": "2019-01-01", "lockbox_start": "2019-01-01"}
 
 
 def test_partition_parsing_validates_chronology_and_hashes():
     p = parse_partitions(P)
-    assert p.development_end < p.oos_end < p.lockbox_start and len(p.hash()) == 64
-    assert parse_partitions(dict(P)).hash() == p.hash() != parse_partitions({**P, "oos_end": "2018-08-01"}).hash()
-    for bad in ({**P, "oos_end": "2017-06-01"}, {**P, "lockbox_start": "2018-03-01"}, {**P, "development_end": "2018-07-01"},
-                {"development_end": "2018-01-01"}, {**P, "extra": "2019-01-01"}, {**P, "oos_end": "not-a-date"}):
+    assert p.development_end < p.selection_holdout_end == p.lockbox_start and len(p.hash()) == 64
+    assert p.selection_holdout_years == 1
+    two = {**P, "selection_holdout_end": "2020-01-01", "lockbox_start": "2020-01-01"}
+    assert parse_partitions(two).selection_holdout_years == 2 and parse_partitions(two).hash() != p.hash() == parse_partitions(dict(P)).hash()
+    for bad in ({**P, "selection_holdout_end": "2017-06-01", "lockbox_start": "2017-06-01"},          # before development end
+                {**P, "selection_holdout_end": "2018-08-01", "lockbox_start": "2018-08-01"},          # 7 months: not 1 or 2 calendar years
+                {**P, "selection_holdout_end": "2021-01-01", "lockbox_start": "2021-01-01"},          # 3 years
+                {**P, "lockbox_start": "2019-03-01"},                                                  # gap between holdout and lockbox
+                {**P, "lockbox_start": "2018-09-01"},                                                  # lockbox overlapping the holdout
+                {**P, "development_end": "2018-07-01"}, {"development_end": "2018-01-01"}, {**P, "extra": "2019-01-01"},
+                {**P, "selection_holdout_end": "not-a-date"}):
         with pytest.raises(PartitionError):
             parse_partitions(bad)
-    assert parse_partitions({**P, "oos_end": "2018-10-01"}).oos_end == parse_partitions(P).lockbox_start      # oos_end == lockbox_start allowed
 
 
 def three_stage_bars():
     return make_bars(n_days=820, seed=3)                                  # 2016-01-04 .. ~2019-02
 
 
-def test_development_view_physically_removes_oos_and_lockbox_rows():
+def test_development_view_physically_removes_selection_holdout_and_lockbox_rows():
     bars = three_stage_bars()
     p = parse_partitions(P)
     dev = development_view(bars, p)
     assert dev.index.max() < p.development_end and len(dev) < len(bars)
     assert len(dev) == int((bars.index < p.development_end).sum())
-    ov = oos_view(bars, p)
-    assert ov.index.max() < pd.Timestamp("2018-07-01", tz="UTC") and len(ov) > len(dev)
-    assert not (ov.index >= p.oos_end).any() and not (ov.index >= p.lockbox_start).any()          # lockbox never in any view
+    ov = selection_holdout_view(bars, p)
+    assert ov.index.max() < pd.Timestamp("2019-01-01", tz="UTC") and len(ov) > len(dev) and len(ov) < len(bars)
+    assert not (ov.index >= p.selection_holdout_end).any() and not (ov.index >= p.lockbox_start).any()          # lockbox never in any view
 
 
 def test_file_loader_never_materialises_rows_after_the_cutoff(tmp_path):
@@ -78,7 +84,7 @@ def make_experiment(ws, parts=P):
         experiment_id: {exp}
         campaign_id: C001
         hypothesis: "Every 90th bar is an event; a guard test for the partition boundary."
-        partitions: {{development_end: "{parts['development_end']}", oos_end: "{parts['oos_end']}", lockbox_start: "{parts['lockbox_start']}"}}
+        partitions: {{development_end: "{parts['development_end']}", selection_holdout_end: "{parts['selection_holdout_end']}", lockbox_start: "{parts['lockbox_start']}"}}
         instrument: NQ_1m
         data_interval: 1min
         eligible_session: {{start: "09:31", end: "15:00"}}
@@ -95,7 +101,7 @@ def make_experiment(ws, parts=P):
 
 
 def poison(bars, p):
-    """Wreck OOS and lockbox prices, add NaN, absurd volumes and an extra post-lockbox tail."""
+    """Wreck SELECTION HOLDOUT and lockbox prices, add NaN, absurd volumes and an extra post-lockbox tail."""
     b = bars.copy()
     late = b.index.tz_convert("UTC") >= p.development_end
     rng = np.random.default_rng(1)
@@ -107,7 +113,7 @@ def poison(bars, p):
 
 @pytest.fixture(scope="module")
 def two_runs(tmp_path_factory):
-    """The IS stage run twice in identical workspaces: on clean bars and on bars whose OOS/lockbox rows are poisoned."""
+    """The IS stage run twice in identical workspaces: on clean bars and on bars whose SELECTION HOLDOUT/lockbox rows are poisoned."""
     bars = three_stage_bars()
     p = parse_partitions(P)
     seen = {}
@@ -141,12 +147,12 @@ def test_is_runner_hands_research_code_development_rows_only(two_runs):
     for label in ("clean", "poisoned"):
         assert seen[label], "spies recorded nothing"
         for name, last_ts, n in seen[label]:
-            assert last_ts < p.development_end, (label, name, last_ts)               # event, feature, target code never saw OOS/lockbox
+            assert last_ts < p.development_end, (label, name, last_ts)               # event, feature, target code never saw SELECTION HOLDOUT/lockbox
     assert {n for n, _, _ in seen["clean"]} >= {"compute_features", "compute_primary_targets", "check_event_causality", "generate_events"}
     assert outs["clean"][2]["base_event"]["rows_removed_before_research"] > 0
 
 
-def test_poisoning_oos_and_lockbox_prices_cannot_alter_any_is_result_or_artifact(two_runs):
+def test_poisoning_selection_holdout_and_lockbox_prices_cannot_alter_any_is_result_or_artifact(two_runs):
     outs, _, _ = two_runs
     (ws_a, exp_a, out_a), (ws_b, exp_b, out_b) = outs["clean"], outs["poisoned"]
     da, db = experiment_dir(ws_a, exp_a) / "results", experiment_dir(ws_b, exp_b) / "results"
@@ -180,7 +186,7 @@ def test_changing_a_development_price_does_change_results_control(tmp_path_facto
     assert runner.bars_fingerprint(dev) == runner.bars_fingerprint(development_view(poison(bars, p), p))   # poison is invisible to IS
 
 
-def test_is_runner_has_no_oos_code_path():
+def test_is_runner_has_no_selection_holdout_code_path():
     import ast
     import inspect
     tree = ast.parse(inspect.getsource(runner))
@@ -195,6 +201,30 @@ def test_is_runner_has_no_oos_code_path():
             names.update(a.name for a in n.names)
         elif isinstance(n, ast.Import):
             names.update(a.name for a in n.names)
-    assert not ({"oos_view", "oos_stage", "run_campaign_oos", "execute_campaign_oos", "validate_approval", "approval_path", "cpcv", "run_cpcv"} & names)
+    assert not ({"selection_holdout_view", "selection_holdout_stage", "run_campaign_selection_holdout", "execute_campaign_selection_holdout", "validate_approval", "approval_path", "cpcv", "run_cpcv"} & names)
     assert "development_view" in names
-    assert "oos" not in " ".join(inspect.signature(runner.run_experiment).parameters).lower()
+    assert "selection_holdout" not in " ".join(inspect.signature(runner.run_experiment).parameters).lower()
+
+
+def test_cli_selection_holdout_is_one_or_two_calendar_years_and_the_lockbox_starts_right_after(tmp_path):
+    import subprocess
+    import sys
+
+    from engine.common import CODE_ROOT
+
+    def new(*extra, ws):
+        return subprocess.run([sys.executable, str(CODE_ROOT / "scripts/new_experiment.py"), "--new-campaign", "C001", "--workspace", str(ws), *extra],
+                              capture_output=True, text=True, cwd=str(CODE_ROOT))
+    for bad in ("3", "0", "1.5"):
+        r = new("--development-end", "2018-01-01", "--selection-holdout-years", bad, ws=tmp_path / f"bad{bad}")
+        assert r.returncode != 0 and not (tmp_path / f"bad{bad}" / "experiments").exists()
+    r = new("--development-end", "2018-01-01", ws=tmp_path / "noyears")                                          # the duration must be chosen explicitly
+    assert r.returncode != 0
+    for flag in ("--selection-holdout-end", "--lockbox-start", "--oos-end"):                                      # no free-form end dates any more
+        r = new("--development-end", "2018-01-01", flag, "2019-03-01", ws=tmp_path / "free")
+        assert r.returncode != 0
+    r = new("--development-end", "2018-01-01", "--selection-holdout-years", "2", ws=tmp_path / "two")
+    assert r.returncode == 0, r.stderr
+    import yaml
+    spec = yaml.safe_load((tmp_path / "two" / "experiments" / "EXP_0001" / "EVENT_SPEC.yaml").read_text())["partitions"]
+    assert spec == {"development_end": "2018-01-01", "selection_holdout_end": "2020-01-01", "lockbox_start": "2020-01-01"}

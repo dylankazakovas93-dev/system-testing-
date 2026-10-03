@@ -1,12 +1,11 @@
 #!/usr/bin/env python
-"""Final CPCV robustness (veto only) for an OOS_CONFIRMED experiment. The final lockbox stays sealed."""
+"""Resume the AUTOMATIC post-selection CPCV of a FINAL_CONFIG_FROZEN experiment (normally `finalize_final_config.py` runs it). Veto only; the
+final lockbox is never loaded and CPCV never needs a human approval."""
 import argparse
 
 from _common import workspace
-from engine.cpcv import run_cpcv
-from engine.event_contract import load_spec
-from engine.experiment_lifecycle import experiment_dir
-from engine.partitions import load_bars_before, parse_partitions
+from engine.cpcv import cpcv_cutoff, run_cpcv
+from engine.partitions import load_bars_before
 
 
 def main():
@@ -17,10 +16,9 @@ def main():
     ap.add_argument("--workspace")
     a = ap.parse_args()
     ws = workspace(a.workspace)
-    parts = parse_partitions(load_spec(experiment_dir(ws, a.experiment) / "EVENT_SPEC.yaml")["partitions"])
-    bars = load_bars_before(a.data, parts.oos_end, a.timestamp_col)
-    r = run_cpcv(ws, a.experiment, bars)
-    print(f"CPCV confirmed groups: {r['cpcv_confirmed_groups'] or 'none'}; PBO diagnostic: {r['pbo_diagnostic']['pbo'] if r['pbo_diagnostic']['pbo'] is not None else 'NOT APPLICABLE'}")
+    cutoff, _ = cpcv_cutoff(ws, a.experiment)
+    r = run_cpcv(ws, a.experiment, load_bars_before(a.data, cutoff, a.timestamp_col))
+    print(f"{r['final_config_id']}: CPCV {'CONFIRMED' if r['cpcv_passed'] else 'REJECTED (lineage ends, no fallback)'} — {r['label']}")
 
 
 if __name__ == "__main__":

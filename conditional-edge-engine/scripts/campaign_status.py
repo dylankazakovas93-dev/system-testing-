@@ -1,11 +1,11 @@
 #!/usr/bin/env python
-"""Selection opportunities used by a campaign, lifecycle statuses, OOS ledger; runs the registry integrity check."""
+"""Selection opportunities used by a campaign, lifecycle statuses, SELECTION HOLDOUT ledger, final-config ledger; runs the registry integrity check."""
 import argparse
 import json
 
 from _common import workspace
 from engine import trial_registry as reg
-from engine.oos_stage import mark_contamination_if_mutated
+from engine.selection_holdout_stage import mark_contamination_if_mutated
 
 
 def main():
@@ -25,8 +25,11 @@ def main():
         print(f"  CAMPAIGN REVEALED SELECTION TRIALS    : {s['selection_trials_revealed']} / {s['selection_trials_max']}"
               f"   (registered: {s['selection_trials_registered']})")
         print(f"  statistical selection opportunities exposed so far: {s['statistical_selection_opportunities_exposed']}")
-        print(f"  campaign OOS status: {s['campaign_status']}  (spent: {s['campaign_oos_spent']})")
-        print(f"  IS shortlist-eligible trials: {s['shortlist_eligible_trials']}; provisional: {s['provisional_trials']}; OOS unlocks: {s['oos_unlocks']}")
+        print(f"  campaign SELECTION HOLDOUT status: {s['campaign_status']}  (spent: {s['campaign_selection_holdout_spent']})")
+        print(f"  IS shortlist-eligible trials: {s['shortlist_eligible_trials']}; provisional: {s['provisional_trials']}; SELECTION HOLDOUT unlocks: {s['selection_holdout_unlocks']}")
+        fc = reg.read_final_configs(ws)
+        fc = fc[fc["campaign_id"] == c]
+        print(f"  final configs frozen: {int((fc['event'] == 'FINAL_CONFIG_FROZEN').sum())}; CPCV results recorded: {int((fc['event'] == 'CPCV_RESULT').sum())}")
         for e in s["experiments"]:
             print(f"    {e['experiment_id']}  {e['status']:28s} is_status={e['is_status'] or '-':26s} lineage_of={e['lineage_parent'] or '-':9s} verification={e['research_verification']}")
 

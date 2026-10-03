@@ -1,7 +1,7 @@
 """Forward-path / monetisation diagnostics (frozen/v1/PATH_DIAGNOSTICS.yaml): DIAGNOSTIC ONLY, never selection.
 
 Pure-array tests use hand-computed examples and a brute-force reference; the class at the bottom runs the real IS pipeline on
-bars (clean / OOS-poisoned / lockbox-poisoned / path-stage-disabled) to prove the lifecycle wall and non-interference."""
+bars (clean / SELECTION HOLDOUT-poisoned / lockbox-poisoned / path-stage-disabled) to prove the lifecycle wall and non-interference."""
 import ast
 import copy
 import json
@@ -55,7 +55,7 @@ def test_frozen_path_constants_are_pinned_and_the_discovery_space_is_unchanged()
     assert (b["stops_sigma"], b["targets_sigma"], b["expiries_bars"], b["n_cells"]) == (LV, LV, [15, 30, 60, 120], 64)
     assert SPEC["stability"]["min_events_for_eligible_year"] == 20 and SPEC["percentiles"]["excursion_summary"] == ["mean", "median", "p75", "p95"]
     p = F.trial_policy                                                                          # the discovery policy is untouched by this layer
-    assert p["expected_trials_per_experiment"] == 24 and p["max_experiments_per_campaign"] == 20 and p["oos"]["max_groups_per_campaign"] == 6
+    assert p["expected_trials_per_experiment"] == 24 and p["max_experiments_per_campaign"] == 20 and p["selection_holdout"]["max_groups_per_campaign"] == 6
     assert (SPEC["promotion_eligible"], SPEC["selection_trials_affected"]) == (False, 0)
     assert len(reg.trial_specs(F)) == 24
 
@@ -530,7 +530,7 @@ def runs(tmp_path_factory):
         b.loc[mask, ["open", "high", "low", "close"]] = rng.uniform(1, 1e6, size=(int(mask.sum()), 4))
         b.loc[mask, "volume"] = -5.0
         return b
-    variants = {"clean": bars, "oos": corrupt((ts >= p.development_end) & (ts < p.oos_end)), "lockbox": corrupt(ts >= p.lockbox_start)}
+    variants = {"clean": bars, "selection_holdout": corrupt((ts >= p.development_end) & (ts < p.selection_holdout_end)), "lockbox": corrupt(ts >= p.lockbox_start)}
     out = {}
     captured = []
     orig = pdx.make_paths
@@ -563,20 +563,20 @@ def _pd(runs, label):
 
 
 class TestPipeline:
-    def test_oos_poisoning_leaves_every_is_path_diagnostic_byte_identical(self, runs):
-        assert _pd(runs, "oos") == _pd(runs, "clean")
+    def test_selection_holdout_poisoning_leaves_every_is_path_diagnostic_byte_identical(self, runs):
+        assert _pd(runs, "selection_holdout") == _pd(runs, "clean")
         a = json.loads((experiment_dir(runs["clean"][0], runs["clean"][1]) / "results/IS_REPORT.json").read_text())
-        b = json.loads((experiment_dir(runs["oos"][0], runs["oos"][1]) / "results/IS_REPORT.json").read_text())
+        b = json.loads((experiment_dir(runs["selection_holdout"][0], runs["selection_holdout"][1]) / "results/IS_REPORT.json").read_text())
         assert a["Z_forward_path_diagnostics"] == b["Z_forward_path_diagnostics"] and a["X_hashes"]["path_diagnostics_sha256"] == b["X_hashes"]["path_diagnostics_sha256"]
 
     def test_lockbox_poisoning_leaves_every_is_path_diagnostic_byte_identical(self, runs):
         assert _pd(runs, "lockbox") == _pd(runs, "clean")
 
-    def test_the_is_report_has_no_oos_path_numbers_and_says_not_accessed(self, runs):
+    def test_the_is_report_has_no_selection_holdout_path_numbers_and_says_not_accessed(self, runs):
         ws, exp, _ = runs["clean"]
         md = (experiment_dir(ws, exp) / "results/IS_REPORT.md").read_text()
-        assert "OOS status = NOT ACCESSED" in md and "No OOS or lockbox row entered any number below" in md
-        for bad in ("OOS MFE", "OOS MAE", "OOS bracket", "OOS continuation"):
+        assert "SELECTION HOLDOUT status = NOT ACCESSED" in md and "No SELECTION HOLDOUT or lockbox row entered any number below" in md
+        for bad in ("SELECTION HOLDOUT MFE", "SELECTION HOLDOUT MAE", "SELECTION HOLDOUT bracket", "SELECTION HOLDOUT continuation"):
             assert bad not in md
         rep = json.loads(_pd(runs, "clean"))
         p = parse_partitions(P)
@@ -650,7 +650,7 @@ class TestPipeline:
         assert reg.integrity_check(ws)["selection_trials"] == 24
 
     def test_selection_code_never_imports_the_path_layer(self):
-        for name in ("acceptance", "trial_registry", "multiplicity", "statistics", "walkforward", "score_calibration", "model_engine", "oos_stage", "cpcv"):
+        for name in ("acceptance", "trial_registry", "multiplicity", "statistics", "walkforward", "score_calibration", "model_engine", "selection_holdout_stage", "cpcv", "near_tie", "holdout_preference"):
             tree = ast.parse((CODE_ROOT / "engine" / f"{name}.py").read_text())
             mods = {n.module for n in ast.walk(tree) if isinstance(n, ast.ImportFrom)} | {a.name for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names}
             assert not any(str(m).startswith(("engine.path", "engine import path")) for m in mods), name
@@ -681,7 +681,7 @@ class TestPipeline:
     def test_tampering_with_the_path_file_invalidates_a_human_approval(self, runs, tmp_path):
         import shutil
 
-        from engine.oos_stage import ApprovalError, validate_approval
+        from engine.selection_holdout_stage import ApprovalError, validate_approval
         from tests.scenario_helpers import human_approval
         ws0, exp, _ = runs["clean"]
         dst = tmp_path / "ws"
@@ -689,7 +689,7 @@ class TestPipeline:
         ws = reg.Workspace(dst)
         f = experiment_dir(ws, exp) / "results" / "PATH_DIAGNOSTICS.json"
         f.write_text(f.read_text().replace('"promotion_eligible":false', '"promotion_eligible":true', 1))
-        human_approval(ws, exp, ["DIR_RETURN_30|UPPER_HALF"])
+        human_approval(ws, exp, [f"{exp}|DIR_RETURN_30|UPPER_HALF"])
         with pytest.raises(ApprovalError, match="PATH_DIAGNOSTICS.json changed|PATH_DIAGNOSTICS.json was edited|edited"):
             validate_approval(ws, exp)
 
@@ -702,4 +702,4 @@ class TestPipeline:
         rv = rv_ref(dev["close"].to_numpy(), pos)
         assert np.allclose(sigma, rv / np.sqrt(60), rtol=1e-12, atol=0)
         assert not np.allclose(sigma, rv, rtol=0.5)                                           # not the old raw-RV_60 scale
-        assert len(runs["captured"]) >= 3 and np.array_equal(runs["captured"][1][1], sigma)      # OOS-poisoned run: identical sigma
+        assert len(runs["captured"]) >= 3 and np.array_equal(runs["captured"][1][1], sigma)      # SELECTION HOLDOUT-poisoned run: identical sigma

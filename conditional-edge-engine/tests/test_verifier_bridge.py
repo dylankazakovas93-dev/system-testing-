@@ -151,7 +151,7 @@ def test_promotion_capable_targets_are_exactly_the_primary_targets():
     from engine.common import primary_target_names
     from engine.verifier_bridge import promotion_capable_targets
     verification_targets = promotion_capable_targets(F)
-    trial_targets = {s["target"] for s in reg.trial_specs(F)}                                  # targets that can reach IS_SHORTLIST_ELIGIBLE / OOS
+    trial_targets = {s["target"] for s in reg.trial_specs(F)}                                  # targets that can reach IS_SHORTLIST_ELIGIBLE / SELECTION HOLDOUT
     assert set(verification_targets) == set(primary_target_names(F)) == trial_targets
     assert verification_targets == ["DIR_RETURN_15", "DIR_RETURN_30", "DIR_RETURN_60", "DIR_PATH_SKEW_60"]
     assert len(verification_targets) * len(MODELS) == 12
@@ -163,7 +163,7 @@ def test_bridge_verifies_all_twelve_strong_paths_even_when_most_targets_are_reje
     from engine.common import primary_target_names
     from engine.synthetic import make_bars
     ws = reg.Workspace(tmp_path / "w").init()
-    exp = new_frozen_experiment(ws, partitions={"development_end": "2017-01-01", "oos_end": "2017-07-01", "lockbox_start": "2017-10-01"})
+    exp = new_frozen_experiment(ws, partitions={"development_end": "2017-01-01", "selection_holdout_end": "2018-01-01", "lockbox_start": "2018-01-01"})
     reg.reveal_experiment(ws, exp, fake_results(ws, exp, {("DIR_RETURN_30", m): 0.0009 for m in MODELS}),
                           train_period="a", validation_period="b", frozen=F)
     t = reg.experiment_trials(ws, exp)
@@ -194,7 +194,7 @@ def test_bridge_verifies_all_twelve_strong_paths_even_when_most_targets_are_reje
     assert len(summary["warnings"]) == 1 and "INCOMPLETE" in summary["warnings"][0]               # 1 UTC calendar year before the holdout
     assert "--skip-tests" not in calls[0] and all("--skip-tests" in c for c in calls[1:])          # repository_health once
     stage_data = pd.read_parquet(Path(dict(zip(calls[0][2::2], calls[0][3::2]))["--data"]))
-    assert pd.to_datetime(stage_data["timestamp"], utc=True).max() < pd.Timestamp("2017-01-01", tz="UTC")   # no OOS/lockbox row reaches it
+    assert pd.to_datetime(stage_data["timestamp"], utc=True).max() < pd.Timestamp("2017-01-01", tz="UTC")   # no SELECTION HOLDOUT/lockbox row reaches it
     assert summary["overall"] == "RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE"
     rec = json.loads(reg.experiment_row(ws, exp)["verification_json"])
     assert set(rec) == {f"{tg}|{m}" for tg in primary_target_names(F) for m in MODELS} and len(rec) == 12 and all(v["mode"] == "strong" for v in rec.values())
@@ -204,7 +204,7 @@ def test_bridge_verifies_all_twelve_strong_paths_even_when_most_targets_are_reje
 def test_partial_target_verification_is_flagged_and_unknown_targets_are_refused(tmp_path, monkeypatch):
     from engine.synthetic import make_bars
     ws = reg.Workspace(tmp_path / "w").init()
-    exp = new_frozen_experiment(ws, partitions={"development_end": "2017-01-01", "oos_end": "2017-07-01", "lockbox_start": "2017-10-01"})
+    exp = new_frozen_experiment(ws, partitions={"development_end": "2017-01-01", "selection_holdout_end": "2018-01-01", "lockbox_start": "2018-01-01"})
     data = tmp_path / "bars.parquet"
     make_bars(n_days=400, seed=2).reset_index().rename(columns={"index": "timestamp"}).to_parquet(data)
     repo = make_fake_verifier(tmp_path)
@@ -219,7 +219,7 @@ def test_partial_target_verification_is_flagged_and_unknown_targets_are_refused(
 def test_a_research_family_failure_rejects_that_model_path(tmp_path, monkeypatch):
     from engine.synthetic import make_bars
     ws = reg.Workspace(tmp_path / "w").init()
-    exp = new_frozen_experiment(ws, partitions={"development_end": "2017-01-01", "oos_end": "2017-07-01", "lockbox_start": "2017-10-01"})
+    exp = new_frozen_experiment(ws, partitions={"development_end": "2017-01-01", "selection_holdout_end": "2018-01-01", "lockbox_start": "2018-01-01"})
     reg.reveal_experiment(ws, exp, fake_results(ws, exp, {("DIR_RETURN_30", m): 0.0009 for m in MODELS}),
                           train_period="a", validation_period="b", frozen=F)
     data = tmp_path / "bars.parquet"
@@ -280,7 +280,7 @@ def test_real_verifier_passes_all_three_model_paths_and_fails_injected_lookahead
     data = tmp_path / "bars.parquet"
     bars.reset_index().rename(columns={"index": "timestamp"}).to_parquet(data)
     ws = reg.Workspace(tmp_path / "w").init()
-    exp = new_frozen_experiment(ws, partitions={"development_end": "2019-01-01", "oos_end": "2019-03-01", "lockbox_start": "2019-03-01"})
+    exp = new_frozen_experiment(ws, partitions={"development_end": "2019-01-01", "selection_holdout_end": "2020-01-01", "lockbox_start": "2020-01-01"})
     summary = run_verification(ws, exp, vr, str(data), mode="fast", targets=["DIR_RETURN_15"], skip_verifier_tests=True,
                                record=False, verbose=False)
     assert [(r["target"], r["model"]) for r in summary["results"]] == [("DIR_RETURN_15", m) for m in MODELS]

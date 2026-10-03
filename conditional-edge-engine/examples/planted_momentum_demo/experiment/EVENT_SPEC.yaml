@@ -3,8 +3,8 @@ campaign_id: C001
 hypothesis: Planted AR(1) momentum makes recent path informative.
 partitions:
   development_end: '2019-01-01'
-  oos_end: '2019-07-01'
-  lockbox_start: '2019-10-01'
+  selection_holdout_end: '2020-01-01'
+  lockbox_start: '2020-01-01'
 instrument: NQ_1m
 data_interval: 1min
 eligible_session:

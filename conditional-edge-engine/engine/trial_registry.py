@@ -1,4 +1,4 @@
-"""Registry of campaigns, experiments, selection trials, observations, the OOS access ledger and confirmation results.
+"""Registry of campaigns, experiments, selection trials, observations, the SELECTION HOLDOUT access ledger, the final-config ledger and CPCV results.
 
 What it proves:
   * a campaign holds at most 20 experiments => at most 480 selection trials (campaign universe = 24 x E revealed);
@@ -8,7 +8,7 @@ What it proves:
     adjusted values and decisions may legitimately change afterwards;
   * campaign_q / campaign_bonferroni_p are recomputed over EVERY revealed trial of the campaign after each reveal and all
     earlier experiments are re-evaluated (an earlier candidate can lose eligibility);
-  * oos_access.csv is an append-only hash chain: an experiment present there has SPENT its OOS.
+  * selection_holdout_access.csv is an append-only hash chain: an experiment present there has SPENT its SELECTION HOLDOUT.
 """
 from __future__ import annotations
 
@@ -31,9 +31,9 @@ from engine.common import (CODE_ROOT, EngineError, Frozen, canonical_json, load_
 from engine.multiplicity import benjamini_hochberg
 from engine.partitions import parse_partitions
 
-CAMPAIGN_COLS = ["campaign_id", "development_end", "oos_end", "lockbox_start", "max_experiments", "created_at", "status",
-                 "oos_freeze_hash", "oos_spent_at"]
-CAMPAIGN_STATUSES = ("OPEN", "OOS_FROZEN", "OOS_SPENT")      # OPEN -> (human) freeze -> OOS_FROZEN -> (human) open once -> OOS_SPENT
+CAMPAIGN_COLS = ["campaign_id", "development_end", "selection_holdout_end", "lockbox_start", "max_experiments", "created_at", "status",
+                 "selection_holdout_freeze_hash", "selection_holdout_spent_at"]
+CAMPAIGN_STATUSES = ("OPEN", "SELECTION_HOLDOUT_FROZEN", "SELECTION_HOLDOUT_SPENT")      # OPEN -> (human) freeze -> SELECTION_HOLDOUT_FROZEN -> (human) open once -> SELECTION_HOLDOUT_SPENT
 EXPERIMENT_COLS = ["experiment_id", "campaign_id", "sequence_in_campaign", "status", "is_status", "lineage_parent",
                    "created_at", "frozen_at", "revealed_at", "event_hash", "manifest_hash", "manifest_sha256",
                    "engine_version", "n_selection_trials", "cumulative_campaign_selection_trials", "trial_ledger_hash",
@@ -49,13 +49,13 @@ TRIAL_COLS = ["campaign_id", "experiment_id", "trial_id", "target", "model", "st
               "decision", "rejection_reason", "status", "registered_at", "revealed_at", "target_sd", "n_cv_weeks"]
 OBS_COLS = ["observation_id", "campaign_id", "experiment_id", "created_at", "category", "description",
             "metric_name", "metric_value", "eligible_for_promotion", "diagnostic_label", "note"]
-# ONE row per campaign: the shared confirmation OOS partition is opened exactly once for the whole campaign.
-OOS_ACCESS_COLS = ["campaign_id", "freeze_hash", "open_approval_file_hash", "experiments", "approved_experiment_groups",
-                   "n_oos_confirmations", "oos_start", "oos_end", "unlock_timestamp", "code_hash", "prev_row_hash", "row_hash"]
-OOS_TRIAL_COLS = ["campaign_id", "experiment_id", "oos_trial_id", "group_id", "target", "state", "model", "n_parent_events",
+# ONE row per campaign: the shared selection holdout partition is opened exactly once for the whole campaign.
+SELECTION_HOLDOUT_ACCESS_COLS = ["campaign_id", "freeze_hash", "open_approval_file_hash", "experiments", "approved_experiment_groups",
+                   "n_holdout_evaluations", "selection_holdout_start", "selection_holdout_end", "unlock_timestamp", "code_hash", "prev_row_hash", "row_hash"]
+SELECTION_HOLDOUT_TRIAL_COLS = ["campaign_id", "experiment_id", "selection_holdout_trial_id", "group_id", "target", "state", "model", "n_parent_events",
                   "n_selected_events", "parent_frequency", "selected_frequency", "retention_ratio", "parent_effect",
                   "selected_effect", "uplift", "standardized_uplift", "bootstrap_ci_low", "bootstrap_ci_high", "raw_p",
-                  "oos_q", "oos_bonferroni_p", "oos_trials_in_family", "gates_pass", "decision", "rejection_reason", "revealed_at"]
+                  "selection_holdout_q", "selection_holdout_bonferroni_p", "selection_holdout_trials_in_family", "gates_pass", "decision", "rejection_reason", "revealed_at"]
 CPCV_COLS = ["campaign_id", "experiment_id", "group_id", "target", "state", "model", "n_valid_splits", "median_effect",
              "median_uplift", "p10_uplift", "p90_uplift", "fraction_effect_positive", "fraction_uplift_positive",
              "worst_split", "best_split", "cpcv_pass", "group_cpcv_pass", "pbo_diagnostic", "revealed_at"]
@@ -75,19 +75,28 @@ SEALED_TRIAL_FIELDS = ["campaign_id", "experiment_id", "trial_id", "target", "mo
                        "experiment_bonferroni_p", "positive_years", "positive_uplift_years", "eligible_years",
                        "folds_evaluated", "positive_effect_folds", "positive_uplift_folds", "year_concentration_share",
                        "year_concentration_warning", "revealed_at", "target_sd", "n_cv_weeks"]
-LIFECYCLE = ["DRAFT", "FROZEN", "IS_REJECTED", "IS_PROVISIONAL_CANDIDATE", "AWAITING_HUMAN_OOS_APPROVAL", "OOS_NOT_APPROVED",
-             "OOS_REJECTED", "OOS_CONFIRMED", "CPCV_REJECTED", "CPCV_CONFIRMED", "AWAITING_FINAL_LOCKBOX", "OOS_CONTAMINATED"]
-IS_STAGE = ("IS_REJECTED", "IS_PROVISIONAL_CANDIDATE", "AWAITING_HUMAN_OOS_APPROVAL")
+FINAL_CONFIG_COLS = ["campaign_id", "experiment_id", "event", "selected_config_id", "is_rank", "near_tie_cluster", "selection_holdout_used",
+                     "selection_holdout_rank", "human_selection_file_hash", "manifest_hash", "frozen_at", "cpcv_status", "prev_row_hash", "row_hash"]
+# Experiment lifecycle (v1.2). Every status below is explicit; nothing is called "confirmed" unless it is the final untouched lockbox.
+LIFECYCLE = ["DRAFT", "FROZEN", "IS_REJECTED", "IS_PROVISIONAL_CANDIDATE", "IS_SHORTLIST_ELIGIBLE",
+             "NEAR_TIE_REVIEW_REQUIRED", "AWAITING_HUMAN_SELECTION_HOLDOUT_APPROVAL", "SELECTION_HOLDOUT_FROZEN", "SELECTION_HOLDOUT_SPENT",
+             "AWAITING_HUMAN_FINAL_CONFIG_SELECTION", "SELECTION_HOLDOUT_SKIPPED", "FINAL_CONFIG_FROZEN", "HUMAN_DECLINED",
+             "CPCV_REJECTED", "CPCV_CONFIRMED", "AWAITING_FINAL_LOCKBOX_APPROVAL", "LOCKBOX_REJECTED", "LOCKBOX_CONFIRMED",
+             "SELECTION_HOLDOUT_CONTAMINATED"]
+# AWAITING_HUMAN_SELECTION_HOLDOUT_APPROVAL is a documented ALIAS of NEAR_TIE_REVIEW_REQUIRED (the engine assigns NEAR_TIE_REVIEW_REQUIRED
+# when IS finds a near-tie cluster; the holdout approval is a human file validated at the campaign freeze).
+STATUS_ALIASES = {"AWAITING_HUMAN_SELECTION_HOLDOUT_APPROVAL": "NEAR_TIE_REVIEW_REQUIRED"}
+IS_STAGE = ("IS_REJECTED", "IS_PROVISIONAL_CANDIDATE", "AWAITING_HUMAN_FINAL_CONFIG_SELECTION", "NEAR_TIE_REVIEW_REQUIRED")
 OBS_NOTE = "DIAGNOSTIC - CANNOT INFLUENCE PROMOTION IN THE GENERATING EXPERIMENT; lead for a NEW experiment only"
 DIAG_LABEL = "DIAGNOSTIC ONLY — NOT A SELECTION TRIAL"
 
 
-class OOSContaminated(EngineError):
-    """The shared confirmation OOS partition was already spent (by this campaign or an overlapping one)."""
+class SelectionHoldoutContaminated(EngineError):
+    """The shared selection holdout partition was already spent (by this campaign or an overlapping one)."""
 
 
 class CampaignClosed(EngineError):
-    """The campaign's OOS is frozen or spent: no new experiment, verification or IS report may change it."""
+    """The campaign's SELECTION HOLDOUT is frozen or spent: no new experiment, verification or IS report may change it."""
 
 
 class CampaignLimitExceeded(EngineError):
@@ -127,8 +136,8 @@ class Workspace:
         self.approvals.mkdir(parents=True, exist_ok=True)
         for name, cols in (("campaigns.csv", CAMPAIGN_COLS), ("experiments.csv", EXPERIMENT_COLS),
                            ("selection_trials.csv", TRIAL_COLS), ("observations.csv", OBS_COLS),
-                           ("oos_access.csv", OOS_ACCESS_COLS), ("oos_trials.csv", OOS_TRIAL_COLS),
-                           ("cpcv_results.csv", CPCV_COLS)):
+                           ("selection_holdout_access.csv", SELECTION_HOLDOUT_ACCESS_COLS), ("selection_holdout_trials.csv", SELECTION_HOLDOUT_TRIAL_COLS),
+                           ("cpcv_results.csv", CPCV_COLS), ("final_configs.csv", FINAL_CONFIG_COLS)):
             p = self.path(name)
             if not p.exists():
                 _write(p, pd.DataFrame(columns=cols), cols)
@@ -171,12 +180,16 @@ def read_observations(ws: Workspace) -> pd.DataFrame:
     return _read(ws.path("observations.csv"), OBS_COLS)
 
 
-def read_oos_access(ws: Workspace) -> pd.DataFrame:
-    return _read(ws.path("oos_access.csv"), OOS_ACCESS_COLS)
+def read_selection_holdout_access(ws: Workspace) -> pd.DataFrame:
+    return _read(ws.path("selection_holdout_access.csv"), SELECTION_HOLDOUT_ACCESS_COLS)
 
 
-def read_oos_trials(ws: Workspace) -> pd.DataFrame:
-    return _read(ws.path("oos_trials.csv"), OOS_TRIAL_COLS)
+def read_selection_holdout_trials(ws: Workspace) -> pd.DataFrame:
+    return _read(ws.path("selection_holdout_trials.csv"), SELECTION_HOLDOUT_TRIAL_COLS)
+
+
+def read_final_configs(ws: Workspace) -> pd.DataFrame:
+    return _read(ws.path("final_configs.csv"), FINAL_CONFIG_COLS)
 
 
 def read_cpcv(ws: Workspace) -> pd.DataFrame:
@@ -214,16 +227,16 @@ def group_id(target: str, state: str) -> str:
 
 # ---------------------------------------------------------------------------- campaigns / experiments
 def create_campaign(ws: Workspace, campaign_id: str, partitions: dict, frozen: Frozen | None = None) -> None:
-    """Open a campaign = one development / confirmation-OOS / final-lockbox generation with frozen partition dates."""
+    """Open a campaign = one development / selection-holdout / final-lockbox generation with frozen partition dates."""
     frozen = frozen or load_frozen()
     p = parse_partitions(partitions)                          # validates chronology and non-overlap
     df = read_campaigns(ws)
     if campaign_id in set(df["campaign_id"]):
         raise EngineError(f"campaign {campaign_id} already exists")
-    assert_oos_partition_untouched(ws, p.as_dict())
+    assert_selection_holdout_partition_untouched(ws, p.as_dict())
     d = p.as_dict()
     row = {"campaign_id": campaign_id, **d, "max_experiments": str(frozen.trial_policy["max_experiments_per_campaign"]),
-           "created_at": now_utc_iso(), "status": "OPEN", "oos_freeze_hash": "", "oos_spent_at": ""}
+           "created_at": now_utc_iso(), "status": "OPEN", "selection_holdout_freeze_hash": "", "selection_holdout_spent_at": ""}
     _write(ws.path("campaigns.csv"), pd.concat([df, pd.DataFrame([row])], ignore_index=True), CAMPAIGN_COLS)
 
 
@@ -248,34 +261,34 @@ def update_campaign(ws: Workspace, campaign_id: str, **fields) -> None:
 
 
 def assert_campaign_open(ws: Workspace, campaign_id: str, action: str) -> None:
-    """Campaign-level OOS accounting: once the campaign's OOS is frozen or spent nothing in the campaign may change."""
+    """Campaign-level SELECTION HOLDOUT accounting: once the campaign's SELECTION HOLDOUT is frozen or spent nothing in the campaign may change."""
     st = campaign_row(ws, campaign_id)["status"]
-    if st == "OOS_SPENT":
-        raise OOSContaminated(f"CAMPAIGN OOS HAS BEEN SPENT ({campaign_id}): cannot {action}. The shared confirmation OOS partition is "
-                              f"no longer untouched; new research needs a NEW campaign with a new, non-overlapping OOS partition")
+    if st == "SELECTION_HOLDOUT_SPENT":
+        raise SelectionHoldoutContaminated(f"CAMPAIGN SELECTION HOLDOUT HAS BEEN SPENT ({campaign_id}): cannot {action}. The shared selection holdout partition is "
+                              f"no longer untouched; new research needs a NEW campaign with a new, non-overlapping SELECTION HOLDOUT partition")
     if st != "OPEN":
         raise CampaignClosed(f"campaign {campaign_id} is {st}: cannot {action}")
 
 
 def _intervals_overlap(a: dict, b: dict) -> bool:
     import pandas as _pd
-    a0, a1 = _pd.Timestamp(a["development_end"]), _pd.Timestamp(a["oos_end"])
-    b0, b1 = _pd.Timestamp(b["development_end"]), _pd.Timestamp(b["oos_end"])
-    return a0 < b1 and b0 < a1                                 # half-open [development_end, oos_end)
+    a0, a1 = _pd.Timestamp(a["development_end"]), _pd.Timestamp(a["selection_holdout_end"])
+    b0, b1 = _pd.Timestamp(b["development_end"]), _pd.Timestamp(b["selection_holdout_end"])
+    return a0 < b1 and b0 < a1                                 # half-open [development_end, selection_holdout_end)
 
 
-def assert_oos_partition_untouched(ws: Workspace, partitions: dict, exclude_campaign: str = "") -> None:
-    """Refuse any campaign whose confirmation-OOS interval overlaps the OOS interval of an already SPENT campaign."""
+def assert_selection_holdout_partition_untouched(ws: Workspace, partitions: dict, exclude_campaign: str = "") -> None:
+    """Refuse any campaign whose selection-holdout interval overlaps the SELECTION HOLDOUT interval of an already SPENT campaign."""
     for _, c in read_campaigns(ws).iterrows():
-        if c["campaign_id"] != exclude_campaign and c["status"] == "OOS_SPENT" and _intervals_overlap(c.to_dict(), partitions):
-            raise OOSContaminated(
-                f"OOS CONTAMINATED: confirmation OOS [{partitions['development_end']}, {partitions['oos_end']}) overlaps the OOS partition "
-                f"[{c['development_end']}, {c['oos_end']}) already spent by campaign {c['campaign_id']}; it cannot be claimed as untouched confirmation")
+        if c["campaign_id"] != exclude_campaign and c["status"] == "SELECTION_HOLDOUT_SPENT" and _intervals_overlap(c.to_dict(), partitions):
+            raise SelectionHoldoutContaminated(
+                f"SELECTION HOLDOUT CONTAMINATED: selection holdout [{partitions['development_end']}, {partitions['selection_holdout_end']}) overlaps the SELECTION HOLDOUT partition "
+                f"[{c['development_end']}, {c['selection_holdout_end']}) already spent by campaign {c['campaign_id']}; it cannot be claimed as untouched confirmation")
 
 
 def campaign_partitions(ws: Workspace, campaign_id: str) -> dict:
     c = campaign_row(ws, campaign_id)
-    return {k: c[k] for k in ("development_end", "oos_end", "lockbox_start")}
+    return {k: c[k] for k in ("development_end", "selection_holdout_end", "lockbox_start")}
 
 
 def register_experiment(ws: Workspace, campaign_id: str, lineage_parent: str = "",
@@ -293,6 +306,9 @@ def register_experiment(ws: Workspace, campaign_id: str, lineage_parent: str = "
             f"a new campaign must be created explicitly")
     if lineage_parent and lineage_parent not in set(exps["experiment_id"]):
         raise EngineError(f"unknown lineage parent {lineage_parent}")
+    if lineage_parent and final_config_of(ws, lineage_parent) is not None:
+        raise EngineError(f"{lineage_parent} already froze its final configuration (CPCV or lockbox stage): this lineage STOPS. "
+                          f"Using another configuration needs a new explicitly registered research lineage/campaign, not a child of {lineage_parent}")
     nums = [int(e.split("_")[1]) for e in exps["experiment_id"]] or [0]
     exp_id = f"EXP_{max(nums) + 1:04d}"
     row = {"experiment_id": exp_id, "campaign_id": campaign_id, "sequence_in_campaign": str(used + 1),
@@ -480,9 +496,12 @@ def recompute_campaign(ws: Workspace, campaign_id: str, frozen: Frozen | None = 
     _write(ws.path("selection_trials.csv"), trials, TRIAL_COLS)
     for exp_id, st in status_updates.items():
         update_experiment(ws, exp_id, is_status=st)
-        if experiment_row(ws, exp_id)["status"] in IS_STAGE + ("FROZEN",):
-            set_status(ws, exp_id, lifecycle_from_is_status(st), f"IS status {st} at campaign universe "
-                       f"{int(rev.sum())} revealed trials")
+        cur = experiment_row(ws, exp_id)["status"]
+        if cur in IS_STAGE + ("FROZEN",):
+            new = lifecycle_from_is_status(st)
+            if cur == "NEAR_TIE_REVIEW_REQUIRED" and new == "AWAITING_HUMAN_FINAL_CONFIG_SELECTION":
+                new = cur                                           # the near-tie review is re-derived by the IS report, never silently dropped here
+            set_status(ws, exp_id, new, f"IS status {st} at campaign universe {int(rev.sum())} revealed trials")
     return numeric_trials(read_trials(ws))[lambda d: d["campaign_id"] == campaign_id]
 
 
@@ -544,52 +563,95 @@ def log_exploratory_observation(ws: Workspace, experiment_id: str, description: 
     return add_observation(ws, experiment_id, category, description, metric_name, metric_value)
 
 
-# ---------------------------------------------------------------------------- OOS access ledger (append-only hash chain)
+# ---------------------------------------------------------------------------- SELECTION HOLDOUT access ledger (append-only hash chain)
 def _row_hash(prev: str, row: dict) -> str:
-    body = {k: row[k] for k in OOS_ACCESS_COLS if k not in ("prev_row_hash", "row_hash")}
+    body = {k: row[k] for k in SELECTION_HOLDOUT_ACCESS_COLS if k not in ("prev_row_hash", "row_hash")}
     return hashlib.sha256((prev + canonical_json(body)).encode()).hexdigest()
 
 
-def campaign_oos_spent(ws: Workspace, campaign_id: str) -> bool:
-    df = read_oos_access(ws)
+def campaign_selection_holdout_spent(ws: Workspace, campaign_id: str) -> bool:
+    df = read_selection_holdout_access(ws)
     return bool((df["campaign_id"] == campaign_id).any())
 
 
-def oos_spent(ws: Workspace, experiment_id: str) -> bool:
-    """True iff the experiment's CAMPAIGN has spent the shared confirmation OOS (accounting is campaign-wide)."""
-    return campaign_oos_spent(ws, experiment_row(ws, experiment_id)["campaign_id"])
+def selection_holdout_spent(ws: Workspace, experiment_id: str) -> bool:
+    """True iff the experiment's CAMPAIGN has spent the shared selection holdout (accounting is campaign-wide)."""
+    return campaign_selection_holdout_spent(ws, experiment_row(ws, experiment_id)["campaign_id"])
 
 
-def append_oos_access(ws: Workspace, **fields) -> dict:
-    """Append the campaign's single unlock record. Refuses a second unlock of the same campaign ('OOS HAS BEEN SPENT')."""
-    df = read_oos_access(ws)
+def append_selection_holdout_access(ws: Workspace, **fields) -> dict:
+    """Append the campaign's single unlock record. Refuses a second unlock of the same campaign ('SELECTION HOLDOUT HAS BEEN SPENT')."""
+    df = read_selection_holdout_access(ws)
     if (df["campaign_id"] == fields["campaign_id"]).any():
-        raise OOSContaminated(f"CAMPAIGN OOS HAS BEEN SPENT for {fields['campaign_id']} (see registry/oos_access.csv); it cannot be opened again")
-    row = {k: str(fields.get(k, "")) for k in OOS_ACCESS_COLS if k not in ("prev_row_hash", "row_hash")}
+        raise SelectionHoldoutContaminated(f"CAMPAIGN SELECTION HOLDOUT HAS BEEN SPENT for {fields['campaign_id']} (see registry/selection_holdout_access.csv); it cannot be opened again")
+    row = {k: str(fields.get(k, "")) for k in SELECTION_HOLDOUT_ACCESS_COLS if k not in ("prev_row_hash", "row_hash")}
     prev = df["row_hash"].iloc[-1] if len(df) else "GENESIS"
     row["prev_row_hash"] = prev
     row["row_hash"] = _row_hash(prev, row)
-    _write(ws.path("oos_access.csv"), pd.concat([df, pd.DataFrame([row])], ignore_index=True), OOS_ACCESS_COLS)
+    _write(ws.path("selection_holdout_access.csv"), pd.concat([df, pd.DataFrame([row])], ignore_index=True), SELECTION_HOLDOUT_ACCESS_COLS)
     return row
 
 
-def verify_oos_ledger(ws: Workspace) -> int:
-    df = read_oos_access(ws)
+def verify_selection_holdout_ledger(ws: Workspace) -> int:
+    df = read_selection_holdout_access(ws)
     prev = "GENESIS"
     seen = set()
     for _, r in df.iterrows():
         row = r.to_dict()
         if row["prev_row_hash"] != prev or row["row_hash"] != _row_hash(prev, row):
-            raise RegistryIntegrityError("registry/oos_access.csv was edited, reordered or truncated (hash chain broken)")
+            raise RegistryIntegrityError("registry/selection_holdout_access.csv was edited, reordered or truncated (hash chain broken)")
         if row["campaign_id"] in seen:
-            raise RegistryIntegrityError(f"campaign OOS opened twice for {row['campaign_id']}")
+            raise RegistryIntegrityError(f"campaign SELECTION HOLDOUT opened twice for {row['campaign_id']}")
         seen.add(row["campaign_id"])
         prev = row["row_hash"]
     return len(df)
 
 
+def _final_row_hash(prev: str, row: dict) -> str:
+    body = {k: row[k] for k in FINAL_CONFIG_COLS if k not in ("prev_row_hash", "row_hash")}
+    return hashlib.sha256((prev + canonical_json(body)).encode()).hexdigest()
+
+
+def final_config_of(ws: Workspace, experiment_id: str) -> dict | None:
+    df = read_final_configs(ws)
+    hit = df[(df["experiment_id"] == experiment_id) & (df["event"] == "FINAL_CONFIG_FROZEN")]
+    return hit.iloc[0].to_dict() if len(hit) else None
+
+
+def append_final_config(ws: Workspace, **fields) -> dict:
+    """Append-only hash-chained final-configuration ledger. ONE FINAL_CONFIG_FROZEN row per experiment, ever (no switching, no fallback
+    to a runner-up); one CPCV_RESULT row per experiment after it."""
+    df = read_final_configs(ws)
+    exp, ev = fields["experiment_id"], fields["event"]
+    mine = df[df["experiment_id"] == exp]
+    if ev == "FINAL_CONFIG_FROZEN" and (mine["event"] == "FINAL_CONFIG_FROZEN").any():
+        raise EngineError(f"{exp} already froze its final configuration {mine['selected_config_id'].iloc[0]}; it can never be replaced "
+                          f"(no fallback to a runner-up after any later evidence)")
+    if ev == "CPCV_RESULT" and ((mine["event"] == "CPCV_RESULT").any() or not (mine["event"] == "FINAL_CONFIG_FROZEN").any()):
+        raise EngineError(f"{exp}: CPCV_RESULT needs exactly one prior FINAL_CONFIG_FROZEN row and may be recorded once")
+    row = {k: str(fields.get(k, "")) for k in FINAL_CONFIG_COLS if k not in ("prev_row_hash", "row_hash")}
+    prev = df["row_hash"].iloc[-1] if len(df) else "GENESIS"
+    row["prev_row_hash"] = prev
+    row["row_hash"] = _final_row_hash(prev, row)
+    _write(ws.path("final_configs.csv"), pd.concat([df, pd.DataFrame([row])], ignore_index=True), FINAL_CONFIG_COLS)
+    return row
+
+
+def verify_final_config_ledger(ws: Workspace) -> int:
+    df = read_final_configs(ws)
+    prev = "GENESIS"
+    for _, r in df.iterrows():
+        row = r.to_dict()
+        if row["prev_row_hash"] != prev or row["row_hash"] != _final_row_hash(prev, row):
+            raise RegistryIntegrityError("registry/final_configs.csv was edited, reordered or truncated (hash chain broken)")
+        prev = row["row_hash"]
+    if (df[df["event"] == "FINAL_CONFIG_FROZEN"]["experiment_id"].duplicated()).any():
+        raise RegistryIntegrityError("an experiment froze two final configurations")
+    return len(df)
+
+
 def append_table(ws: Workspace, name: str, cols: list[str], rows: list[dict]) -> None:
-    """Append-only helper for oos_trials.csv / cpcv_results.csv."""
+    """Append-only helper for selection_holdout_trials.csv / cpcv_results.csv."""
     df = _read(ws.path(name), cols)
     _write(ws.path(name), pd.concat([df, pd.DataFrame([{k: str(v) for k, v in r.items()} for r in rows])],
                                     ignore_index=True), cols)
@@ -598,7 +660,7 @@ def append_table(ws: Workspace, name: str, cols: list[str], rows: list[dict]) ->
 # ---------------------------------------------------------------------------- integrity / summary
 def integrity_check(ws: Workspace, frozen: Frozen | None = None) -> dict:
     """Raises RegistryIntegrityError if the registry violates the frozen opportunity accounting. Catches: missing trial,
-    duplicate trial, trial 25, changed trial spec, edited historical result (ledger hash), broken OOS ledger chain."""
+    duplicate trial, trial 25, changed trial spec, edited historical result (ledger hash), broken SELECTION HOLDOUT ledger chain."""
     frozen = frozen or load_frozen()
     exps, trials, obs = read_experiments(ws), read_trials(ws), read_observations(ws)
     limit = int(frozen.trial_policy["max_experiments_per_campaign"])
@@ -632,16 +694,17 @@ def integrity_check(ws: Workspace, frozen: Frozen | None = None) -> dict:
         raise RegistryIntegrityError("observation references an unknown experiment")
     if (obs["eligible_for_promotion"] != "False").any():
         raise RegistryIntegrityError("observations can never be eligible for promotion")
-    n_oos = verify_oos_ledger(ws)
+    n_selection_holdout = verify_selection_holdout_ledger(ws)
     camps = read_campaigns(ws)
-    ledger = set(read_oos_access(ws)["campaign_id"])
+    ledger = set(read_selection_holdout_access(ws)["campaign_id"])
     if ledger - set(camps["campaign_id"]):
-        raise RegistryIntegrityError(f"oos_access.csv references unknown campaigns {ledger - set(camps['campaign_id'])}")
-    spent = set(camps[camps["status"] == "OOS_SPENT"]["campaign_id"])
+        raise RegistryIntegrityError(f"selection_holdout_access.csv references unknown campaigns {ledger - set(camps['campaign_id'])}")
+    spent = set(camps[camps["status"] == "SELECTION_HOLDOUT_SPENT"]["campaign_id"])
     if spent != ledger:
-        raise RegistryIntegrityError(f"campaign status and OOS ledger disagree: OOS_SPENT campaigns {sorted(spent)} vs ledger {sorted(ledger)}")
-    return {"experiments": int(len(exps)), "selection_trials": int(len(trials)),
-            "revealed_trials": int(len(revealed)), "observations": int(len(obs)), "oos_unlocks": n_oos}
+        raise RegistryIntegrityError(f"campaign status and SELECTION HOLDOUT ledger disagree: SELECTION_HOLDOUT_SPENT campaigns {sorted(spent)} vs ledger {sorted(ledger)}")
+    n_final = verify_final_config_ledger(ws)
+    return {"experiments": int(len(exps)), "selection_trials": int(len(trials)), "final_config_rows": n_final,
+            "revealed_trials": int(len(revealed)), "observations": int(len(obs)), "selection_holdout_unlocks": n_selection_holdout}
 
 
 def campaign_summary(ws: Workspace, campaign_id: str, frozen: Frozen | None = None) -> dict:
@@ -653,13 +716,13 @@ def campaign_summary(ws: Workspace, campaign_id: str, frozen: Frozen | None = No
     trials = trials[trials["campaign_id"] == campaign_id]
     limit = int(frozen.trial_policy["max_experiments_per_campaign"])
     revealed = int((trials["status"] == "REVEALED").sum())
-    return {"campaign_id": campaign_id, "partitions": {k: camp[k] for k in ("development_end", "oos_end", "lockbox_start")},
+    return {"campaign_id": campaign_id, "partitions": {k: camp[k] for k in ("development_end", "selection_holdout_end", "lockbox_start")},
             "experiments_used": int(len(exps)), "experiments_max": limit,
             "selection_trials_registered": int(len(trials)),
             "selection_trials_max": int(frozen.trial_policy["max_selection_trials_per_campaign"]),
             "selection_trials_revealed": revealed, "statistical_selection_opportunities_exposed": revealed,
             "shortlist_eligible_trials": int((trials["decision"] == SHORTLIST).sum()),
             "provisional_trials": int((trials["decision"] == PROVISIONAL).sum()),
-            "oos_unlocks": int((read_oos_access(ws)["campaign_id"] == campaign_id).sum()),
-            "campaign_status": camp["status"], "campaign_oos_spent": campaign_oos_spent(ws, campaign_id),
+            "selection_holdout_unlocks": int((read_selection_holdout_access(ws)["campaign_id"] == campaign_id).sum()),
+            "campaign_status": camp["status"], "campaign_selection_holdout_spent": campaign_selection_holdout_spent(ws, campaign_id),
             "experiments": exps[["experiment_id", "status", "is_status", "lineage_parent", "research_verification"]].to_dict("records")}

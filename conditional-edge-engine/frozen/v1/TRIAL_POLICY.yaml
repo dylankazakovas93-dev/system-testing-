@@ -4,9 +4,10 @@
 #
 # DATA STAGES (dates are supplied by the experiment, frozen in its manifest BEFORE any result):
 #   DEVELOPMENT (IS)  -> everything research code may touch (event, features, targets, models, CV, stats, plots, reports)
-#   CONFIRMATION OOS  -> one-shot, only after a manual human unlock (approvals/EXP_xxxx_OOS_APPROVAL.yaml)
+#   SELECTION HOLDOUT  -> one-shot, only after a manual human unlock (approvals/EXP_xxxx_SELECTION_HOLDOUT_APPROVAL.yaml)
 #   FINAL LOCKBOX     -> sealed; no code path opens it
-# "OOS" means ONLY the human-unlocked confirmation period. Internal cross-validation is DEVELOPMENT_CV.
+# "SELECTION HOLDOUT" means ONLY the human-unlocked SELECTION period (1 or 2 calendar years; selection data, NOT final confirmation).
+# Internal cross-validation is DEVELOPMENT_CV. The FINAL LOCKBOX is the only untouched confirmation sample.
 version: v1
 states: [UPPER_HALF, LOWER_HALF]
 expected_trials_per_experiment: 24
@@ -40,9 +41,9 @@ sensitivity:
 single_direction_events_only: true   # all events of one v1 experiment share one direction; mixed -> separate _LONG / _SHORT experiments
 shortlist:
   top_groups_reported: 5
-oos:
-  max_groups_per_experiment: 2       # MAX_OOS_GROUPS_PER_EXPERIMENT
-  max_groups_per_campaign: 6         # MAX_OOS_GROUPS_PER_CAMPAIGN: 6 groups x 3 frozen models = 18 OOS confirmations at most; never relaxed dynamically
+selection_holdout:
+  max_groups_per_experiment: 2       # MAX_SELECTION_HOLDOUT_CONFIGS_PER_EXPERIMENT
+  max_groups_per_campaign: 6         # MAX_SELECTION_HOLDOUT_CONFIGS_PER_CAMPAIGN: 6 groups x 3 frozen models = 18 SELECTION HOLDOUT model evaluations at most; never relaxed dynamically
   models_per_group: 3                # every approved group includes RIDGE, SPLINE and XGB
   one_shot: true
   approval_dir: approvals

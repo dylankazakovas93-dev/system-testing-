@@ -34,14 +34,14 @@ decision_priority:
   - DIAGNOSTIC_CONDITIONAL_IMPROVEMENT
   - REJECTED_STATISTICAL
   - REJECTED_INSTABILITY
-# One-shot confirmation OOS gates for each of the 3 x G approved model confirmations.
-oos_confirmation:
+# One-shot selection-holdout EVIDENCE gates (informational; SELECTION DATA, never confirmation) for each of the 3 x G approved model evaluations.
+selection_holdout_evidence:
   min_selected_frequency_per_week: 1.0
   min_standardized_uplift: 0.10
   selected_effect_must_exceed: 0.0
   bootstrap_ci_lower_bound_must_exceed: 0.0
-  max_oos_bh_q: 0.05            # BH over all 3G approved model confirmations
-  max_oos_bonferroni_p: 0.05    # min(raw_p * 3G, 1)
+  max_selection_holdout_bh_q: 0.05            # BH over all 3G approved model evaluations
+  max_selection_holdout_bonferroni_p: 0.05    # min(raw_p * 3G, 1)
   min_models_passing: 2         # per target/side group
 # Final CPCV robustness (veto only), per candidate model; a group needs >= 2 of 3 models CPCV_PASS.
 cpcv:

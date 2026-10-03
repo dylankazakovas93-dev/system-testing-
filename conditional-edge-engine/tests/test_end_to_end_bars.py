@@ -1,7 +1,7 @@
 """Bar-level end-to-end runs (synthetic 1-minute NQ-like bars through the REAL pipeline and the REAL CLIs).
 
-Lifecycle covered at bar level: freeze -> IS run (stops at the human gate) -> [test code playing the human] approval ->
-one-shot OOS -> CPCV. The strong-mode external verification of the three model paths is injected here with the test-only
+Lifecycle covered at bar level: freeze -> IS run (stops at the human gate; near-tie analysis) -> [test code playing the human] approval ->
+one-shot campaign SELECTION HOLDOUT (selection data) -> [human] final config -> automatic CPCV; and the direct path (holdout skipped, never read). The strong-mode external verification of the three model paths is injected here with the test-only
 helper ``prepare_for_approval`` (the real verifier is exercised in test_verifier_bridge.py and in the reported verifier runs).
 """
 import json
@@ -20,19 +20,19 @@ from engine.common import CODE_ROOT, load_frozen
 from engine.event_contract import EventContractError, EventSpecError
 from engine.experiment_lifecycle import MutationDetected, create_experiment, experiment_dir, freeze, verify_manifest
 from engine.experiment_runner import run_experiment
-from engine.oos_stage import ApprovalError, validate_approval
+from engine.selection_holdout_stage import ApprovalError, validate_approval
 from engine.synthetic import make_bars
-from tests.scenario_helpers import campaign_open_approval, human_approval, prepare_for_approval, top_group_ids
+from tests.scenario_helpers import (campaign_open_approval, human_approval, human_final_selection, prepare_for_approval, proposable, top_group_ids)
 
 F = load_frozen()
-PARTS = {"development_end": "2018-01-01", "oos_end": "2018-07-01", "lockbox_start": "2018-10-01"}
-PART_ARGS = ["--development-end", PARTS["development_end"], "--oos-end", PARTS["oos_end"], "--lockbox-start", PARTS["lockbox_start"]]
-N_DAYS = 820                                      # 2016-01-04 .. 2019-02: development 2016-17, OOS 2018H1, gap, lockbox 2018-10 on
+PARTS = {"development_end": "2018-01-01", "selection_holdout_end": "2019-01-01", "lockbox_start": "2019-01-01"}
+PART_ARGS = ["--development-end", PARTS["development_end"], "--selection-holdout-years", "1"]
+N_DAYS = 820                                      # 2016-01-04 .. 2019-02: development 2016-17, SELECTION HOLDOUT 2018H1, gap, lockbox 2018-10 on
 REPORT_SECTIONS = ["A. Experiment hypothesis", "B. Exact event definition", "C. Direction", "D. Raw event frequency", "E. Data period used",
                    "F. Exact selection trial count", "G. All 24 trial results", "H. Multiplicity adjustments", "I. Top configurations",
                    "J. Model agreement", "K. All IS calendar years", "L. All 5 purged DEVELOPMENT_CV folds", "M–Q.", "R. Feature diagnostics",
                    "S. Filter / component ladder", "T. Sensitivity diagnostics", "U. Why each shortlisted configuration was selected",
-                   "V. Why every other configuration was rejected", "W. Non-promotable interesting observations", "X. Exact hashes", "Y. OOS status"]
+                   "V. Why every other configuration was rejected", "NT. CONFIGURATION UNCERTAINTY / NEAR-TIES", "W. Non-promotable interesting observations", "X. Exact hashes", "Y. SELECTION HOLDOUT status"]
 
 
 def cli(*args, check=True):
@@ -51,7 +51,7 @@ def write_parquet(path, **kw):
 def golden(tmp_path_factory):
     base = tmp_path_factory.mktemp("golden")
     data = base / "NQ_synth.parquet"
-    write_parquet(data)                                                       # includes OOS AND lockbox rows: the CLI must discard them
+    write_parquet(data)                                                       # includes SELECTION HOLDOUT AND lockbox rows: the CLI must discard them
     ws = base / "ws"
     cli("scripts/new_experiment.py", "--new-campaign", "C001", *PART_ARGS, "--workspace", ws)
     spec = ws / "experiments/EXP_0001/EVENT_SPEC.yaml"
@@ -64,22 +64,22 @@ def golden(tmp_path_factory):
 def test_run_experiment_prints_the_counters_and_stops(golden):
     out = golden["run_stdout"]
     assert "EXPERIMENT SELECTION TRIALS: 24 / 24" in out and "CAMPAIGN REVEALED SELECTION TRIALS: 24 / 480" in out
-    assert "OOS NOT ACCESSED" in out and "stopped for human review" in out
+    assert "SELECTION HOLDOUT NOT ACCESSED" in out and "stopped for human review" in out
 
 
-def test_is_report_has_sections_A_to_Y_and_the_sealed_oos_status(golden):
+def test_is_report_has_sections_A_to_Y_and_the_sealed_selection_holdout_status(golden):
     ws = golden["ws"]
     text = (ws / "experiments/EXP_0001/results/IS_REPORT.md").read_text()
     for s in REPORT_SECTIONS:
         assert f"## {s}" in text, s
-    assert "OOS status = NOT ACCESSED" in text and "DIAGNOSTIC ONLY — NOT A SELECTION TRIAL" in text
-    assert "NOT OOS" in text and "4 targets × 3 models × 2 states = **24**" in text
+    assert "SELECTION HOLDOUT status = NOT ACCESSED" in text and "DIAGNOSTIC ONLY — NOT A SELECTION TRIAL" in text
+    assert "NOT SELECTION HOLDOUT" in text and "4 targets × 3 models × 2 states = **24**" in text
     assert text.count("EXP_0001_T") >= 24 and "EXP_0001_T24" in text
     j = json.loads((ws / "experiments/EXP_0001/results/IS_REPORT.json").read_text())
-    assert j["markdown_sha256"] and j["X_hashes"]["manifest_sha256"] and j["Y_oos_status"] == "NOT ACCESSED"
+    assert j["markdown_sha256"] and j["X_hashes"]["manifest_sha256"] and j["Y_selection_holdout_status"] == "NOT ACCESSED"
 
 
-def test_registry_has_exactly_24_revealed_trials_and_no_oos_activity(golden):
+def test_registry_has_exactly_24_revealed_trials_and_no_selection_holdout_activity(golden):
     ws = reg.Workspace(golden["ws"])
     chk = reg.integrity_check(ws)
     assert chk["selection_trials"] == 24 and chk["revealed_trials"] == 24
@@ -89,15 +89,15 @@ def test_registry_has_exactly_24_revealed_trials_and_no_oos_activity(golden):
         assert t[col].notna().all(), col
     assert not t["decision"].isin(["IS_SHORTLIST_ELIGIBLE", "IS_PROVISIONAL_CANDIDATE"]).any()      # null data: nothing may survive
     assert reg.experiment_row(ws, "EXP_0001")["status"] == "IS_REJECTED"
-    assert len(reg.read_oos_access(ws)) == 0 and not list(Path(golden["ws"], "approvals").glob("*.yaml"))
+    assert len(reg.read_selection_holdout_access(ws)) == 0 and not list(Path(golden["ws"], "approvals").glob("*.yaml"))
     res = json.loads((golden["ws"] / "experiments/EXP_0001/results/results.json").read_text())
     file_ts = pd.to_datetime(pd.read_parquet(golden["data"])["timestamp"], utc=True)
     n_dev = int((file_ts < pd.Timestamp(PARTS["development_end"], tz="UTC")).sum())
-    assert len(file_ts) > n_dev                                                                   # the data file DID contain OOS + lockbox rows ...
+    assert len(file_ts) > n_dev                                                                   # the data file DID contain SELECTION HOLDOUT + lockbox rows ...
     assert res["base_event"]["development_bars"] == n_dev                                         # ... and exactly the development rows were used
     assert res["base_event"]["rows_removed_before_research"] == 0                                 # (the CLI loader never materialised the rest)
     assert pd.Timestamp(res["base_event"]["last_bar"]) < pd.Timestamp(PARTS["development_end"], tz="UTC")
-    assert not list((golden["ws"] / "experiments/EXP_0001/results").glob("oos_*")) and not (golden["ws"] / "experiments/EXP_0001/results/OOS_REPORT.json").exists()
+    assert not list((golden["ws"] / "experiments/EXP_0001/results").glob("selection_holdout_*")) and not (golden["ws"] / "experiments/EXP_0001/results/SELECTION_HOLDOUT_REPORT.json").exists()
     man = json.loads((golden["ws"] / "experiments/EXP_0001/FROZEN_MANIFEST.json").read_text())
     assert man["partitions"] == PARTS and man["partitions_hash"]
 
@@ -107,13 +107,13 @@ def test_rerun_of_revealed_experiment_is_refused(golden):
     assert p.returncode != 0 and "already revealed" in (p.stderr + p.stdout)
 
 
-def test_run_campaign_oos_refuses_without_a_human_approval_and_spends_nothing(golden):
-    p = cli("scripts/run_campaign_oos.py", "--campaign", "C001", "--data", golden["data"], "--workspace", golden["ws"], check=False)
+def test_run_campaign_selection_holdout_refuses_without_a_human_approval_and_spends_nothing(golden):
+    p = cli("scripts/run_campaign_selection_holdout.py", "--campaign", "C001", "--data", golden["data"], "--workspace", golden["ws"], check=False)
     assert p.returncode != 0 and "frozen" in (p.stderr + p.stdout).lower()
     ws = reg.Workspace(golden["ws"])
-    assert len(reg.read_oos_access(ws)) == 0 and not list(Path(golden["ws"], "approvals").glob("*.yaml"))
+    assert len(reg.read_selection_holdout_access(ws)) == 0 and not list(Path(golden["ws"], "approvals").glob("*.yaml"))
     c = cli("scripts/run_cpcv.py", "--experiment", "EXP_0001", "--data", golden["data"], "--workspace", golden["ws"], check=False)
-    assert c.returncode != 0 and len(reg.read_oos_access(ws)) == 0
+    assert c.returncode != 0 and len(reg.read_selection_holdout_access(ws)) == 0
 
 
 def test_campaign_status_reports_counters_and_statuses(golden):
@@ -165,7 +165,7 @@ def test_cli_rejects_experiment_21_and_new_campaigns_need_explicit_partitions(tm
     assert "EXP_0021" in p2.stdout
 
 
-# ============================ a planted bar-level edge: candidate + sensitivity + human gate + OOS + CPCV ====================
+# ============================ a planted bar-level edge: candidate + sensitivity + human gate + SELECTION HOLDOUT + CPCV ====================
 def write_custom_event(ws, exp, *, mixed: bool, hypothesis: str, spec_values=(1,)):
     d = experiment_dir(ws, exp)
     (d / "event.py").write_text(textwrap.dedent('''
@@ -237,11 +237,10 @@ def test_candidate_without_strong_verification_is_provisional_and_cannot_be_appr
     copy = planted["ws_dir"].parent / "unverified_copy"
     shutil.copytree(planted["ws_dir"], copy)
     cws = reg.Workspace(copy)
-    groups = ["DIR_RETURN_15|UPPER_HALF"]
-    human_approval(cws, exp, groups)                                                          # a human could write this file ...
+    human_approval(cws, exp, [f"{exp}|DIR_RETURN_15|UPPER_HALF"])                              # a human could write this file ...
     with pytest.raises(ApprovalError):
         validate_approval(cws, exp)                                                           # ... but it is not valid without verification
-    assert len(reg.read_oos_access(cws)) == 0
+    assert len(reg.read_selection_holdout_access(cws)) == 0
 
 
 def test_sensitivity_probes_ran_and_never_replace_the_base_parameter(planted):
@@ -258,20 +257,20 @@ def test_sensitivity_probes_ran_and_never_replace_the_base_parameter(planted):
     assert reg.experiment_row(ws, exp)["sensitivity_json"] != "{}"
 
 
-def test_the_planted_run_never_touched_oos_or_the_lockbox(planted):
+def test_the_planted_run_never_touched_selection_holdout_or_the_lockbox(planted):
     ws, exp = planted["ws"], planted["exp"]
-    assert len(reg.read_oos_access(ws)) == 0 and not list(Path(planted["ws_dir"], "approvals").glob("*.yaml"))
+    assert len(reg.read_selection_holdout_access(ws)) == 0 and not list(Path(planted["ws_dir"], "approvals").glob("*.yaml"))
     assert pd.Timestamp(planted["results"]["base_event"]["last_bar"]) < pd.Timestamp(PARTS["development_end"], tz="UTC")
-    assert "OOS status = NOT ACCESSED" in (experiment_dir(ws, exp) / "results/IS_REPORT.md").read_text()
+    assert "SELECTION HOLDOUT status = NOT ACCESSED" in (experiment_dir(ws, exp) / "results/IS_REPORT.md").read_text()
 
 
 def test_path_diagnostics_are_non_promotable_content_cannot_move_ranking_but_tampering_breaks_approval_integrity(planted, tmp_path):
     """PATH DIAGNOSTICS ARE NON-PROMOTABLE: drastically rewriting PATH_DIAGNOSTICS.json (and legitimately regenerating the report)
-    leaves candidate status, trial/group ranking, the top-5 list, approval eligibility and OOS group order untouched, while the
+    leaves candidate status, trial/group ranking, the top-5 list, approval eligibility and SELECTION HOLDOUT group order untouched, while the
     hash-bound approval of the earlier report is invalidated."""
     from engine.acceptance import rank_groups, rank_trials
     from engine.is_report import write_is_report
-    from engine.oos_stage import ApprovalError, approval_hashes, freeze_campaign_oos, validate_approval
+    from engine.selection_holdout_stage import ApprovalError, approval_hashes, freeze_campaign_selection_holdout, validate_approval
     ws_dir = tmp_path / "ws"
     shutil.copytree(planted["ws_dir"], ws_dir)
     ws = reg.Workspace(ws_dir)
@@ -286,12 +285,13 @@ def test_path_diagnostics_are_non_promotable_content_cannot_move_ranking_but_tam
                 "trial_rank": [r["trial_id"] for r in rank_trials(rows)], "group_rank": [g["group_id"] for g in rank_groups(rows, F.acceptance, 5)],
                 "top5": j["I_top_configurations"], "agreement": j["J_model_agreement"], "allowed": approval_hashes(ws, exp)["allowed_target_side_groups"],
                 "eligible_ids": sorted(r["trial_id"] for r in rows if r["decision"] == "IS_SHORTLIST_ELIGIBLE")}
+    before_nt = json.loads((experiment_dir(ws, exp) / "results/IS_REPORT.json").read_text())["NT_configuration_uncertainty"]["clusters"]
     before = formal()
-    assert before["status"][0] == "AWAITING_HUMAN_OOS_APPROVAL" and len(before["top5"]["top_groups"]) >= 2
-    order = top_group_ids(ws, exp)[:2][::-1]                                                   # the human picks 2 eligible groups, in his own order
-    human_approval(ws, exp, order)
+    assert before["status"][0] == "NEAR_TIE_REVIEW_REQUIRED" and len(before["top5"]["top_groups"]) >= 2
+    pair = proposable(ws, exp, 0)                                                              # the engine's deterministic proposable (top-2) near-tied pair
+    human_approval(ws, exp, pair)
     old_report_hash = approval_hashes(ws, exp)["is_report_sha256"]
-    assert validate_approval(ws, exp)["approved_target_side_groups"] == order
+    assert validate_approval(ws, exp)["approved_configs"] == pair
 
     # (a) raw tampering of the frozen diagnostic artifact (no regeneration) invalidates the hash-bound approval
     d = experiment_dir(ws, exp) / "results"
@@ -300,7 +300,7 @@ def test_path_diagnostics_are_non_promotable_content_cannot_move_ranking_but_tam
     with pytest.raises(ApprovalError, match="PATH_DIAGNOSTICS.json changed"):
         validate_approval(ws, exp)
     (d / "PATH_DIAGNOSTICS.json").write_text(original)
-    assert validate_approval(ws, exp)["approved_target_side_groups"] == order
+    assert validate_approval(ws, exp)["approved_configs"] == pair
 
     # (b) drastic rewrite of every diagnostic number, consistently re-hashed and regenerated: formal results do not move
     rep = json.loads(original)
@@ -318,18 +318,20 @@ def test_path_diagnostics_are_non_promotable_content_cannot_move_ranking_but_tam
     write_is_report(ws, exp)
     after = formal()
     assert after == before                                                                     # status, ranks, top-5, eligibility, trial rows: identical
+    assert json.loads((d / "IS_REPORT.json").read_text())["NT_configuration_uncertainty"]["clusters"] == \
+        json.loads(json.dumps(before_nt))                                                       # the near-tie clusters did not move either
     new_hash = approval_hashes(ws, exp)["is_report_sha256"]
     assert new_hash != old_report_hash                                                         # but the artifact hash moved ...
     with pytest.raises(ApprovalError, match="is_report_sha256 does not match"):
         validate_approval(ws, exp)                                                             # ... so the OLD approval is no longer valid
-    human_approval(ws, exp, order)                                                             # a NEW human approval over the new hashes accepts the SAME groups
-    assert validate_approval(ws, exp)["approved_target_side_groups"] == order
-    with pytest.raises(ApprovalError, match="not in the frozen IS shortlist"):                 # an attractive-looking non-eligible group is refused
-        human_approval(ws, exp, ["DIR_RETURN_60|UPPER_HALF"])
+    human_approval(ws, exp, pair)                                                              # a NEW human approval over the new hashes accepts the SAME pair
+    assert validate_approval(ws, exp)["approved_configs"] == pair
+    with pytest.raises(ApprovalError, match="not one of the top-2"):                           # an attractive-looking non-proposable config is refused
+        human_approval(ws, exp, [f"{exp}|DIR_RETURN_60|UPPER_HALF", pair[0]], near_tie_cluster_id="NEAR_TIE_CLUSTER_01")
         validate_approval(ws, exp)
-    human_approval(ws, exp, order)
-    doc = freeze_campaign_oos(ws, "C001")
-    assert doc["experiments"][0]["approved_target_side_groups"] == order and doc["n_oos_confirmations"] == 6   # OOS group order = the human's order of eligible groups
+    human_approval(ws, exp, pair)
+    doc = freeze_campaign_selection_holdout(ws, "C001")
+    assert doc["experiments"][0]["approved_configs"] == pair and doc["n_holdout_evaluations"] == 6   # the holdout compares exactly the engine's near-tied pair
 
 
 # ---------------- documented hard failure: mixed-direction events ----------------
@@ -353,34 +355,34 @@ def test_a_spec_that_declares_two_directions_cannot_be_frozen(tmp_path):
         freeze(ws, exp)
 
 
-# ---------------- bar-level human gate -> one-shot OOS -> CPCV (test code plays the human) ----------------
-def approve_and_spend_oos(planted, name, data):
+# ---------------- bar-level human gate -> one-shot SELECTION HOLDOUT -> human final config -> automatic CPCV (test code plays the human) ----------------
+def approve_and_spend_selection_holdout(planted, name, data):
     ws_dir = planted["ws_dir"].parent / name
     shutil.copytree(planted["ws_dir"], ws_dir)
     ws = reg.Workspace(ws_dir)
     exp = planted["exp"]
     row = prepare_for_approval(ws, exp)                       # TEST-ONLY injection of strong verification of all 12 paths
-    assert row["status"] == "AWAITING_HUMAN_OOS_APPROVAL"
-    groups = top_group_ids(ws, exp)[:1]
-    human_approval(ws, exp, groups)                           # TEST CODE PLAYING THE HUMAN
-    cli("scripts/freeze_campaign_oos.py", "--campaign", "C001", "--workspace", ws_dir)          # closes the campaign (human-run step)
+    assert row["status"] == "NEAR_TIE_REVIEW_REQUIRED"        # the planted 15 / 30 configs are statistically near-tied
+    cfgs = proposable(ws, exp, 0)
+    human_approval(ws, exp, cfgs)                             # TEST CODE PLAYING THE HUMAN
+    cli("scripts/freeze_campaign_selection_holdout.py", "--campaign", "C001", "--workspace", ws_dir)          # closes the campaign (human-run step)
     campaign_open_approval(ws, "C001")                        # TEST CODE PLAYING THE HUMAN (second, campaign-level approval)
-    run = cli("scripts/run_campaign_oos.py", "--campaign", "C001", "--data", data, "--workspace", ws_dir)
-    return {"ws_dir": ws_dir, "ws": ws, "exp": exp, "groups": groups, "stdout": run.stdout, "data": data}
+    run = cli("scripts/run_campaign_selection_holdout.py", "--campaign", "C001", "--data", data, "--workspace", ws_dir)
+    return {"ws_dir": ws_dir, "ws": ws, "exp": exp, "configs": cfgs, "stdout": run.stdout, "data": data}
 
 
 @pytest.fixture(scope="module")
-def after_oos(planted):
-    return approve_and_spend_oos(planted, "ws_oos", planted["data"])
+def after_selection_holdout(planted):
+    return approve_and_spend_selection_holdout(planted, "ws_selection_holdout", planted["data"])
 
 
 @pytest.fixture(scope="module")
-def after_oos_poisoned_lockbox(planted):
-    """Same approval, same experiment - but every row at/after oos_end (gap + final lockbox) is wrecked in the data file."""
+def after_selection_holdout_poisoned_lockbox(planted):
+    """Same approval, same experiment - but every row at/after selection_holdout_end (the final lockbox) is wrecked in the data file."""
     import numpy as np
     df = pd.read_parquet(planted["data"])
     ts = pd.to_datetime(df["timestamp"], utc=True)
-    late = (ts >= pd.Timestamp(PARTS["oos_end"], tz="UTC")).to_numpy()
+    late = (ts >= pd.Timestamp(PARTS["selection_holdout_end"], tz="UTC")).to_numpy()
     assert late.sum() > 10_000
     rng = np.random.default_rng(99)
     df.loc[late, ["open", "high", "low", "close"]] = rng.uniform(1, 1e6, size=(int(late.sum()), 4))
@@ -388,50 +390,152 @@ def after_oos_poisoned_lockbox(planted):
     df.iloc[-50:, df.columns.get_loc("close")] = np.nan
     bad = planted["ws_dir"].parent / "NQ_poisoned.parquet"
     df.to_parquet(bad)
-    return approve_and_spend_oos(planted, "ws_oos_poisoned", bad)
+    return approve_and_spend_selection_holdout(planted, "ws_selection_holdout_poisoned", bad)
 
 
-def test_after_human_approval_the_bar_level_oos_runs_exactly_once(after_oos):
-    ws, exp = after_oos["ws"], after_oos["exp"]
-    assert "OOS is now SPENT" in after_oos["stdout"] and "family of 3" in after_oos["stdout"]
-    ledger = reg.read_oos_access(ws)
-    assert len(ledger) == 1 and ledger["campaign_id"].iloc[0] == "C001" and ledger["experiments"].iloc[0] == exp and reg.verify_oos_ledger(ws) == 1
-    rep = json.loads((experiment_dir(ws, exp) / "results/OOS_REPORT.json").read_text())
-    assert rep["status"] == reg.experiment_row(ws, exp)["status"] == "OOS_CONFIRMED"           # the planted momentum persists in the OOS period
-    oos_rows = reg.read_oos_trials(ws)
-    assert len(oos_rows) == 3 * len(after_oos["groups"]) and set(oos_rows["model"]) == {"RIDGE", "SPLINE", "XGB"}   # an approved group runs all 3 models
-    assert rep["family_size_for_multiple_testing"] == 3 and rep["oos_period"] == [PARTS["development_end"], PARTS["oos_end"]]
+def holdout_report(ws, exp):
+    return json.loads((experiment_dir(ws, exp) / "results/SELECTION_HOLDOUT_REPORT.json").read_text())
 
 
-def test_second_oos_unlock_and_is_report_regeneration_are_refused_afterwards(after_oos):
-    from engine.is_report import NOT_ACCESSED, oos_status_label
-    ws, exp = after_oos["ws"], after_oos["exp"]
-    p = cli("scripts/run_campaign_oos.py", "--campaign", "C001", "--data", after_oos["data"], "--workspace", after_oos["ws_dir"], check=False)
-    assert p.returncode != 0 and "SPENT" in (p.stderr + p.stdout) and len(reg.read_oos_access(ws)) == 1
-    m = cli("scripts/make_report.py", "--experiment", exp, "--workspace", after_oos["ws_dir"], check=False)
-    assert m.returncode != 0 and "OOS SPENT" in (m.stderr + m.stdout)                          # 'NOT ACCESSED' can no longer be printed
-    label = oos_status_label(ws, exp)
-    assert label != NOT_ACCESSED and label.startswith("OOS SPENT")
+def test_after_human_approval_the_bar_level_selection_holdout_runs_exactly_once(after_selection_holdout):
+    ws, exp = after_selection_holdout["ws"], after_selection_holdout["exp"]
+    assert "SELECTION HOLDOUT is now SPENT" in after_selection_holdout["stdout"] and "family of 6" in after_selection_holdout["stdout"]
+    assert "NOT confirmation" in after_selection_holdout["stdout"]
+    ledger = reg.read_selection_holdout_access(ws)
+    assert len(ledger) == 1 and ledger["campaign_id"].iloc[0] == "C001" and ledger["experiments"].iloc[0] == exp and reg.verify_selection_holdout_ledger(ws) == 1
+    rep = holdout_report(ws, exp)
+    assert rep["status"] == reg.experiment_row(ws, exp)["status"] == "SELECTION_HOLDOUT_SPENT"
+    assert rep["label"] == "SELECTION DATA — USED TO CHOOSE FINAL CONFIGURATION / NOT FINAL CONFIRMATION" and rep["is_independent_confirmation"] is False
+    rows = reg.read_selection_holdout_trials(ws)
+    assert len(rows) == 6 and set(rows["model"]) == {"RIDGE", "SPLINE", "XGB"} and set(rows["group_id"]) == {c.split("|", 1)[1] for c in after_selection_holdout["configs"]}   # all 3 models per config
+    assert rep["family_size_for_multiple_testing"] == 6 and rep["selection_holdout_period"] == [PARTS["development_end"], PARTS["selection_holdout_end"]]
+    assert rep["preference"]["status"] in ("HOLDOUT_PREFERRED_CONFIG", "HOLDOUT_UNRESOLVED", "NO_QUALIFYING_CONFIG")
 
 
-def test_poisoned_lockbox_rows_cannot_change_a_single_oos_result(after_oos, after_oos_poisoned_lockbox):
-    exp = after_oos["exp"]
-    a = json.loads((experiment_dir(after_oos["ws"], exp) / "results/OOS_REPORT.json").read_text())
-    b = json.loads((experiment_dir(after_oos_poisoned_lockbox["ws"], exp) / "results/OOS_REPORT.json").read_text())
-    assert a["status"] == b["status"] and a["oos_bars_fingerprint"] == b["oos_bars_fingerprint"]
-    assert a["confirmations"] == b["confirmations"] and a["group_verdicts"] == b["group_verdicts"]    # every OOS statistic is identical
-    assert pd.Timestamp(a["oos_period"][1]) <= pd.Timestamp(PARTS["lockbox_start"])
+def test_bar_level_holdout_path_diagnostics_exist_only_for_the_frozen_configs_and_cannot_create_one(after_selection_holdout):
+    """Selection-holdout path / MFE-MAE / bracket diagnostics are computed (bars are available) for the pre-frozen configs only, and may inform the human only."""
+    ws, exp = after_selection_holdout["ws"], after_selection_holdout["exp"]
+    rep = holdout_report(ws, exp)
+    pi = rep["path_diagnostics"]
+    assert pi["status"] == "COMPUTED" and pi["label"].startswith("SELECTION DATA") and "GROSS" in pi["cost_banner"] and "NO BRACKET WAS SELECTED" in pi["selection_banner"]
+    approved = set(after_selection_holdout["configs"])
+    assert {k.rsplit("|", 1)[0] for k in pi["per_config_model"]} == approved                       # nothing but the frozen configs
+    assert {k.rsplit("|", 1)[1] for k in pi["per_config_model"]} == {"RIDGE", "SPLINE", "XGB"} and pi["all_holdout_events"]["n_events"] > 0
+    for k, v in pi["per_config_model"].items():
+        assert v == {} or ({"continuation_60", "reversal_60", "median_MFE_points_60", "median_abs_MAE_points_60", "bracket_cells"} <= set(v) and v["bracket_cells"] == 64)
+    f = experiment_dir(ws, exp) / "results" / pi["file"]
+    import hashlib
+    assert hashlib.sha256(f.read_bytes()).hexdigest() == pi["sha256"]
+    md = (experiment_dir(ws, exp) / "results/SELECTION_HOLDOUT_REPORT.md").read_text()
+    assert "Path / bracket diagnostics of the holdout (SELECTION DATA)" in md and "may inform the HUMAN's choice among configs frozen before the holdout opened" in md
+    # the diagnostics do not enter the deterministic preference: the preference module cannot see them
+    import inspect
+
+    from engine import holdout_preference
+    assert "path" not in inspect.getsource(holdout_preference).lower().replace("path/bracket", "").replace("path-free", "").replace("path / bracket", "")
 
 
-def test_bar_level_cpcv_runs_only_after_oos_confirmation_and_only_vetoes(after_oos):
-    ws, exp = after_oos["ws"], after_oos["exp"]
-    cli("scripts/run_cpcv.py", "--experiment", exp, "--data", after_oos["data"], "--workspace", after_oos["ws_dir"])
+def test_second_selection_holdout_unlock_and_is_report_regeneration_are_refused_afterwards(after_selection_holdout):
+    from engine.is_report import NOT_ACCESSED, selection_holdout_status_label
+    ws, exp = after_selection_holdout["ws"], after_selection_holdout["exp"]
+    p = cli("scripts/run_campaign_selection_holdout.py", "--campaign", "C001", "--data", after_selection_holdout["data"], "--workspace", after_selection_holdout["ws_dir"], check=False)
+    assert p.returncode != 0 and "SPENT" in (p.stderr + p.stdout) and len(reg.read_selection_holdout_access(ws)) == 1
+    m = cli("scripts/make_report.py", "--experiment", exp, "--workspace", after_selection_holdout["ws_dir"], check=False)
+    assert m.returncode != 0 and "SELECTION HOLDOUT SPENT" in (m.stderr + m.stdout)                          # 'NOT ACCESSED' can no longer be printed
+    label = selection_holdout_status_label(ws, exp)
+    assert label != NOT_ACCESSED and label.startswith("SELECTION HOLDOUT SPENT")
+
+
+def test_poisoned_lockbox_rows_cannot_change_a_single_selection_holdout_result(after_selection_holdout, after_selection_holdout_poisoned_lockbox):
+    exp = after_selection_holdout["exp"]
+    a = holdout_report(after_selection_holdout["ws"], exp)
+    b = holdout_report(after_selection_holdout_poisoned_lockbox["ws"], exp)
+    assert a["status"] == b["status"] and a["selection_holdout_bars_fingerprint"] == b["selection_holdout_bars_fingerprint"]
+    assert a["evaluations"] == b["evaluations"] and a["evidence_gate_verdicts"] == b["evidence_gate_verdicts"] and a["preference"] == b["preference"]    # every statistic is identical
+    assert a["path_diagnostics"]["sha256"] == b["path_diagnostics"]["sha256"] and a["path_diagnostics"]["per_config_model"] == b["path_diagnostics"]["per_config_model"]
+    assert pd.Timestamp(a["selection_holdout_period"][1]) <= pd.Timestamp(PARTS["lockbox_start"])
+
+
+def pick_config(rep):
+    pref = rep["preference"]
+    return pref.get("holdout_preferred_config") or pref.get("ranking_leader_advisory") or rep["approved_configs"][0]
+
+
+@pytest.fixture(scope="module")
+def after_final_config(after_selection_holdout):
+    """The human chooses one frozen config (the advisory preference if there is one); the engine freezes it and runs CPCV AUTOMATICALLY."""
+    ws, exp, ws_dir = after_selection_holdout["ws"], after_selection_holdout["exp"], after_selection_holdout["ws_dir"]
+    pick = pick_config(holdout_report(ws, exp))
+    human_final_selection(ws, exp, pick)                                     # TEST CODE PLAYING THE HUMAN
+    out = cli("scripts/finalize_final_config.py", "--experiment", exp, "--data", after_selection_holdout["data"], "--workspace", ws_dir)
+    return {**after_selection_holdout, "pick": pick, "stdout": out.stdout}
+
+
+def test_bar_level_final_config_freezes_then_cpcv_runs_automatically_and_only_vetoes(after_final_config):
+    ws, exp, pick = after_final_config["ws"], after_final_config["exp"], after_final_config["pick"]
     rep = json.loads((experiment_dir(ws, exp) / "results/CPCV_REPORT.json").read_text())
+    assert "POST-SELECTION ROBUSTNESS — NOT INDEPENDENT CONFIRMATION" in after_final_config["stdout"] and rep["final_config_id"] == pick
     cp = reg.read_cpcv(ws)
-    assert len(cp) == 3 and set(cp["model"]) == {"RIDGE", "SPLINE", "XGB"}
+    assert len(cp) == 3 and set(cp["model"]) == {"RIDGE", "SPLINE", "XGB"} and set(cp["group_id"]) == {pick.split("|", 1)[1]}     # exactly the ONE frozen config
     assert rep["n_splits"] == 15 and all(int(v["n_valid_splits"]) == 15 for v in rep["summary"].values())
-    assert reg.experiment_row(ws, exp)["status"] in ("AWAITING_FINAL_LOCKBOX", "CPCV_REJECTED")
+    assert rep["data_used"] == "DEVELOPMENT + SELECTION_HOLDOUT" and rep["final_lockbox_accessed"] is False
     status = reg.experiment_row(ws, exp)["status"]
-    assert (status == "AWAITING_FINAL_LOCKBOX") == bool(rep["cpcv_confirmed_groups"])
+    assert status in ("AWAITING_FINAL_LOCKBOX_APPROVAL", "CPCV_REJECTED") and (status == "AWAITING_FINAL_LOCKBOX_APPROVAL") == rep["cpcv_passed"]
+    led = reg.read_final_configs(ws)
+    assert list(led["event"]) == ["FINAL_CONFIG_FROZEN", "CPCV_RESULT"] and reg.verify_final_config_ledger(ws) == 2 and set(led["selected_config_id"]) == {pick}
+    assert [p.name for p in ws.approvals.glob("*")].count(f"{exp}_FINAL_CONFIG_SELECTION.yaml") == 1 and not any("CPCV" in p.name for p in ws.approvals.glob("*"))   # no CPCV approval exists
     p = cli("scripts/confirm_lockbox.py", check=False)
     assert p.returncode != 0 and "not implemented" in (p.stderr + p.stdout)                    # the lockbox stays sealed (stub)
+
+
+def test_bar_level_cpcv_is_identical_when_the_lockbox_rows_are_poisoned(after_final_config, after_selection_holdout_poisoned_lockbox):
+    exp = after_final_config["exp"]
+    pick = after_final_config["pick"]
+    ws2, dir2 = after_selection_holdout_poisoned_lockbox["ws"], after_selection_holdout_poisoned_lockbox["ws_dir"]
+    human_final_selection(ws2, exp, pick)
+    cli("scripts/finalize_final_config.py", "--experiment", exp, "--data", after_selection_holdout_poisoned_lockbox["data"], "--workspace", dir2)
+    a = json.loads((experiment_dir(after_final_config["ws"], exp) / "results/CPCV_REPORT.json").read_text())
+    b = json.loads((experiment_dir(ws2, exp) / "results/CPCV_REPORT.json").read_text())
+    assert a["summary"] == b["summary"] and a["records"] == b["records"] and a["cpcv_passed"] == b["cpcv_passed"]
+
+
+@pytest.fixture(scope="module")
+def direct_selection(planted):
+    """Direct final selection from the IS report: holdout skipped. The data file has every row at/after development_end wrecked."""
+    import numpy as np
+    df = pd.read_parquet(planted["data"])
+    ts = pd.to_datetime(df["timestamp"], utc=True)
+    late = (ts >= pd.Timestamp(PARTS["development_end"], tz="UTC")).to_numpy()
+    rng = np.random.default_rng(5)
+    df.loc[late, ["open", "high", "low", "close"]] = rng.uniform(1, 1e6, size=(int(late.sum()), 4))
+    df.loc[late, "volume"] = -5.0
+    bad = planted["ws_dir"].parent / "NQ_post_dev_poisoned.parquet"
+    df.to_parquet(bad)
+    out = {}
+    for name, data in (("clean", planted["data"]), ("poisoned", bad)):
+        ws_dir = planted["ws_dir"].parent / f"ws_direct_{name}"
+        shutil.copytree(planted["ws_dir"], ws_dir)
+        ws = reg.Workspace(ws_dir)
+        exp = planted["exp"]
+        prepare_for_approval(ws, exp)
+        cfg = f"{exp}|{top_group_ids(ws, exp)[0]}"                           # one deterministic IS-eligible config, chosen directly by the human
+        human_final_selection(ws, exp, cfg)
+        run = cli("scripts/finalize_final_config.py", "--experiment", exp, "--data", data, "--workspace", ws_dir)
+        out[name] = {"ws": ws, "ws_dir": ws_dir, "cfg": cfg, "stdout": run.stdout,
+                     "cpcv": json.loads((experiment_dir(ws, exp) / "results/CPCV_REPORT.json").read_text())}
+    return {"exp": planted["exp"], **out}
+
+
+def test_direct_final_selection_skips_the_holdout_and_cpcv_uses_development_only(direct_selection):
+    exp = direct_selection["exp"]
+    for name in ("clean", "poisoned"):
+        d = direct_selection[name]
+        ws = d["ws"]
+        assert reg.read_selection_holdout_access(ws).empty and reg.campaign_row(ws, "C001")["status"] == "OPEN"          # the unused holdout was never opened
+        assert not (experiment_dir(ws, exp) / "results/SELECTION_HOLDOUT_REPORT.json").exists()
+        h = [x[0] for x in json.loads(reg.experiment_row(ws, exp)["status_history"])]
+        assert "SELECTION_HOLDOUT_SKIPPED" in h and h.index("SELECTION_HOLDOUT_SKIPPED") < h.index("FINAL_CONFIG_FROZEN")
+        assert d["cpcv"]["data_used"].startswith("DEVELOPMENT only") and d["cpcv"]["selection_holdout_used"] is False and d["cpcv"]["final_config_id"] == d["cfg"]
+        assert reg.read_final_configs(ws).iloc[0]["selection_holdout_used"] == "no"
+    a, b = direct_selection["clean"]["cpcv"], direct_selection["poisoned"]["cpcv"]
+    assert a["summary"] == b["summary"] and a["records"] == b["records"]    # wrecking every row after development_end changes nothing: those rows are never read

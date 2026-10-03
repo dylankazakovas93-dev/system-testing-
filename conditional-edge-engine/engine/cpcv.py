@@ -1,9 +1,12 @@
-"""Final robustness stage: fixed CPCV (N=6 chronological groups, k=2 held out => C(6,2)=15 splits). VETO ONLY.
+"""Automatic post-selection robustness: fixed CPCV (N=6 chronological groups, k=2 held out => C(6,2)=15 splits). VETO ONLY.
 
-CPCV may run only for OOS-confirmed target/side groups. It cannot create a candidate, rescue a failed one, choose a model,
-target, threshold or event parameter. Everything is fixed: same event, target, side, feature bank, model, hyperparameters and
-score-state definition. Inside every split the preprocessing, the nested inner-OOF calibration and the score median are
-TRAIN-ONLY (nothing is reused from another split or from the global fit).
+Runs AUTOMATICALLY (no human approval) once the human's FINAL_CONFIG_FROZEN is valid, for exactly that ONE TARGET x SIDE configuration
+(all 3 models). Data: DEVELOPMENT + SELECTION_HOLDOUT if the selection holdout was used, DEVELOPMENT only if it was skipped; the final lockbox is
+never loaded. The report is labelled "POST-SELECTION ROBUSTNESS — NOT INDEPENDENT CONFIRMATION" because the configuration was chosen with the
+IS (and possibly selection-holdout) data CPCV re-uses. CPCV cannot create a candidate, rescue a failed one, choose a model, target, threshold or
+event parameter, and a CPCV failure ENDS the lineage: there is no fallback to a runner-up. Everything is fixed: same event, target, side,
+feature bank, model, hyperparameters and score-state definition. Inside every split the preprocessing, the nested inner-OOF calibration and the
+score median are TRAIN-ONLY (nothing is reused from another split or from the global fit).
 
 Splits: groups = ~equal model-eligible event counts, chronological, boundaries snapped to exchange-local day starts (whole
 trading days). TEST = the 2 held-out groups, TRAIN = the other 4 minus
@@ -14,8 +17,8 @@ No shuffling, no random assignment.
 
 PBO-style diagnostic (NOT a p-value; NEVER used to rank, select or veto; docs/CPCV_PBO.md):
   m[i,g] = mean over the CPCV splits that held out group g of config i's uplift measured on group g.
-  For each split s (test groups T, train groups C): IS_i = mean_{g in C} m[i,g], OOS_i = mean_{g in T} m[i,g];
-  n* = argmax_i IS_i; w = rank(OOS_{n*} among N configs, ascending)/(N+1); logit = ln(w/(1-w)); PBO = share of splits with
+  For each split s (test groups T, train groups C): IS_i = mean_{g in C} m[i,g], SELECTION_HOLDOUT_i = mean_{g in T} m[i,g];
+  n* = argmax_i IS_i; w = rank(SELECTION_HOLDOUT_{n*} among N configs, ascending)/(N+1); logit = ln(w/(1-w)); PBO = share of splits with
   logit < 0. Needs >= 2 configurations, otherwise NOT APPLICABLE.
 """
 from __future__ import annotations
@@ -33,7 +36,7 @@ from engine.event_contract import load_event_module, load_spec
 from engine.experiment_lifecycle import experiment_dir
 from engine.feature_engine import feature_names
 from engine.model_engine import make_model_factory
-from engine.partitions import oos_view, parse_partitions
+from engine.partitions import development_view, parse_partitions, selection_holdout_view
 from engine.score_calibration import WFConfig, assign_state, calibrate_threshold
 from engine.statistics import weeks_in_intervals
 from engine.target_engine import max_primary_horizon_bars
@@ -98,9 +101,9 @@ def pbo_diagnostic(group_uplift: dict[str, np.ndarray], splits: list[tuple[int, 
     logits = []
     for test in splits:
         train = [g for g in range(n_groups) if g not in test]
-        is_perf, oos_perf = M[:, train].mean(axis=1), M[:, list(test)].mean(axis=1)
+        is_perf, selection_holdout_perf = M[:, train].mean(axis=1), M[:, list(test)].mean(axis=1)
         best = int(np.argmax(is_perf))
-        w = rankdata(oos_perf)[best] / (len(cfgs) + 1)
+        w = rankdata(selection_holdout_perf)[best] / (len(cfgs) + 1)
         logits.append(float(np.log(w / (1 - w))))
     return {"pbo": float(np.mean(np.array(logits) < 0)), "status": "COMPUTED", "n_configs": len(cfgs), "logits": logits,
             "note": "diagnostic only; not an independent p-value; never used for selection or ranking"}
@@ -186,28 +189,49 @@ def run_cpcv_tables(events, features, targets, eligible, calendar_index, groups:
     return out
 
 
+CPCV_LABEL = "POST-SELECTION ROBUSTNESS — NOT INDEPENDENT CONFIRMATION"
+
+
+def _final_config(ws: reg.Workspace, experiment_id: str) -> dict:
+    fc = reg.final_config_of(ws, experiment_id)
+    if fc is None:
+        raise EngineError(f"{experiment_id} has no FINAL_CONFIG_FROZEN ledger row: CPCV runs only for the ONE human-chosen final configuration")
+    return fc
+
+
+def cpcv_cutoff(ws: reg.Workspace, experiment_id: str) -> tuple[pd.Timestamp, str]:
+    """(exclusive end of the data CPCV may load, which partitions it contains). The final lockbox is never included."""
+    d = experiment_dir(ws, experiment_id)
+    parts = parse_partitions(load_spec(d / "EVENT_SPEC.yaml")["partitions"])
+    if _final_config(ws, experiment_id)["selection_holdout_used"] == "yes":
+        return parts.selection_holdout_end, "DEVELOPMENT + SELECTION_HOLDOUT"
+    return parts.development_end, "DEVELOPMENT only (selection holdout skipped)"
+
+
 def run_cpcv(ws: reg.Workspace, experiment_id: str, bars: pd.DataFrame, *, verbose: bool = True) -> dict:
-    """Final CPCV for an OOS_CONFIRMED experiment. Veto only; the lockbox is excluded."""
+    """Automatic CPCV for a FINAL_CONFIG_FROZEN experiment. Veto only; the final lockbox is excluded."""
     from engine.experiment_runner import build_event_tables
     frozen = load_frozen()
     precheck_cpcv(ws, experiment_id)
     d = experiment_dir(ws, experiment_id)
     spec = load_spec(d / "EVENT_SPEC.yaml")
     parts = parse_partitions(spec["partitions"])
-    bars_oos = oos_view(bars, parts)                                # final lockbox excluded
+    used = _final_config(ws, experiment_id)["selection_holdout_used"] == "yes"
+    cut = selection_holdout_view(bars, parts) if used else development_view(bars, parts)
     del bars
     module = load_event_module(d / "event.py")
-    events, features, eligible, targets, _ = build_event_tables(module, spec, bars_oos, frozen)
-    return execute_cpcv(ws, experiment_id, events, features, targets, eligible, bars_oos.index, verbose=verbose)
+    events, features, eligible, targets, _ = build_event_tables(module, spec, cut, frozen)
+    return execute_cpcv(ws, experiment_id, events, features, targets, eligible, cut.index, verbose=verbose)
 
 
 def precheck_cpcv(ws: reg.Workspace, experiment_id: str) -> None:
-    from engine.oos_stage import mark_contamination_if_mutated
+    from engine.selection_holdout_stage import mark_contamination_if_mutated
     if mark_contamination_if_mutated(ws, experiment_id):
-        raise EngineError(f"{experiment_id} is OOS_CONTAMINATED (frozen experiment changed after OOS was spent)")
+        raise EngineError(f"{experiment_id} is SELECTION_HOLDOUT_CONTAMINATED (frozen experiment changed after SELECTION HOLDOUT was spent)")
     exp = reg.experiment_row(ws, experiment_id)
-    if exp["status"] != "OOS_CONFIRMED":
-        raise EngineError(f"CPCV runs only for OOS_CONFIRMED experiments (this one is {exp['status']}); it can never rescue a failed candidate")
+    if exp["status"] != "FINAL_CONFIG_FROZEN":
+        raise EngineError(f"CPCV runs only for FINAL_CONFIG_FROZEN experiments (this one is {exp['status']}); it can never rescue a failed candidate")
+    _final_config(ws, experiment_id)
 
 
 def execute_cpcv(ws: reg.Workspace, experiment_id: str, events, features, targets, eligible, calendar_index, *, verbose: bool = True) -> dict:
@@ -217,9 +241,10 @@ def execute_cpcv(ws: reg.Workspace, experiment_id: str, events, features, target
     precheck_cpcv(ws, experiment_id)
     exp = reg.experiment_row(ws, experiment_id)
     d = experiment_dir(ws, experiment_id)
-    oos = json.loads((d / "results" / "OOS_REPORT.json").read_text())
-    confirmed = [g for g, v in oos["group_verdicts"].items() if v["confirmed"]]
-    res = run_cpcv_tables(events, features, targets, eligible, calendar_index, confirmed, frozen,
+    fc = _final_config(ws, experiment_id)
+    group = fc["selected_config_id"].split("|", 1)[1]                      # TARGET|SIDE of the single human-chosen configuration
+    _, data_used = cpcv_cutoff(ws, experiment_id)
+    res = run_cpcv_tables(events, features, targets, eligible, calendar_index, [group], frozen,
                           progress=lambda t, s, m: log(f"[{experiment_id}] CPCV {t}|{s} {m} done"))
     now = now_utc_iso()
     rows = []
@@ -232,17 +257,50 @@ def execute_cpcv(ws: reg.Workspace, experiment_id: str, events, features, target
                      "cpcv_pass": s["cpcv_pass"], "group_cpcv_pass": res["group_verdicts"][gid]["cpcv_pass"],
                      "pbo_diagnostic": res["pbo"]["pbo"] if res["pbo"]["pbo"] is not None else "NOT APPLICABLE", "revealed_at": now})
     reg.append_table(ws, "cpcv_results.csv", reg.CPCV_COLS, rows)
-    survivors = [g for g, v in res["group_verdicts"].items() if v["cpcv_pass"]]
-    report = {"experiment_id": experiment_id, "oos_confirmed_groups_entering_cpcv": confirmed, "cpcv_confirmed_groups": survivors,
-              "n_splits": len(res["splits"]), "splits": [list(s) for s in res["splits"]],
+    passed = bool(res["group_verdicts"][group]["cpcv_pass"])
+    report = {"label": CPCV_LABEL, "experiment_id": experiment_id, "final_config_id": fc["selected_config_id"], "data_used": data_used,
+              "selection_holdout_used": fc["selection_holdout_used"] == "yes", "final_lockbox_accessed": False,
+              "cpcv_passed": passed, "n_splits": len(res["splits"]), "splits": [list(s) for s in res["splits"]],
               "summary": {"|".join(k): v for k, v in res["summary"].items()}, "group_verdicts": res["group_verdicts"],
               "pbo_diagnostic": res["pbo"], "records": {"|".join(k): v for k, v in res["records"].items()},
-              "note": "CPCV is a veto/robustness stage only; PBO is a diagnostic, not a p-value, and influences nothing."}
+              "note": "CPCV is a veto/robustness stage only (the configuration was chosen with this data: NOT independent confirmation). "
+                      "PBO is a diagnostic, not a p-value, and influences nothing. A failure ends the lineage; there is no fallback to a runner-up."}
     (d / "results" / "CPCV_REPORT.json").write_text(json.dumps(_clean(report), indent=2, sort_keys=True))
-    if survivors:
-        reg.set_status(ws, experiment_id, "CPCV_CONFIRMED", f"CPCV passed for {survivors}")
-        reg.set_status(ws, experiment_id, "AWAITING_FINAL_LOCKBOX", "stop: the human decides separately whether to spend the final lockbox")
+    (d / "results" / "CPCV_REPORT.md").write_text(_cpcv_md(report))
+    reg.append_final_config(ws, campaign_id=exp["campaign_id"], experiment_id=experiment_id, event="CPCV_RESULT",
+                            selected_config_id=fc["selected_config_id"], is_rank=fc["is_rank"], near_tie_cluster=fc["near_tie_cluster"],
+                            selection_holdout_used=fc["selection_holdout_used"], selection_holdout_rank=fc["selection_holdout_rank"],
+                            human_selection_file_hash=fc["human_selection_file_hash"], manifest_hash=fc["manifest_hash"], frozen_at=now,
+                            cpcv_status="CPCV_CONFIRMED" if passed else "CPCV_REJECTED")
+    if passed:
+        reg.set_status(ws, experiment_id, "CPCV_CONFIRMED", f"CPCV robustness passed for {fc['selected_config_id']} (post-selection, not independent)")
+        reg.set_status(ws, experiment_id, "AWAITING_FINAL_LOCKBOX_APPROVAL", "stop: the human decides separately whether to spend the final lockbox")
     else:
-        reg.set_status(ws, experiment_id, "CPCV_REJECTED", "CPCV vetoed every OOS-confirmed group")
-    log(f"[{experiment_id}] CPCV verdicts {res['group_verdicts']}; status {reg.experiment_row(ws, experiment_id)['status']}")
+        reg.set_status(ws, experiment_id, "CPCV_REJECTED", f"CPCV vetoed the final configuration {fc['selected_config_id']}; lineage ends, no fallback")
+    log(f"[{experiment_id}] CPCV verdict {res['group_verdicts']}; status {reg.experiment_row(ws, experiment_id)['status']}")
     return report
+
+
+def _cpcv_md(r: dict) -> str:
+    L = [f"# CPCV — {r['experiment_id']}", "", f"**{CPCV_LABEL}**", "",
+         f"Final configuration: `{r['final_config_id']}` (one configuration, all 3 models). Data: {r['data_used']}. Final lockbox accessed: NO.", "",
+         f"Verdict: **{'CPCV_CONFIRMED (robustness only)' if r['cpcv_passed'] else 'CPCV_REJECTED — lineage ends, no fallback to a runner-up'}**", "",
+         "| model | valid splits | median effect | median uplift | p10 uplift | splits effect>0 / uplift>0 | pass |", "|---|---|---|---|---|---|---|"]
+    for k, s in sorted(r["summary"].items()):
+        L.append(f"| {k.split('|')[-1]} | {s['n_valid_splits']}/{s['n_splits']} | {s['median_effect']} | {s['median_uplift']} | {s['p10_uplift']} | "
+                 f"{s['n_effect_positive']} / {s['n_uplift_positive']} | {s['cpcv_pass']} |")
+    L += ["", f"PBO diagnostic (not a p-value, influences nothing): {r['pbo_diagnostic'].get('pbo')}", "", r["note"], ""]
+    return "\n".join(L)
+
+
+def freeze_and_run_cpcv(ws: reg.Workspace, experiment_id: str, data_path, timestamp_col: str = "timestamp", *, verbose: bool = True) -> dict:
+    """Validate + freeze the human's final-configuration file, then run the fixed CPCV AUTOMATICALLY (no further approval).
+    Only DEVELOPMENT (+ SELECTION_HOLDOUT if used) rows are ever loaded; the final lockbox never is. A DECLINE ends the experiment with no CPCV."""
+    from engine.partitions import load_bars_before
+    from engine.selection_holdout_stage import freeze_final_config
+    info = freeze_final_config(ws, experiment_id)
+    if info["decline"]:
+        return {"declined": True, **info}
+    cutoff, _ = cpcv_cutoff(ws, experiment_id)
+    bars = load_bars_before(data_path, cutoff, timestamp_col)
+    return run_cpcv(ws, experiment_id, bars, verbose=verbose)

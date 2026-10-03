@@ -1,8 +1,10 @@
-# RESEARCH RULES — conditional-edge-engine v1.0.0 (frozen v1)
+# RESEARCH RULES — conditional-edge-engine v1.2.0 (frozen v1 research rules; v1.2 lifecycle)
 
 > The engine may search only inside the predefined development (IS) research space. It stops and presents the human with the
-> entire in-sample selection history before it is technically permitted to touch OOS. OOS is a manual human unlock.
-> The final lockbox stays sealed.
+> entire in-sample selection history **and the configuration uncertainty (near-ties)** before it is technically permitted to touch the SELECTION HOLDOUT.
+> The SELECTION HOLDOUT is selection data (a manual human unlock); it is **not** confirmation. The final lockbox stays sealed: it is the only untouched confirmation sample.
+
+Lifecycle (v1.2): `DEVELOPMENT / IS → IS SHORTLIST + NEAR-TIE DETECTION → HUMAN DECISION → optional 1–2 year SELECTION HOLDOUT → HUMAN CHOOSES EXACTLY ONE FINAL CONFIG → AUTOMATIC CPCV (post-selection robustness / veto) → AWAITING FINAL LOCKBOX → HUMAN LOCKBOX APPROVAL → FINAL UNTOUCHED CONFIRMATION (not implemented)`.
 
 Creativity is allowed in defining the **event hypothesis**. The research machinery after the event is **frozen**.
 This file states what is frozen, how opportunities are counted, and — separately — which parts I **interpreted** and
@@ -12,24 +14,24 @@ which problems I found. Nothing below has been run on real NQ data.
 
 1 trade/week floor, 0.10 standardized-uplift floor, exactly 24 selection trials per experiment, 20 experiments per campaign,
 2-of-3 model agreement, 70% year consistency, 4/5 fold consistency, the Bonferroni **and** BH universes, single-direction events,
-the same-session target rule, the human OOS gate, and the CPCV 6-choose-2 specification. If a synthetic scenario fails one of
+the same-session target rule, the human SELECTION HOLDOUT gate, and the CPCV 6-choose-2 specification. If a synthetic scenario fails one of
 them the **planted effect** is changed, never the rule. `tests/test_policy_invariants.py` pins the frozen constants.
 
 ## 1. Three non-overlapping chronological partitions
 
 | Partition | What it is | Who may touch it |
 |---|---|---|
-| **DEVELOPMENT (IS)** | bars opening before `development_end` | the whole IS stage (event, features, targets, models, DEVELOPMENT_CV, statistics, plots, reports) |
-| **CONFIRMATION OOS** | `[development_end, oos_end)` | one-shot, only after a human approval file |
-| **FINAL LOCKBOX** | bars from `lockbox_start` (`oos_end <= lockbox_start`) | nobody — no code path opens it (`confirm_lockbox.py` is a stub; `oos_view` cuts at `oos_end`) |
+| **DEVELOPMENT (IS)** | bars opening before `development_end` | the whole IS stage (event, features, targets, models, DEVELOPMENT_CV, statistics, near-tie detection, plots, reports) |
+| **SELECTION_HOLDOUT** | `[development_end, selection_holdout_end)`, exactly **1 or 2 calendar years** starting at `development_end` | selection data: only after a human approval, once per campaign; used to choose among configs frozen before it was read. **Not confirmation.** |
+| **FINAL_LOCKBOX** | bars from `lockbox_start`, which must equal `selection_holdout_end` (starts immediately after the holdout) | nobody — no code path opens it (`confirm_lockbox.py` is a stub; `selection_holdout_view` cuts at `selection_holdout_end`) |
 
-The three dates are chosen when the campaign is opened (`new_experiment.py --new-campaign … --development-end … --oos-end … --lockbox-start …`),
-copied into every `EVENT_SPEC.yaml`, hashed (`partitions_hash`) and written into `FROZEN_MANIFEST.json` **before** any IS result exists.
-Nothing infers or moves them. "OOS" means *only* the human-unlocked confirmation period; internal cross-validation is called `DEVELOPMENT_CV`.
+The holdout length (1 or 2 years — no other duration) is chosen when the campaign is opened, *before any IS result exists*
+(`new_experiment.py --new-campaign … --development-end … --selection-holdout-years {1,2}`), copied into every `EVENT_SPEC.yaml`, hashed (`partitions_hash`) and written into `FROZEN_MANIFEST.json`.
+Nothing infers or moves it. "SELECTION HOLDOUT" means *only* the human-unlocked selection period; internal cross-validation is called `DEVELOPMENT_CV`; only the final lockbox may ever be called confirmation.
 
-**Data-partition guard.** `run_experiment.py` reads the file through `load_bars_before(..., development_end)`, so OOS/lockbox rows are never
+**Data-partition guard.** `run_experiment.py` reads the file through `load_bars_before(..., development_end)`, so SELECTION HOLDOUT/lockbox rows are never
 materialised; the library entry point `run_experiment()` additionally applies `development_view()` to whatever bars it is given and records how
-many rows it removed. `tests/test_partition_guard.py` poisons OOS and lockbox rows (random prices 1…1e6, negative volume, NaN closes, an extra post-lockbox tail) and asserts
+many rows it removed. `tests/test_partition_guard.py` poisons SELECTION HOLDOUT and lockbox rows (random prices 1…1e6, negative volume, NaN closes, an extra post-lockbox tail) and asserts
 that the IS results and artifacts are identical to a run on clean bars (see the test for the exact comparison).
 
 ## 2. Immutable boundary
@@ -44,7 +46,7 @@ Every later stage re-verifies the manifest and raises `MutationDetected` on any 
 revealed is a **new lineage** (`new_experiment.py --lineage-of EXP_xxxx`) that consumes a new campaign slot and 24 new trials.
 
 *Enforcement is detection, not prevention:* read-only modes are advisory (root ignores them) and the CSV registry can be hand-edited.
-`integrity_check()`, the manifest hashes, the trial-ledger hash and the OOS hash chain make such edits detectable; git is the durable audit trail.
+`integrity_check()`, the manifest hashes, the trial-ledger hash and the SELECTION HOLDOUT hash chain make such edits detectable; git is the durable audit trail.
 
 ## 3. Opportunity accounting
 
@@ -90,26 +92,48 @@ revealed is a **new lineage** (`new_experiment.py --lineage-of EXP_xxxx`) that c
 * **Ranking** (deterministic, `rank_trials` / `rank_groups`): standardized uplift DESC, `campaign_bonferroni_p` ASC, selected frequency DESC, `trial_id` ASC. A group needs ≥ 2/3 eligible models and is ranked
   by the median uplift of its eligible models; the report shows the TOP 5 groups. There is no subjective selection.
 
-## 5. Human gate, one-shot OOS, CPCV, lockbox
+## 5. Near-ties, human decisions, selection holdout, final config, automatic CPCV, lockbox
 
-1. **Stop.** `run_experiment.py` ends at `AWAITING_HUMAN_OOS_APPROVAL` (or `IS_REJECTED` / `IS_PROVISIONAL_CANDIDATE`) after writing `IS_REPORT.json/.md` (sections A–Y; `M–Q` share one heading) with the entire selection history.
-2. **Per-experiment approval.** The human writes `approvals/EXP_xxxx_OOS_APPROVAL.yaml` (template in `templates/approval/`) for each experiment he wants confirmed. **Scripts and LLMs never create it** (AGENTS.md; no engine function writes into `approvals/`;
-   `show_approval_hashes.py` is read-only). It must reference the current `manifest_sha256` and `is_report_sha256`, name ≤ 2 groups from the top-5 list (`MAX_OOS_GROUPS_PER_EXPERIMENT = 2`), and every named group is run with all 3 models.
-   It is invalid if the event, spec, frozen specs, partitions or IS results change, if the status is not `AWAITING_HUMAN_OOS_APPROVAL` when re-derived under the campaign universe, or if any of the 3 model paths lacks a strong-mode verification.
-3. **Campaign OOS freeze, then ONE opening (the OOS accounting unit is the CAMPAIGN).**
-   * **Freeze** (`freeze_campaign_oos.py`, human-run): refused unless **every** experiment of the campaign has completed its IS stage (no DRAFT / FROZEN experiment). It closes the campaign (no new experiment, verification record or IS report), re-validates every approval and writes
-     `registry/oos_freeze_<campaign>.json` with all approved experiment/group pairs, their manifest / IS-report / approval hashes and `n_oos_confirmations = 3 × Σ approved groups`. Experiments awaiting approval without a positive approval file become `OOS_NOT_APPROVED`; an invalid approval aborts the freeze.
-   * **Open** (`run_campaign_oos.py`): needs a second human file `approvals/CAMPAIGN_<id>_OOS_OPEN_APPROVAL.yaml` citing the exact freeze hash; all per-experiment approvals are re-checked against the freeze. The single ledger row in `registry/oos_access.csv` (append-only SHA hash chain, **one row per campaign**) is written
-     **before** any OOS computation — "CAMPAIGN OOS HAS BEEN SPENT" — and the campaign becomes `OOS_SPENT`.
-   * **Group caps:** ≤ 2 groups per experiment and ≤ 6 positively approved groups across the campaign, summed over all experiments and checked before any state change (and again when the freeze document is validated at opening, so an edited/re-hashed freeze cannot add a 7th group).
-   * **Multiplicity is campaign-wide:** BH `oos_q` and `oos_bonferroni_p = min(raw_p × m, 1)` use **m = every 3 × approved_group model confirmation of every experiment in the campaign** (losing experiments and models included). Per-experiment reports, group verdicts (≥ 2 of 3 models), statuses and `oos_trials.csv` rows are preserved; each report states the campaign family size.
-   * **Confirmation gate** per model: `selected_effect>0`, frequency ≥ 1/week, uplift ≥ 0.10, CI low > 0, BH q ≤ 0.05 **and** Bonferroni ≤ 0.05 (campaign-wide). Failure ⇒ `OOS_REJECTED`; IS reports of the campaign are sealed (`ReportSealedError`; `OOS status = NOT ACCESSED` can no longer be printed).
-   * **Spent enforcement:** once frozen the campaign is closed; once spent, no experiment (including lineage children) can be registered in it, every approval for any of its experiments is refused, a mutated experiment becomes `OOS_CONTAMINATED`, and **no new campaign whose confirmation OOS interval `[development_end, oos_end)` overlaps a spent OOS interval can be created, frozen or opened** (`OOS CONTAMINATED`). A later, disjoint OOS needs a new campaign.
-4. **CPCV** (`run_cpcv.py`, only for `OOS_CONFIRMED`, veto only): 6 groups, 2 held out ⇒ 15 splits; purge + embargo = max primary horizon on both sides of every held-out region; preprocessing, thresholds and nested calibration are train-only per split.
-   `CPCV_PASS` per model: median effect > 0, median uplift > 0, ≥ 12/15 splits with positive effect and ≥ 12/15 with positive uplift. A group needs ≥ 2/3 passing models. See `docs/CPCV_PBO.md`.
-   The PBO-style diagnostic (`NOT APPLICABLE` for one candidate configuration) never influences selection.
-5. **Lifecycle**: `IS_REJECTED → IS_PROVISIONAL_CANDIDATE → AWAITING_HUMAN_OOS_APPROVAL → OOS_NOT_APPROVED | OOS_REJECTED | OOS_CONFIRMED → CPCV_REJECTED | CPCV_CONFIRMED → AWAITING_FINAL_LOCKBOX`.
-   The lockbox stays sealed.
+**Human approvals required vs not required**
+
+| ACTION | HUMAN APPROVAL? |
+|---|---|
+| Define / confirm event premise | YES |
+| Run DEVELOPMENT / IS | YES (explicit run) |
+| Open selection holdout | YES |
+| Choose final config | YES |
+| Run fixed CPCV | **NO** (automatic after `FINAL_CONFIG_FROZEN`) |
+| Open final lockbox | YES (not implemented) |
+
+Automated diagnostics / verifier / sensitivity do not need separate approval once their stage is legitimately entered. All of the following is in `frozen/v1/SELECTION_PROCESS.yaml` (hashed into every manifest).
+
+1. **Stop + near-tie detection.** `run_experiment.py` ends after writing `IS_REPORT.json/.md` (sections A–Y plus **NT. CONFIGURATION UNCERTAINTY / NEAR-TIES**; `M–Q` share one heading). The unit of a configuration is a TARGET × SIDE group retaining all 3 models.
+   Two groups of the same experiment are a **near-tie** iff both are `IS_SHORTLIST_ELIGIBLE` (≥ 2 of 3 eligible models; the existing `rank_groups` set), they are on the same side (UPPER with UPPER, LOWER with LOWER),
+   |difference of median standardized uplift| ≤ **0.03**, and the paired weekly-block bootstrap 95% CI (2000 repetitions, seed 1729) of that difference, computed on the *same* DEVELOPMENT_CV validation observations, contains 0. No number is tuned or searched.
+   Near-tie edges form **connected components**; members are ranked by the existing frozen IS group ranking (no new metric) and **only the top 2 of a cluster may be proposed** for the holdout (config 3 is not tested merely because 1 and 2 fail later).
+   Near-tie analysis creates **no selection trial** (the development count stays exactly 24), can never promote a rejected config and never chooses. The report lists, per cluster: config IDs, target, side, frequency, median standardized uplift, selected effect, campaign BH / Bonferroni, year and fold consistency, pairwise differences, the paired CI and the reason.
+2. **Statuses after IS.** `IS_REJECTED`; `AWAITING_HUMAN_FINAL_CONFIG_SELECTION` (eligible, no near-tie cluster); `NEAR_TIE_REVIEW_REQUIRED` (eligible, ≥ 1 cluster; the documented alias `AWAITING_HUMAN_SELECTION_HOLDOUT_APPROVAL` names the same state). The engine stops and never decides for the human:
+   **A.** choose ONE IS-eligible config directly and skip the holdout (`SELECTION_HOLDOUT_SKIPPED`); **B.** approve the top 2 near-tied configs of one cluster for the selection holdout; **C.** decline (`HUMAN_DECLINED`).
+3. **Human holdout approval** `approvals/EXP_xxxx_SELECTION_HOLDOUT_APPROVAL.yaml` (fields `experiment_id, campaign_id, manifest_sha256, is_report_sha256, near_tie_cluster_id, approved, approved_by, approved_configs, approval_note`; template in `templates/approval/`).
+   **Scripts and LLMs never create it** (AGENTS.md; no engine function writes into `approvals/`). ≤ 2 configs per experiment (`MAX_SELECTION_HOLDOUT_CONFIGS_PER_EXPERIMENT`), exactly the proposable pair of one cluster; ≤ 6 per campaign. Invalid if the event, spec, frozen specs, partitions, IS results or IS report change, or if any of the 3 model paths of a config lacks a strong-mode verification.
+4. **Campaign freeze, then ONE opening (the accounting unit is the CAMPAIGN).** `freeze_campaign_selection_holdout.py` (human-run) is refused unless every experiment of the campaign finished IS; it closes the campaign and freezes **all** approved configs of all experiments together
+   (`registry/selection_holdout_freeze_<campaign>.json`: campaign, partition hash, experiment / IS-report / approval hashes, config IDs, family size) **before any holdout byte is read**; max 6 configs × 3 models = **18** evaluations on the SAME interval; no sequential "test A, look, then decide on B".
+   `run_campaign_selection_holdout.py` additionally needs the human file `approvals/CAMPAIGN_<id>_SELECTION_HOLDOUT_OPEN_APPROVAL.yaml` citing the freeze hash; the single ledger row in `registry/selection_holdout_access.csv` (append-only SHA hash chain, one row per campaign; campaign, freeze and approval hashes, partition boundaries, frozen config IDs, timestamp, engine hash, family size)
+   is written **before** any holdout computation (`SELECTION_HOLDOUT_SPENT`). No second opening, no added configs, and no overlapping campaign may claim the spent partition as untouched.
+5. **Multiplicity.** IS: unchanged (24-trial experiment BH/Bonferroni and campaign-wide revealed-trial BH/Bonferroni). Holdout: `raw_p`, `selection_holdout_q`, `selection_holdout_bonferroni_p = min(raw_p × m, 1)` over **every approved config × 3 models of the whole campaign, losers included**. These are *selection-holdout evidence* values, never confirmation p-values. The lockbox multiplicity is **not** designed (the lockbox is not implemented).
+6. **Holdout report** (`SELECTION_HOLDOUT_REPORT.json/.md`): labelled **"SELECTION DATA — USED TO CHOOSE FINAL CONFIGURATION / NOT FINAL CONFIRMATION"**; for every frozen config all 3 models (N, frequency, effect, uplift, standardized uplift, raw p, BH q, Bonferroni), year/month breakdown, path / MFE-MAE / continuation-reversal / bracket diagnostics, the campaign family size and the deterministic advisory preference.
+   Because the holdout exists for selection, the human may use these diagnostics — but only to choose among configs frozen before the opening: no new config, threshold, bracket in the final config or model parameter.
+7. **Advisory `HOLDOUT_PREFERRED_CONFIG`.** Requires selected effect > 0, frequency ≥ 1/week and ≥ 2 of 3 models with positive uplift; ranks by median standardized uplift DESC, median selected effect DESC, frequency DESC, frozen IS rank ASC, config ID ASC. If the top two are still within the same near-tie rule (|Δ| ≤ 0.03 and paired CI contains 0) the engine reports **`HOLDOUT_UNRESOLVED`** instead of fabricating certainty; `NO_QUALIFYING_CONFIG` if none qualifies. Path diagnostics never enter this rule.
+8. **Final config** `approvals/EXP_xxxx_FINAL_CONFIG_SELECTION.yaml` (human only; `experiment_id, campaign_id, manifest_sha256, is_report_sha256, selection_holdout_report_sha256, selected_config_id, selected_by, selection_note`): exactly ONE config, frozen before the opening and actually evaluated in the holdout; or `DECLINE`.
+   Direct selection without a holdout references the IS report (`selection_holdout_report_sha256: null`), must still be one deterministic IS-eligible config, and marks `SELECTION_HOLDOUT_SKIPPED`; the unused holdout data stay unread. Accepted ⇒ `FINAL_CONFIG_FROZEN` and one append-only row in `registry/final_configs.csv`
+   (campaign, experiment, selected config, IS rank, near-tie cluster, holdout used yes/no, holdout rank, human file hash, manifest hash, timestamp, CPCV status; hash-chained and integrity-checked).
+9. **Automatic CPCV** (`finalize_final_config.py` validates + freezes and then runs it; `run_cpcv.py` resumes it) needs **no approval**. Data: DEVELOPMENT + SELECTION_HOLDOUT if the holdout was used, DEVELOPMENT only if skipped; the lockbox is never loaded. Mechanics unchanged: 6 chronological groups, 2 held out ⇒ 15 splits; purge + embargo = max primary horizon on both sides of every held-out region; train-only preprocessing, thresholds and nested calibration;
+   `CPCV_PASS` per model: median effect > 0, median uplift > 0, ≥ 12/15 splits with positive effect and ≥ 12/15 with positive uplift; ≥ 2 of 3 models. It is labelled **"POST-SELECTION ROBUSTNESS — NOT INDEPENDENT CONFIRMATION"**; it can pass or veto only — never select, rescue, retune or replace.
+   The PBO-style diagnostic (see `docs/CPCV_PBO.md`) never influences anything.
+10. **No fallback.** `CPCV_REJECTED` ends the lineage: the engine never falls back to the runner-up (that would be another selection after additional evidence). Using the runner-up needs a new, explicitly registered lineage / campaign. `CPCV_CONFIRMED ⇒ AWAITING_FINAL_LOCKBOX_APPROVAL`.
+11. **Final lockbox.** Never opened by any code path; it has had no role in event discovery, feature design, model design, IS ranking, near-tie identification, holdout comparison, final-config selection or CPCV, so it is the only dataset that may legitimately be called FINAL UNTOUCHED CONFIRMATION — only after explicit human approval, which is **not implemented in this patch**.
+12. **Statuses.** `DRAFT, FROZEN, IS_REJECTED, IS_SHORTLIST_ELIGIBLE, NEAR_TIE_REVIEW_REQUIRED, AWAITING_HUMAN_SELECTION_HOLDOUT_APPROVAL (alias), SELECTION_HOLDOUT_FROZEN, SELECTION_HOLDOUT_SPENT, AWAITING_HUMAN_FINAL_CONFIG_SELECTION, SELECTION_HOLDOUT_SKIPPED, FINAL_CONFIG_FROZEN, CPCV_REJECTED, CPCV_CONFIRMED, AWAITING_FINAL_LOCKBOX_APPROVAL, LOCKBOX_REJECTED, LOCKBOX_CONFIRMED`
+    (plus `IS_PROVISIONAL_CANDIDATE`, `HUMAN_DECLINED`, `SELECTION_HOLDOUT_CONTAMINATED`). The two `LOCKBOX_*` statuses exist but are never entered by the engine.
 
 ## 5b. Forward-path and monetisation diagnostics (v1.1.0) — DIAGNOSTIC ONLY
 
@@ -122,7 +146,7 @@ DEVELOPMENT_CV fold, plus the frozen filter-ladder steps. Gross points only: **G
 * It runs after the 24 trials are revealed, reads only development rows, writes `results/PATH_DIAGNOSTICS.json` (hash-bound into `results.json` and `IS_REPORT.json`) and an IS-report section Z (separated from the PROMOTION EVIDENCE). Nothing enters `selection_trials.csv`, BH, Bonferroni, ranking or status (tests compare a run with and without the layer).
 * `PATH_TIMESTAMP_INELIGIBLE` is decided per event and horizon from timestamps only (non-consecutive bars, data end, completion after the RTH close; non-finite prices also void a window). Exact arithmetic (RTH 09:30–16:00 America/New_York, DST-safe; tested bar by bar): a window of h bars is eligible iff its last bar completes by 16:00, i.e. the first forward bar opens no later than 16:00 − h minutes (latest event times 15:55 / 15:45 / 15:30 / 15:00 / 14:00 for h = 5 / 15 / 30 / 60 / 120). With the template's `eligible_session` ending at 15:00 every event is 60-bar eligible, but events after 14:00 are PATH_TIMESTAMP_INELIGIBLE at 120 bars.
 * Memory: streaming over forward-bar steps vectorised over events (O(events) state, no events × horizon matrices).
-* **PATH DIAGNOSTICS ARE NON-PROMOTABLE.** They never change `IS_PROVISIONAL_CANDIDATE` / `IS_SHORTLIST_ELIGIBLE`, trial or group ranking, the top-5 IS list, campaign BH/Bonferroni, human-approval eligibility or OOS group order (tested by rewriting the diagnostics file). They are hash-bound: altering the artifact invalidates an approval, which is an integrity rule, not an influence on ranking.
+* **PATH DIAGNOSTICS ARE NON-PROMOTABLE.** They never change `IS_PROVISIONAL_CANDIDATE` / `IS_SHORTLIST_ELIGIBLE`, trial or group ranking, the top-5 IS list, campaign BH/Bonferroni, human-approval eligibility or SELECTION HOLDOUT group order (tested by rewriting the diagnostics file). They are hash-bound: altering the artifact invalidates an approval, which is an integrity rule, not an influence on ranking.
 * **Human interpretation rule.** A human may approve, decline, or approve fewer than the eligible maximum from the deterministic eligible list. A human may NOT use an attractive path/bracket diagnostic to substitute a non-eligible or lower-ranked configuration that the engine did not place in the approval-eligible set. A different rule, bracket, horizon, threshold or filter inspired by diagnostics needs a NEW experiment or a SEPARATE MONETISATION STUDY; there is no current-experiment promotion.
 * Any trading rule, threshold, bracket, horizon, percentile or filter inspired by these numbers needs a NEW registered experiment or a separate monetisation study. CPCV path diagnostics are not implemented (optional in the specification); CPCV remains a veto only.
 
@@ -142,9 +166,9 @@ rows and its `future_label_poisoning` / `future_feature_poisoning` checks are "n
 1. Window conventions, VR/Hurst windows, session VWAP, `eligible_session` ⊂ `[09:31, 16:00)`, ties belong to neither state — as in the original build (see `features/` docstrings and `frozen/v1/FEATURE_BANK.yaml`).
 2. **Blocks are cut by event count, not by calendar,** and snapped to exchange-local day starts so no trading day is split. The block cut uses timestamps only.
 3. **The `years` in the year-consistency rule are UTC calendar years** of `event_time` (matches the external verifier's fold construction); the trading week is the ISO week of the exchange-local date.
-4. **OOS confirmation gate constants are my definition.** You specified BH + Bonferroni across 3×G confirmations and ≥ 2/3 models; the remaining numeric gates (frequency ≥ 1/week, uplift ≥ 0.10, effect > 0, CI low > 0) mirror the IS gates (`oos_confirmation:` in `ACCEPTANCE_RULES.yaml`).
+4. **Selection-holdout evidence-gate constants are my definition.** You specified BH + Bonferroni across all approved config × 3 model evaluations and ≥ 2/3 models; the remaining numeric gates (frequency ≥ 1/week, uplift ≥ 0.10, effect > 0, CI low > 0) mirror the IS gates (`selection_holdout_evidence:` in `ACCEPTANCE_RULES.yaml`). They are informational labels on selection data, not a confirmation.
 5. **The CPCV group rule (≥ 2 of 3 models) mirrors model agreement;** you specified the per-model pass rule only.
-6. **PBO configurations** = the (target, side, model) configs of OOS-confirmed groups. With one approved group that is ≤ 3 highly dependent configs; the diagnostic is descriptive only.
+6. **PBO configurations** = the (target, side, model) configs of the one final configuration (3 highly dependent configs); the diagnostic is descriptive only.
 7. **Permutation statistic** = uplift, one-sided; `p = (1+#≥)/(B+1)`; bootstrap CI = percentile interval over resampled weeks.
 8. **Sensitivity verdict** mirrors model agreement (a probe reverses the sign if < 2 of 3 models keep positive uplift; fails frequency if < 2 of 3 keep ≥ 1/week; fail if > 1 probe reverses or any fails frequency).
 9. **Static event scan** rejects numeric literals other than `0`/`1` in `event.py` (heuristic). **Causality pre-check** re-runs the event at 8 cutoffs on truncated and future-mutated bars.
@@ -159,7 +183,7 @@ rows and its `future_label_poisoning` / `future_feature_poisoning` checks are "n
 4. **Previous issue 5 (windows across session gaps) is now closed by the same-session rule,** at the price of dropping events near the close (counted and reported).
 5. **The 0.10 standardized-uplift floor is demanding at 15–60 minute horizons;** most real signals are expected to be `REJECTED_INSUFFICIENT_UPLIFT`.
 6. **Short development windows make the year gate nearly unanimous:** with 3 eligible years 70% requires 3/3, with 2 it requires 2/2, and `YEAR_CONCENTRATION_WARNING` is structurally likely with ≤ 3 years. Choose a long development window.
-7. **OOS multiplicity and access are campaign-wide, with a hard campaign cap:** `MAX_OOS_GROUPS_PER_CAMPAIGN = 6` approved groups across ALL experiments (2 per experiment) ⇒ at most 6 × 3 = **18** confirmations in the one family. More than 6 refuses the freeze atomically (nothing is written or changed); the cap is frozen policy and is never relaxed because Bonferroni gets strict (×18 at most). Exactly 6 is accepted; 0 never opens OOS.
+7. **SELECTION HOLDOUT multiplicity and access are campaign-wide, with a hard campaign cap:** `MAX_SELECTION_HOLDOUT_CONFIGS_PER_CAMPAIGN = 6` approved configs across ALL experiments (2 per experiment) ⇒ at most 6 × 3 = **18** evaluations in the one family. More than 6 refuses the freeze atomically (nothing is written or changed); the cap is frozen policy and is never relaxed because Bonferroni gets strict (×18 at most). Exactly 6 is accepted; 0 never opens SELECTION HOLDOUT.
 8. **The verifier pin** (`624c8b7f…`, on branch `claude/relaxed-lamport-119uli` of `engine-verification-`) is the commit that introduced `scripts/verify_research.py`; there are no tags. **The human must confirm or replace it.**
 9. **Float reproducibility.** Batch shape can change reductions by ≤ 1 ulp (invariance tests use `rtol=1e-12`; the verifier compares at `atol=1e-9`).
 10. Everything was validated on **synthetic** data with known structure; **no real NQ data has been run.** Real data will exercise gap handling, zero-volume windows and roll provenance.

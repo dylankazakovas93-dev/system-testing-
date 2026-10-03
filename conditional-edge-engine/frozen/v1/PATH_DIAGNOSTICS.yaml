@@ -101,10 +101,10 @@ diagnostic_statement: >-
   They are not eligible to create or promote a candidate in this experiment.
   Any trading rule, threshold, bracket, horizon, percentile, or filter inspired by these diagnostics requires a NEW registered
   experiment or a separate monetisation study.
-non_promotable_rule: "PATH DIAGNOSTICS ARE NON-PROMOTABLE: they never change candidate status, trial rank, group rank, the top-5 IS list, campaign BH/Bonferroni, human-approval eligibility or OOS group ordering."
+non_promotable_rule: "PATH DIAGNOSTICS ARE NON-PROMOTABLE: they never change candidate status, trial rank, group rank, the top-5 IS list, campaign BH/Bonferroni, human-approval eligibility or SELECTION HOLDOUT group ordering."
 human_interpretation_rule: >-
   A human may approve, decline, or approve fewer than the eligible maximum from the deterministic eligible list. A human may NOT use a visually
   attractive path or bracket diagnostic to substitute a non-eligible or lower-ranked configuration that the engine did not place in the
   approval-eligible set. If diagnostics inspire a different rule, bracket, horizon, threshold or filter, a NEW experiment or a SEPARATE
   MONETISATION STUDY is required; there is no current-experiment promotion.
-lifecycle: "IS (development) rows only; no OOS / lockbox path diagnostics exist before the human campaign OOS opening."
+lifecycle: "IS (development) rows only; no SELECTION HOLDOUT / lockbox path diagnostics exist before the human campaign SELECTION HOLDOUT opening."

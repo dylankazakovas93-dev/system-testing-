@@ -85,7 +85,7 @@ class TestLinearEdge:
                 assert (g["positive_years"] >= 0.7 * g["eligible_years"]).all() and (g["positive_uplift_years"] >= 0.7 * g["eligible_years"]).all()
                 assert (g["positive_effect_folds"] >= 4).all() and (g["positive_uplift_folds"] >= 4).all() and (g["folds_evaluated"] == 5).all()
         assert reg.experiment_row(ws, exp)["is_status"] == SHORTLIST
-        assert reg.experiment_row(ws, exp)["status"] == "AWAITING_HUMAN_OOS_APPROVAL"
+        assert reg.experiment_row(ws, exp)["status"] == "AWAITING_HUMAN_FINAL_CONFIG_SELECTION"
 
     def test_effect_size_matches_planted_truth(self, res):
         # planted: y = 0.35*z + N(0,1). Upper half of a good score has E[y|upper] ~ 0.35*0.8 = 0.28; sd ~ 1.06

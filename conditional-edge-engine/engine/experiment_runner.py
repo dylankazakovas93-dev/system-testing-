@@ -1,11 +1,11 @@
 """IS (development) stage of one frozen experiment.
 
 EVENT -> FROZEN MARKET STATE -> FROZEN FUTURE PATH TARGETS -> DEVELOPMENT_CV (5 purged folds) -> 24 SELECTION TRIALS
-      -> (sensitivity veto) -> IS_REPORT -> STOP at AWAITING_HUMAN_OOS_APPROVAL (or IS_REJECTED / IS_PROVISIONAL_CANDIDATE).
+      -> (sensitivity veto) -> IS_REPORT -> STOP at AWAITING_HUMAN_FINAL_CONFIG_SELECTION (or IS_REJECTED / IS_PROVISIONAL_CANDIDATE).
 
-The runner receives full bars only to immediately cut them to the DEVELOPMENT partition (``development_view``); OOS and
+The runner receives full bars only to immediately cut them to the DEVELOPMENT partition (``development_view``); SELECTION HOLDOUT and
 lockbox rows never reach event, feature, target, model, CV, statistics, plot, report or diagnostic code. It contains no
-OOS code path: confirmation lives in oos_stage.py behind a human approval file.
+SELECTION HOLDOUT code path: the selection holdout lives in selection_holdout_stage.py behind human approval files.
 """
 from __future__ import annotations
 
@@ -274,7 +274,7 @@ def run_experiment(ws: reg.Workspace, experiment_id: str, bars: pd.DataFrame, *,
     parts = parse_partitions(spec["partitions"])
     validate_bars(bars)
     n_input = len(bars)
-    bars_dev = development_view(bars, parts)                   # HARD PARTITION GUARD: OOS + lockbox rows removed here
+    bars_dev = development_view(bars, parts)                   # HARD PARTITION GUARD: SELECTION HOLDOUT + lockbox rows removed here
     del bars
     if len(bars_dev) == 0:
         raise EngineError("no development bars before development_end")
@@ -299,8 +299,8 @@ def run_experiment(ws: reg.Workspace, experiment_id: str, bars: pd.DataFrame, *,
     bundle = finish_is(ws, experiment_id, panels, events, features, eligible, frozen, spec=spec, module=module, bars_dev=bars_dev,
                        base=base, causality=causality, verified=verified, data_label=data_label, parts=parts,
                        run_sensitivity_stage=run_sensitivity_stage, log=log)
-    log(f"[{experiment_id}] STOP: status {reg.experiment_row(ws, experiment_id)['status']} - OOS NOT ACCESSED; OOS needs a "
-        f"manual human approval file (approvals/{experiment_id}_OOS_APPROVAL.yaml)")
+    log(f"[{experiment_id}] STOP: status {reg.experiment_row(ws, experiment_id)['status']} - SELECTION HOLDOUT NOT ACCESSED; SELECTION HOLDOUT needs a "
+        f"manual human approval file (approvals/{experiment_id}_SELECTION_HOLDOUT_APPROVAL.yaml)")
     return bundle
 
 
