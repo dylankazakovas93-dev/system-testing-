@@ -12,7 +12,7 @@ from engine.common import EngineError, load_frozen
 from engine.experiment_lifecycle import experiment_dir
 from engine.holdout_preference import holdout_preference
 from engine.selection_holdout_stage import ApprovalError, freeze_final_config, holdout_report_path, validate_final_selection
-from tests.scenario_helpers import (NEAR_TIE_PAIR, finalize_config, human_approval, human_final_selection, lifecycle_workspace, proposable,
+from tests.scenario_helpers import (NEAR_TIE_PAIR, finalize_config, human_approval, human_final_selection, lifecycle_workspace, pair_60_first, proposable,
                                     run_cpcv_stage, spend_selection_holdout, weaken)
 
 F = load_frozen()
@@ -27,7 +27,7 @@ def clone(ws, tmp_path, name="c"):
 @pytest.fixture(scope="module")
 def life(tmp_path_factory):
     ws, exp, tables = lifecycle_workspace(tmp_path_factory.mktemp("viab"), **NEAR_TIE_PAIR)
-    return ws, exp, tables, proposable(ws, exp, 0)                       # cfgs = [60|LOWER (IS rank 1), 15|LOWER]
+    return ws, exp, tables, pair_60_first(proposable(ws, exp, 0))      # cfgs = [60, 15] (same side)
 
 
 def spent(life, tmp_path_factory, name, tables):
@@ -44,8 +44,8 @@ def both(life, tmp_path_factory):                                         # 60 k
 
 
 @pytest.fixture(scope="module")
-def only_b(life, tmp_path_factory):                                       # 60's effect vanishes: only 15 is viable
-    return spent(life, tmp_path_factory, "onlyb", weaken(life[2], "DIR_RETURN_60", Y, 1.0))
+def only_b(life, tmp_path_factory):                                       # 60's effect reverses in the holdout year: only 15 is viable
+    return spent(life, tmp_path_factory, "onlyb", weaken(life[2], "DIR_RETURN_60", Y, 1.6))
 
 
 @pytest.fixture(scope="module")
@@ -163,7 +163,7 @@ def test_all_configs_non_viable_through_the_rewritten_report_also_stops(both, li
 def test_the_floor_is_frozen_policy_and_unresolved_can_coexist_with_viable_configs(life, tmp_path_factory):
     v = F.selection_process["final_config"]["viability_floor_after_holdout"]
     assert v == {"selected_effect_gt": 0, "selected_frequency_per_week_ge": 1.0, "models_with_positive_uplift_ge": 2, "none_viable": "NO_FINAL_CONFIG"}
-    ws, rep = spent(life, tmp_path_factory, "unres", weaken(life[2], "DIR_RETURN_15", Y, 0.45))
+    ws, rep = spent(life, tmp_path_factory, "unres", life[2])
     exp, cfgs = life[1], life[3]
     assert rep["preference"]["status"] == "HOLDOUT_UNRESOLVED" and rep["viable_configs"] == cfgs   # close, still both viable: the human picks (viable) either
     human_final_selection(ws, exp, cfgs[0])

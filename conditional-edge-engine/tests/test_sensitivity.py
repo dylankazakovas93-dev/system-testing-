@@ -81,7 +81,7 @@ def rows_for(pass_models):
 
 
 def test_sensitivity_cannot_rescue_a_failed_base_candidate():
-    sens = {"DIR_RETURN_30|UPPER_HALF": "PASSED"}
+    sens = {"DIR_RETURN_180|UPPER_HALF": "PASSED"}
     none = decide_experiment(rows_for(set()), ACC, sens, VER_ALL)
     assert {r["decision"] for r in none} == {acceptance.LOW_UPLIFT}                       # nothing passes -> nothing promoted
     one = decide_experiment(rows_for({"RIDGE"}), ACC, sens, VER_ALL)
@@ -93,11 +93,11 @@ def test_sensitivity_cannot_rescue_a_failed_base_candidate():
 
 
 def test_zero_designated_parameters_skips_the_stage():
-    pending = pd.DataFrame([{"target": "DIR_RETURN_30", "state": "UPPER_HALF"}])
+    pending = pd.DataFrame([{"target": "DIR_RETURN_180", "state": "UPPER_HALF"}])
     out = run_sensitivity(None, spec(sensitivity_parameters=[]), None, F, pending)
     assert out["status"] == "SKIPPED_NO_PARAMETERS"
-    assert out["groups"]["DIR_RETURN_30|UPPER_HALF"]["verdict"] == "SKIPPED_NO_PARAMETERS"
-    done = decide_experiment(rows_for({"RIDGE", "XGB"}), ACC, {"DIR_RETURN_30|UPPER_HALF": "SKIPPED_NO_PARAMETERS"}, VER_ALL)
+    assert out["groups"]["DIR_RETURN_180|UPPER_HALF"]["verdict"] == "SKIPPED_NO_PARAMETERS"
+    done = decide_experiment(rows_for({"RIDGE", "XGB"}), ACC, {"DIR_RETURN_180|UPPER_HALF": "SKIPPED_NO_PARAMETERS"}, VER_ALL)
     assert {r["decision"] for r in done if r["model"] != "SPLINE"} == {acceptance.SHORTLIST}
 
 

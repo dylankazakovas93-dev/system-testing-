@@ -175,10 +175,12 @@ def build_is_report(ws: reg.Workspace, experiment_id: str, bundle: dict, trials:
     first_opp, last_opp = int(trials["selection_opportunity_number"].min()), int(trials["selection_opportunity_number"].max())
 
     from engine import near_tie as near_tie_mod
+    from engine import where_map as where_map_mod
     from engine import path_report as path_report_mod
     path_rep = path_report_mod.load_path_file(d / "results", bundle)
     nt_res = near_tie_mod.detect(ws, experiment_id, frozen)
     nt_cards = {g["group_id"]: near_tie_mod.group_card(rows, g) for g in nt_res["eligible_groups"]}
+    wmap = where_map_mod.build(ws, experiment_id, top_groups, frozen)
     # ---------------------------------------------------------------- JSON
     J: dict = {
         "experiment_id": experiment_id, "campaign_id": exp["campaign_id"],
@@ -227,6 +229,7 @@ def build_is_report(ws: reg.Workspace, experiment_id: str, bundle: dict, trials:
                                        {"status": "NOT_COMPUTED_NO_BARS", "promotion_eligible": False, "selection_trials_affected": 0}),
         "NT_configuration_uncertainty": {**nt_res, "group_cards": nt_cards, "label": NT_LABEL,
                                          "note": "DIAGNOSTIC FOR THE HUMAN - creates no selection trial, promotes no rejected configuration, ranks nothing new"},
+        "WM_where_it_works": wmap,
         "Y_selection_holdout_status": status,
         "Y_selection_holdout_recommendation": _holdout_recommendation(nt_res),
         "is_status": exp["is_status"], "lifecycle_status": exp["status"],
@@ -261,7 +264,7 @@ def build_is_report(ws: reg.Workspace, experiment_id: str, bundle: dict, trials:
     L.append(_table(["quantity", "value"], [["events after session/dedup/cooldown/target-session rules", f"{b['n_events']:,}"],
         ["model-eligible events (>= 480 completed bars)", f"{b['n_model_eligible']:,}"], ["development trading weeks", b["trading_weeks"]],
         ["raw event frequency", _n(b["raw_event_frequency_per_week"], "{:.2f}") + " / week"],
-        ["TARGET_TIMESTAMP_INELIGIBLE events removed (60-bar window would cross the RTH close)", b["target_timestamp_ineligible"]],
+        ["TARGET_TIMESTAMP_INELIGIBLE events removed (no complete forward bar before the RTH close; longer horizons are truncated at the close, not dropped)", b["target_timestamp_ineligible"]],
         ["declared parameters never read by event.py", ", ".join(b["unused_parameters"]) or "none"]]))
     if b["flag"]:
         L.append(f"\n**{b['flag']}** — a fixed half-state cannot realistically keep >= 1/week. The 50% threshold is NOT changed.\n")
@@ -406,6 +409,8 @@ def build_is_report(ws: reg.Workspace, experiment_id: str, bundle: dict, trials:
                                                                           for r in rows if r["trial_id"] not in shortlisted]))
     L.append(f"## NT. {NT_LABEL}\n")
     L += _near_tie_md(nt_res, nt_cards)
+    L.append("## WM. WHERE IT WORKS / WHERE IT DOES NOT (top IS groups)\n")
+    L += where_map_mod.render(wmap, lambda x: _n(x, "{:+.6f}"))
     L.append("## W. Non-promotable interesting observations (registry/observations.csv)\n")
     L.append(f"**{DIAG_BANNER}.** Anything here can only inspire a NEW registered experiment (which adds 24 selection trials to the campaign universe).\n")
     L.append(_table(["id", "category", "description"], [[r["observation_id"], r["category"], r["description"]] for _, r in my_obs.iterrows()]))

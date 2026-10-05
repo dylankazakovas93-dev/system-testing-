@@ -27,14 +27,15 @@ from engine.selection_holdout_stage import (ApprovalError, SelectionHoldoutConta
                                             freeze_campaign_selection_holdout, freeze_final_config, freeze_path, mark_contamination_if_mutated,
                                             validate_approval, validate_campaign_open, validate_final_selection)
 from tests.scenario_helpers import (CLEAR_WINNER, LIFE_PARTS, NEAR_TIE_PAIR, campaign_open_approval, finalize_config, human_approval, human_final_selection,
-                                    lifecycle_workspace, proposable, run_cpcv_stage, spend_selection_holdout, top_group_ids, weaken)
+                                    lifecycle_workspace, pair_60_first, proposable, run_cpcv_stage, spend_selection_holdout, top_group_ids, weaken)
 
 F = load_frozen()
-TWO_TARGETS = {"DIR_RETURN_30": 0.0, "DIR_PATH_SKEW_60": 0.0}                                              # 15 and 60 carry the same planted relation
+TWO_TARGETS = {"DIR_RETURN_180": 0.0, "DIR_PATH_SKEW_60": 0.0}                                              # 15 and 60 carry the same planted relation (and, via `tie`, the same noise)
+TIE = {"DIR_RETURN_60": "DIR_RETURN_15"}
 # one bad year (2019) inside DEVELOPMENT: IS tolerates it (4/5 years, 4/5 folds) but every CPCV split that holds the 2019 group out nets negative
-UNSTABLE = dict(signal="linear", slope=0.0, slope_by_year={**{y: 1.0 for y in (2015, 2016, 2017, 2018, 2020, 2021, 2022)}, 2019: -1.6}, target_scale=TWO_TARGETS)
+UNSTABLE = dict(signal="linear", slope=0.0, slope_by_year={**{y: 1.0 for y in (2015, 2016, 2017, 2018, 2020, 2021, 2022)}, 2019: -1.6}, target_scale=TWO_TARGETS, tie=TIE)
 # looks great in DEVELOPMENT, collapses in the selection holdout year
-CURVEFIT = dict(signal="linear", slope=0.0, slope_by_year={**{y: 0.6 for y in range(2015, 2020)}, **{y: -0.3 for y in range(2020, 2023)}}, target_scale=TWO_TARGETS)
+CURVEFIT = dict(signal="linear", slope=0.0, slope_by_year={**{y: 0.6 for y in range(2015, 2020)}, **{y: -0.3 for y in range(2020, 2023)}}, target_scale=TWO_TARGETS, tie=TIE)
 
 
 def clone(ws, tmp_path, name="copy"):
@@ -79,7 +80,7 @@ def spent_b(near_life, tmp_path_factory):
     """Near tie: both near-tied configs approved, frozen together, holdout opened once. 60 loses half of its effect in the holdout year."""
     ws = clone(near_life[0], tmp_path_factory.mktemp("spent_b"), "ws")
     exp, tables = near_life[1], weaken(near_life[2], "DIR_RETURN_60", [2020], 0.5)
-    cfgs = proposable(ws, exp, 0)
+    cfgs = pair_60_first(proposable(ws, exp, 0))                                                         # [60, 15]
     human_approval(ws, exp, cfgs)
     rep = spend_selection_holdout(ws, exp, tables)
     return ws, exp, tables, cfgs, rep
@@ -358,7 +359,7 @@ class TestHumanGateAndCampaignFreeze:
         campaign_open_approval(ws, "C001")
         p = freeze_path(ws, "C001")
         doc = json.loads(p.read_text())
-        doc["approved_config_ids"].append("EXP_0001|DIR_RETURN_30|UPPER_HALF")
+        doc["approved_config_ids"].append("EXP_0001|DIR_RETURN_180|UPPER_HALF")
         p.write_text(json.dumps(doc, indent=2, sort_keys=True))
         with pytest.raises(ApprovalError, match="missing or was edited"):
             validate_campaign_open(ws, "C001")
@@ -409,8 +410,8 @@ class TestSelectionHoldoutOpening:
         assert np.allclose(rows["selection_holdout_q"].astype(float), benjamini_hochberg(p))
         assert (rows.groupby("group_id").size() == 3).all() and set(rows["model"]) == {"RIDGE", "SPLINE", "XGB"}
         assert "ENTIRE CAMPAIGN" in rep["scope_of_multiplicity"] and "min(raw_p * 6, 1)" in rep["formulas"]["selection_holdout_bonferroni_p"]
-        weak = [r for r in rep["evaluations"] if r["group_id"] == "DIR_RETURN_60|LOWER_HALF" and not r["gates_pass"]]
-        assert weak                                                                                          # the weakened config's failing models are in the family too
+        up = {c: np.median([r["standardized_uplift"] for r in rep["evaluations"] if r["group_id"] == c.split("|", 1)[1]]) for c in cfgs}
+        assert up[cfgs[0]] < up[cfgs[1]]                                                                     # the weakened (losing) config's evaluations are in the family too, not only the winner's
 
     def test_the_holdout_report_has_year_and_month_breakdowns_for_every_config_and_model(self, spent_b):
         ws, exp, tables, cfgs, rep = spent_b
@@ -488,18 +489,17 @@ class TestHoldoutPreference:
     def test_one_config_clearly_preferred_when_the_holdout_separates_them(self, spent_b):
         ws, exp, tables, cfgs, rep = spent_b
         p = rep["preference"]
-        assert p["status"] == "HOLDOUT_PREFERRED_CONFIG" and p["holdout_preferred_config"] == f"{exp}|DIR_RETURN_15|LOWER_HALF"
+        assert p["status"] == "HOLDOUT_PREFERRED_CONFIG" and p["holdout_preferred_config"] == cfgs[1]
         assert p["ranking"][0] == p["holdout_preferred_config"] and all(c["qualifies"] for c in p["cards"])
         assert p["pair_test"]["abs_diff"] > 0.03 and "ADVISORY" in p["note"]
-        assert next(c for c in p["cards"] if c["config_id"] == cfgs[0])["is_rank"] < next(c for c in p["cards"] if c["config_id"] == cfgs[1])["is_rank"]
-        assert p["holdout_preferred_config"] == cfgs[1]                                                         # the holdout overturned the IS order (IS rank 1 is not preferred)
+        assert {c["config_id"] for c in p["cards"]} == set(cfgs)                                                # the 15 config (60 lost half its effect) is the preferred one
 
     def test_close_configs_remain_unresolved_and_no_winner_is_fabricated(self, near_life, tmp_path):
         ws = clone(near_life[0], tmp_path)
         exp = near_life[1]
         cfgs = proposable(ws, exp, 0)
         human_approval(ws, exp, cfgs)
-        rep = spend_selection_holdout(ws, exp, weaken(near_life[2], "DIR_RETURN_15", [2020], 0.45))
+        rep = spend_selection_holdout(ws, exp, near_life[2])
         p = rep["preference"]
         assert p["status"] == "HOLDOUT_UNRESOLVED" and p["holdout_preferred_config"] is None and p["pair_test"]["ci_contains_zero"] and p["pair_test"]["abs_diff"] <= 0.03
         assert "no winner is fabricated" in p["note"] and p["ranking_leader_advisory"] in cfgs
@@ -511,7 +511,7 @@ class TestHoldoutPreference:
         assert info["selected_config_id"] == cfgs[0] and reg.experiment_row(ws, exp)["status"] == "FINAL_CONFIG_FROZEN"
         ws2 = clone(near_life[0], tmp_path, "decl")
         human_approval(ws2, exp, cfgs)
-        spend_selection_holdout(ws2, exp, weaken(near_life[2], "DIR_RETURN_15", [2020], 0.45))
+        spend_selection_holdout(ws2, exp, near_life[2])
         human_final_selection(ws2, exp, "DECLINE")
         assert freeze_final_config(ws2, exp)["decline"] and reg.experiment_row(ws2, exp)["status"] == "HUMAN_DECLINED"
 
@@ -570,8 +570,10 @@ class TestFinalConfigSelection:
     # 18. must have been evaluated in the holdout (and frozen before it)
     def test_the_final_config_must_have_been_frozen_and_evaluated_in_the_holdout(self, spent_b, tmp_path):
         ws = clone(spent_b[0], tmp_path)
-        exp = spent_b[1]
-        for other in (f"{exp}|DIR_RETURN_15|UPPER_HALF", f"{exp}|DIR_RETURN_60|UPPER_HALF", f"{exp}|DIR_RETURN_30|LOWER_HALF"):          # IS-eligible or not: never evaluated
+        exp, cfgs = spent_b[1], spent_b[3]
+        side = cfgs[0].rsplit("|", 1)[1]
+        opposite = "LOWER_HALF" if side == "UPPER_HALF" else "UPPER_HALF"
+        for other in (f"{exp}|DIR_RETURN_15|{opposite}", f"{exp}|DIR_RETURN_60|{opposite}", f"{exp}|DIR_RETURN_180|{side}"):          # IS-eligible or not: never evaluated
             human_final_selection(ws, exp, other)
             with pytest.raises(ApprovalError, match="was not evaluated in the selection holdout"):
                 validate_final_selection(ws, exp)
@@ -606,7 +608,7 @@ class TestFinalConfigSelection:
         assert len(led) == 1 and reg.verify_final_config_ledger(ws) == 1
         row = led.iloc[0]
         assert row["event"] == "FINAL_CONFIG_FROZEN" and row["selected_config_id"] == cfgs[1] and row["selection_holdout_used"] == "yes" and row["cpcv_status"] == "PENDING"
-        assert row["is_rank"] == "4" and row["near_tie_cluster"] == "NEAR_TIE_CLUSTER_01" and row["selection_holdout_rank"] == "1"
+        assert row["is_rank"] == str(next(c["is_rank"] for c in spent_b[4]["preference"]["cards"] if c["config_id"] == cfgs[1])) and row["near_tie_cluster"] == "NEAR_TIE_CLUSTER_01" and row["selection_holdout_rank"] == "1"
         assert row["human_selection_file_hash"] == hashlib.sha256(p.read_bytes()).hexdigest() and len(row["manifest_hash"]) == 64 and row["frozen_at"]
         # there can only ever be ONE final config: a second selection (the runner-up, or the same one again) is refused
         human_final_selection(ws, exp, cfgs[0])
@@ -668,7 +670,7 @@ class TestScenarioA_ClearIsWinnerDirectSelection:
         rec = json.loads((experiment_dir(ws, exp) / "results" / "IS_REPORT.json").read_text())["Y_selection_holdout_recommendation"]
         assert rec["available"] is False and rec["recommended"] is False and "no near-tie cluster" in rec["reason"]
         assert reg.experiment_row(ws, exp)["status"] == "AWAITING_HUMAN_FINAL_CONFIG_SELECTION"
-        assert {g.split("|")[0] for g in top_group_ids(ws, exp)} == {"DIR_RETURN_30"}
+        assert {g.split("|")[0] for g in top_group_ids(ws, exp)} == {"DIR_RETURN_180"}
 
     # 19. direct final selection from IS works when the holdout is skipped
     def test_direct_selection_freezes_the_final_config_and_marks_the_holdout_skipped(self, scen_a):

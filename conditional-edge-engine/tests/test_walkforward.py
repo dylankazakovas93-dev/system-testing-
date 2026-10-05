@@ -199,11 +199,11 @@ def test_effective_target_end_is_max_of_claimed_and_declared():
     from engine.target_engine import compute_primary_targets, declared_resolution_times
     bars = H.random_bars(300, seed=2)
     ev = H.events_at(bars, [50, 100])
-    tg = compute_primary_targets(bars, ev, F)["DIR_RETURN_30"]
-    declared = declared_resolution_times(bars.index, ev["event_time"], 30, pd.Timedelta("1min"))
+    tg = compute_primary_targets(bars, ev, F)["DIR_RETURN_15"]
+    declared = declared_resolution_times(bars.index, ev["event_time"], 15, pd.Timedelta("1min"))
     assert (pd.DatetimeIndex(tg["effective_target_end"]) >= pd.DatetimeIndex(tg["target_end"])).all()
     assert (pd.DatetimeIndex(tg["effective_target_end"]) == declared).all()
-    understated = pd.DatetimeIndex(tg["target_end"]) - pd.Timedelta("20min")                       # a lying claim
+    understated = pd.DatetimeIndex(tg["target_end"]) - pd.Timedelta("10min")                       # a lying claim
     eff = pd.DatetimeIndex(np.maximum(understated.asi8, declared.asi8)).tz_localize("UTC")
     assert (eff == declared).all() and (eff > understated).all()
 

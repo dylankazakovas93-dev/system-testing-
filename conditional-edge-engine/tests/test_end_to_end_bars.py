@@ -35,6 +35,23 @@ REPORT_SECTIONS = ["A. Experiment hypothesis", "B. Exact event definition", "C. 
                    "V. Why every other configuration was rejected", "NT. CONFIGURATION UNCERTAINTY / NEAR-TIES", "W. Non-promotable interesting observations", "X. Exact hashes", "Y. SELECTION HOLDOUT status"]
 
 
+def force_near_tie(ws, exp, mp):
+    """TEST DOUBLE (disclosed): planted AR(1) bars give no natural near-tie (different horizons have different uplifts). Declare the engine's top-2
+    same-side groups a near-tie cluster by patching the DIAGNOSTIC `near_tie.detect`; the holdout, final-config and CPCV stages then run for real."""
+    from engine import near_tie
+    j = json.loads((experiment_dir(ws, exp) / "results/IS_REPORT.json").read_text())
+    groups = j["I_top_configurations"]["top_groups"]
+    first = groups[0]
+    second = next(g for g in groups[1:] if g["state"] == first["state"])
+    members = [f"{exp}|{first['group_id']}", f"{exp}|{second['group_id']}"]
+    cluster = {"cluster_id": "NEAR_TIE_CLUSTER_01", "side": first["state"], "members": members, "proposable_for_holdout": members,
+               "is_ranks": {members[0]: first["rank"], members[1]: second["rank"]}, "pairs": []}
+    real = near_tie.detect
+    mp.setattr(near_tie, "detect", lambda w, e, f=None: {**real(w, e, f), "clusters": [cluster]})
+    reg.set_status(ws, exp, "NEAR_TIE_REVIEW_REQUIRED", "test double: forced near-tie cluster")
+    return members
+
+
 def cli(*args, check=True):
     p = subprocess.run([sys.executable, *map(str, args)], capture_output=True, text=True, cwd=str(CODE_ROOT))
     if check and p.returncode != 0:
@@ -216,17 +233,32 @@ def test_planted_momentum_yields_provisional_candidates_that_pass_every_floor(pl
     t = reg.experiment_trials(ws, exp)
     cand = t[t["decision"] == "IS_PROVISIONAL_CANDIDATE"]
     assert len(cand) > 0
-    for target in ("DIR_RETURN_15", "DIR_RETURN_30"):
+    for target in ("DIR_RETURN_15", "DIR_PATH_SKEW_60"):                                      # the short-memory momentum shows at 15 minutes and in the 60-minute path skew
         assert (t[t["target"] == target]["decision"] == "IS_PROVISIONAL_CANDIDATE").all(), target
-    assert (t[t["target"] == "DIR_RETURN_60"]["decision"] == "REJECTED_INSUFFICIENT_UPLIFT").all()     # std uplift 0.06-0.09 < 0.10 floor
+    assert not t[t["target"] == "DIR_RETURN_180"]["decision"].isin(["IS_PROVISIONAL_CANDIDATE", "IS_SHORTLIST_ELIGIBLE"]).any()   # AR(1) memory has decayed by 180 minutes
     for c in ("standardized_uplift", "selected_frequency", "selected_effect", "bootstrap_ci_low", "experiment_q", "campaign_q",
               "experiment_bonferroni_p", "campaign_bonferroni_p"):
         cand = cand.assign(**{c: pd.to_numeric(cand[c])})
-    assert (cand["standardized_uplift"] >= 0.10).all() and (cand["selected_frequency"] >= 1.0).all()
+    assert (cand["standardized_uplift"] >= 0.01).all() and (cand["selected_frequency"] >= 1.0).all()                       # v2: the 0.01 uplift floor
     assert (cand["selected_effect"] > 0).all() and (cand["bootstrap_ci_low"] > 0).all()
     assert (cand[["experiment_q", "campaign_q", "experiment_bonferroni_p", "campaign_bonferroni_p"]] <= 0.05).all().all()
     rejected = t[~t["decision"].isin(["IS_PROVISIONAL_CANDIDATE", "IS_SHORTLIST_ELIGIBLE"])]
     assert len(rejected) > 0 and (rejected["decision"] != "PENDING").all()                    # rejected trials remain visible
+
+
+def test_events_late_in_the_session_are_kept_and_their_long_horizon_targets_are_truncated_and_flagged(planted):
+    """v2: nothing is dropped for crossing the close; the 180-minute target of a 13:00+ event ends at the close and carries truncated=True."""
+    ws, exp, d = planted["ws"], planted["exp"], experiment_dir(planted["ws"], planted["exp"]) / "results"
+    res = planted["results"]["base_event"]
+    assert res["target_timestamp_ineligible"] == 0                                              # no event is removed for a long window crossing the close
+    cv180 = pd.read_csv(d / "cv_DIR_RETURN_180_RIDGE.csv")
+    cv15 = pd.read_csv(d / "cv_DIR_RETURN_15_RIDGE.csv")
+    assert cv180["truncated"].any() and (~cv180["truncated"]).any() and not cv15["truncated"].any()
+    local = pd.to_datetime(cv180["event_time"], utc=True).dt.tz_convert("America/New_York")
+    mins = local.dt.hour * 60 + local.dt.minute
+    assert (cv180["truncated"].to_numpy() == (mins > 13 * 60).to_numpy()).all()                  # truncated exactly when fewer than 180 minutes remain before 16:00
+    wm = json.loads((d / "IS_REPORT.json").read_text())["WM_where_it_works"]
+    assert wm["groups"] == {} and wm["available"] is False                                      # before verification there is no top group to map
 
 
 def test_candidate_without_strong_verification_is_provisional_and_cannot_be_approved(planted):
@@ -264,7 +296,7 @@ def test_the_planted_run_never_touched_selection_holdout_or_the_lockbox(planted)
     assert "SELECTION HOLDOUT status = NOT ACCESSED" in (experiment_dir(ws, exp) / "results/IS_REPORT.md").read_text()
 
 
-def test_path_diagnostics_are_non_promotable_content_cannot_move_ranking_but_tampering_breaks_approval_integrity(planted, tmp_path):
+def test_path_diagnostics_are_non_promotable_content_cannot_move_ranking_but_tampering_breaks_approval_integrity(planted, tmp_path, monkeypatch):
     """PATH DIAGNOSTICS ARE NON-PROMOTABLE: drastically rewriting PATH_DIAGNOSTICS.json (and legitimately regenerating the report)
     leaves candidate status, trial/group ranking, the top-5 list, approval eligibility and SELECTION HOLDOUT group order untouched, while the
     hash-bound approval of the earlier report is invalidated."""
@@ -285,11 +317,10 @@ def test_path_diagnostics_are_non_promotable_content_cannot_move_ranking_but_tam
                 "trial_rank": [r["trial_id"] for r in rank_trials(rows)], "group_rank": [g["group_id"] for g in rank_groups(rows, F.acceptance, 5)],
                 "top5": j["I_top_configurations"], "agreement": j["J_model_agreement"], "allowed": approval_hashes(ws, exp)["allowed_target_side_groups"],
                 "eligible_ids": sorted(r["trial_id"] for r in rows if r["decision"] == "IS_SHORTLIST_ELIGIBLE")}
-    before_nt = json.loads((experiment_dir(ws, exp) / "results/IS_REPORT.json").read_text())["NT_configuration_uncertainty"]["clusters"]
+    pair = force_near_tie(ws, exp, monkeypatch)                                                # forced near-tie pair (test double, see force_near_tie)
     before = formal()
     assert before["status"][0] == "NEAR_TIE_REVIEW_REQUIRED" and len(before["top5"]["top_groups"]) >= 2
-    pair = proposable(ws, exp, 0)                                                              # the engine's deterministic proposable (top-2) near-tied pair
-    human_approval(ws, exp, pair)
+    human_approval(ws, exp, pair, near_tie_cluster_id="NEAR_TIE_CLUSTER_01")
     old_report_hash = approval_hashes(ws, exp)["is_report_sha256"]
     assert validate_approval(ws, exp)["approved_configs"] == pair
 
@@ -318,18 +349,17 @@ def test_path_diagnostics_are_non_promotable_content_cannot_move_ranking_but_tam
     write_is_report(ws, exp)
     after = formal()
     assert after == before                                                                     # status, ranks, top-5, eligibility, trial rows: identical
-    assert json.loads((d / "IS_REPORT.json").read_text())["NT_configuration_uncertainty"]["clusters"] == \
-        json.loads(json.dumps(before_nt))                                                       # the near-tie clusters did not move either
+    assert [c["members"] for c in json.loads((d / "IS_REPORT.json").read_text())["NT_configuration_uncertainty"]["clusters"]] == [pair]   # the (forced) cluster is untouched by the diagnostics rewrite
     new_hash = approval_hashes(ws, exp)["is_report_sha256"]
     assert new_hash != old_report_hash                                                         # but the artifact hash moved ...
     with pytest.raises(ApprovalError, match="is_report_sha256 does not match"):
         validate_approval(ws, exp)                                                             # ... so the OLD approval is no longer valid
-    human_approval(ws, exp, pair)                                                              # a NEW human approval over the new hashes accepts the SAME pair
+    human_approval(ws, exp, pair, near_tie_cluster_id="NEAR_TIE_CLUSTER_01")                  # a NEW human approval over the new hashes accepts the SAME pair
     assert validate_approval(ws, exp)["approved_configs"] == pair
     with pytest.raises(ApprovalError, match="not one of the top-2"):                           # an attractive-looking non-proposable config is refused
         human_approval(ws, exp, [f"{exp}|DIR_RETURN_60|UPPER_HALF", pair[0]], near_tie_cluster_id="NEAR_TIE_CLUSTER_01")
         validate_approval(ws, exp)
-    human_approval(ws, exp, pair)
+    human_approval(ws, exp, pair, near_tie_cluster_id="NEAR_TIE_CLUSTER_01")
     doc = freeze_campaign_selection_holdout(ws, "C001")
     assert doc["experiments"][0]["approved_configs"] == pair and doc["n_holdout_evaluations"] == 6   # the holdout compares exactly the engine's near-tied pair
 
@@ -357,18 +387,24 @@ def test_a_spec_that_declares_two_directions_cannot_be_frozen(tmp_path):
 
 # ---------------- bar-level human gate -> one-shot SELECTION HOLDOUT -> human final config -> automatic CPCV (test code plays the human) ----------------
 def approve_and_spend_selection_holdout(planted, name, data):
+    from engine.partitions import load_bars_before, parse_partitions
+    from engine.selection_holdout_stage import freeze_campaign_selection_holdout, run_campaign_selection_holdout
     ws_dir = planted["ws_dir"].parent / name
     shutil.copytree(planted["ws_dir"], ws_dir)
     ws = reg.Workspace(ws_dir)
     exp = planted["exp"]
-    row = prepare_for_approval(ws, exp)                       # TEST-ONLY injection of strong verification of all 12 paths
-    assert row["status"] == "NEAR_TIE_REVIEW_REQUIRED"        # the planted 15 / 30 configs are statistically near-tied
-    cfgs = proposable(ws, exp, 0)
-    human_approval(ws, exp, cfgs)                             # TEST CODE PLAYING THE HUMAN
-    cli("scripts/freeze_campaign_selection_holdout.py", "--campaign", "C001", "--workspace", ws_dir)          # closes the campaign (human-run step)
-    campaign_open_approval(ws, "C001")                        # TEST CODE PLAYING THE HUMAN (second, campaign-level approval)
-    run = cli("scripts/run_campaign_selection_holdout.py", "--campaign", "C001", "--data", data, "--workspace", ws_dir)
-    return {"ws_dir": ws_dir, "ws": ws, "exp": exp, "configs": cfgs, "stdout": run.stdout, "data": data}
+    prepare_for_approval(ws, exp)                             # TEST-ONLY injection of strong verification of all 12 paths
+    mp = pytest.MonkeyPatch()
+    try:
+        cfgs = force_near_tie(ws, exp, mp)                    # disclosed test double: a near-tie cluster is declared for the top-2 same-side groups
+        human_approval(ws, exp, cfgs, near_tie_cluster_id="NEAR_TIE_CLUSTER_01")                          # TEST CODE PLAYING THE HUMAN
+        freeze_campaign_selection_holdout(ws, "C001")         # closes the campaign (human-run step)
+        campaign_open_approval(ws, "C001")                    # TEST CODE PLAYING THE HUMAN (second, campaign-level approval)
+        bars = load_bars_before(data, parse_partitions(PARTS).selection_holdout_end)                     # the loader never reads the lockbox rows
+        result = run_campaign_selection_holdout(ws, "C001", bars, verbose=False)
+    finally:
+        mp.undo()
+    return {"ws_dir": ws_dir, "ws": ws, "exp": exp, "configs": cfgs, "result": result, "data": data}
 
 
 @pytest.fixture(scope="module")
@@ -399,8 +435,7 @@ def holdout_report(ws, exp):
 
 def test_after_human_approval_the_bar_level_selection_holdout_runs_exactly_once(after_selection_holdout):
     ws, exp = after_selection_holdout["ws"], after_selection_holdout["exp"]
-    assert "SELECTION HOLDOUT is now SPENT" in after_selection_holdout["stdout"] and "family of 6" in after_selection_holdout["stdout"]
-    assert "NOT confirmation" in after_selection_holdout["stdout"]
+    assert after_selection_holdout["result"]["family_size"] == 6 and after_selection_holdout["result"]["campaign_status"] == "SELECTION_HOLDOUT_SPENT"
     ledger = reg.read_selection_holdout_access(ws)
     assert len(ledger) == 1 and ledger["campaign_id"].iloc[0] == "C001" and ledger["experiments"].iloc[0] == exp and reg.verify_selection_holdout_ledger(ws) == 1
     rep = holdout_report(ws, exp)

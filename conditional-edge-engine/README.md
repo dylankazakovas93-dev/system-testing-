@@ -2,7 +2,7 @@
 
 A **frozen research factory**: take one precisely specified, single-direction, causal market event (optionally translated from a
 TradingView/Pine indicator) and test whether the market state at that event holds robust conditional information about
-the next 15–60 minutes — while making it impossible to fish for a result.
+the next 15, 60 and 180 minutes (windows truncated at the session close) — while making it impossible to fish for a result.
 
 ```
 EVENT -> FROZEN MARKET STATE (56 features) -> FROZEN SAME-SESSION TARGETS (4) -> 3 MODELS x 2 STATES = 24 SELECTION TRIALS

@@ -1,8 +1,9 @@
 # FROZEN ACCEPTANCE RULES v1.
-# IS shortlist eligibility of ONE model trial = ALL of the following (the numeric constants are unchanged from before):
+# IS shortlist eligibility of ONE model trial = ALL of the following. v2.0.0 change: the standardized-uplift floor is 0.01 (was 0.10);
+# the null-based gates (adjusted p, CI > 0, year/fold consistency) carry the burden of proof; all other constants are unchanged.
 version: v1
 min_selected_frequency_per_week: 1.0
-min_standardized_uplift: 0.10
+min_standardized_uplift: 0.01
 selected_effect_must_exceed: 0.0           # ABSOLUTE selected effect in the candidate action direction must be positive
 bootstrap_ci_lower_bound_must_exceed: 0.0
 max_experiment_q: 0.05                     # BH over the experiment's 24 trials
@@ -37,7 +38,7 @@ decision_priority:
 # One-shot selection-holdout EVIDENCE gates (informational; SELECTION DATA, never confirmation) for each of the 3 x G approved model evaluations.
 selection_holdout_evidence:
   min_selected_frequency_per_week: 1.0
-  min_standardized_uplift: 0.10
+  min_standardized_uplift: 0.01
   selected_effect_must_exceed: 0.0
   bootstrap_ci_lower_bound_must_exceed: 0.0
   max_selection_holdout_bh_q: 0.05            # BH over all 3G approved model evaluations

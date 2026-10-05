@@ -36,7 +36,7 @@ All events: **+1** (long only). v1 allows one direction per experiment.
 | model-eligible events (>= 480 completed bars) | 5,718 |
 | development trading weeks | 157 |
 | raw event frequency | 36.48 / week |
-| TARGET_TIMESTAMP_INELIGIBLE events removed (60-bar window would cross the RTH close) | 0 |
+| TARGET_TIMESTAMP_INELIGIBLE events removed (no complete forward bar before the RTH close; longer horizons are truncated at the close, not dropped) | 0 |
 | declared parameters never read by event.py | none |
 
 ## E. Data period used
@@ -55,30 +55,30 @@ All statistics are on pooled DEVELOPMENT_CV validation predictions (5 purged chr
 
 | trial | opp # | target | model | state | N sel | parent f/wk | sel f/wk | retention | parent effect | selected effect | uplift | std uplift | 95% block-boot CI (uplift) | raw p | exp q | exp Bonf p | camp q | camp Bonf p | pos-eff yrs | pos-uplift yrs | pos-eff folds | pos-uplift folds | decision |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| EXP_0001_T01 | 1 | DIR_RETURN_15 | RIDGE | UPPER_HALF | 2357 | 36.39 | 17.99 | 0.49 | +0.00003 | +0.00143 | +0.00140 | +0.212 | [+0.00119, +0.00160] | 0.0005 | 0.0005 | 0.0120 | 0.0005 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
-| EXP_0001_T02 | 2 | DIR_RETURN_15 | RIDGE | LOWER_HALF | 2410 | 36.39 | 18.40 | 0.51 | -0.00003 | +0.00134 | +0.00137 | +0.207 | [+0.00116, +0.00157] | 0.0005 | 0.0005 | 0.0120 | 0.0005 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
-| EXP_0001_T03 | 3 | DIR_RETURN_15 | SPLINE | UPPER_HALF | 2452 | 36.39 | 18.72 | 0.51 | +0.00003 | +0.00143 | +0.00140 | +0.211 | [+0.00121, +0.00157] | 0.0005 | 0.0005 | 0.0120 | 0.0005 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
-| EXP_0001_T04 | 4 | DIR_RETURN_15 | SPLINE | LOWER_HALF | 2315 | 36.39 | 17.67 | 0.49 | -0.00003 | +0.00145 | +0.00148 | +0.224 | [+0.00126, +0.00168] | 0.0005 | 0.0005 | 0.0120 | 0.0005 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
-| EXP_0001_T05 | 5 | DIR_RETURN_15 | XGB | UPPER_HALF | 2524 | 36.39 | 19.27 | 0.53 | +0.00003 | +0.00143 | +0.00140 | +0.212 | [+0.00121, +0.00158] | 0.0005 | 0.0005 | 0.0120 | 0.0005 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
-| EXP_0001_T06 | 6 | DIR_RETURN_15 | XGB | LOWER_HALF | 2243 | 36.39 | 17.12 | 0.47 | -0.00003 | +0.00155 | +0.00158 | +0.239 | [+0.00137, +0.00179] | 0.0005 | 0.0005 | 0.0120 | 0.0005 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
-| EXP_0001_T07 | 7 | DIR_RETURN_30 | RIDGE | UPPER_HALF | 2168 | 36.39 | 16.55 | 0.45 | -0.00001 | +0.00145 | +0.00145 | +0.142 | [+0.00112, +0.00179] | 0.0005 | 0.0005 | 0.0120 | 0.0005 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
-| EXP_0001_T08 | 8 | DIR_RETURN_30 | RIDGE | LOWER_HALF | 2599 | 36.39 | 19.84 | 0.55 | +0.00001 | +0.00122 | +0.00121 | +0.118 | [+0.00092, +0.00151] | 0.0005 | 0.0005 | 0.0120 | 0.0005 | 0.0120 | 2/3 | 3/3 | 4/5 | 5/5 | REJECTED_INSTABILITY ⚠YEAR_CONCENTRATION_WARNING |
-| EXP_0001_T09 | 9 | DIR_RETURN_30 | SPLINE | UPPER_HALF | 2257 | 36.39 | 17.23 | 0.47 | -0.00001 | +0.00157 | +0.00158 | +0.154 | [+0.00129, +0.00185] | 0.0005 | 0.0005 | 0.0120 | 0.0005 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
-| EXP_0001_T10 | 10 | DIR_RETURN_30 | SPLINE | LOWER_HALF | 2510 | 36.39 | 19.16 | 0.53 | +0.00001 | +0.00143 | +0.00142 | +0.138 | [+0.00115, +0.00169] | 0.0005 | 0.0005 | 0.0120 | 0.0005 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
-| EXP_0001_T11 | 11 | DIR_RETURN_30 | XGB | UPPER_HALF | 2512 | 36.39 | 19.18 | 0.53 | -0.00001 | +0.00131 | +0.00132 | +0.128 | [+0.00102, +0.00158] | 0.0005 | 0.0005 | 0.0120 | 0.0005 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
-| EXP_0001_T12 | 12 | DIR_RETURN_30 | XGB | LOWER_HALF | 2255 | 36.39 | 17.21 | 0.47 | +0.00001 | +0.00148 | +0.00147 | +0.143 | [+0.00113, +0.00179] | 0.0005 | 0.0005 | 0.0120 | 0.0005 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
-| EXP_0001_T13 | 13 | DIR_RETURN_60 | RIDGE | UPPER_HALF | 2046 | 36.39 | 15.62 | 0.43 | +0.00016 | +0.00161 | +0.00145 | +0.095 | [+0.00095, +0.00198] | 0.0005 | 0.0005 | 0.0120 | 0.0005 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | REJECTED_INSUFFICIENT_UPLIFT ⚠YEAR_CONCENTRATION_WARNING |
-| EXP_0001_T14 | 14 | DIR_RETURN_60 | RIDGE | LOWER_HALF | 2721 | 36.39 | 20.77 | 0.57 | -0.00016 | +0.00092 | +0.00109 | +0.072 | [+0.00070, +0.00149] | 0.0005 | 0.0005 | 0.0120 | 0.0005 | 0.0120 | 2/3 | 3/3 | 4/5 | 5/5 | REJECTED_INSUFFICIENT_UPLIFT ⚠YEAR_CONCENTRATION_WARNING |
-| EXP_0001_T15 | 15 | DIR_RETURN_60 | SPLINE | UPPER_HALF | 2253 | 36.39 | 17.20 | 0.47 | +0.00016 | +0.00112 | +0.00095 | +0.063 | [+0.00051, +0.00140] | 0.0005 | 0.0005 | 0.0120 | 0.0005 | 0.0120 | 3/3 | 2/3 | 5/5 | 4/5 | REJECTED_INSUFFICIENT_UPLIFT ⚠YEAR_CONCENTRATION_WARNING |
-| EXP_0001_T16 | 16 | DIR_RETURN_60 | SPLINE | LOWER_HALF | 2514 | 36.39 | 19.19 | 0.53 | -0.00016 | +0.00069 | +0.00085 | +0.056 | [+0.00045, +0.00128] | 0.0005 | 0.0005 | 0.0120 | 0.0005 | 0.0120 | 2/3 | 2/3 | 4/5 | 4/5 | REJECTED_INSUFFICIENT_UPLIFT ⚠YEAR_CONCENTRATION_WARNING |
-| EXP_0001_T17 | 17 | DIR_RETURN_60 | XGB | UPPER_HALF | 2389 | 36.39 | 18.24 | 0.50 | +0.00016 | +0.00132 | +0.00116 | +0.076 | [+0.00068, +0.00160] | 0.0005 | 0.0005 | 0.0120 | 0.0005 | 0.0120 | 2/3 | 2/3 | 4/5 | 4/5 | REJECTED_INSUFFICIENT_UPLIFT ⚠YEAR_CONCENTRATION_WARNING |
-| EXP_0001_T18 | 18 | DIR_RETURN_60 | XGB | LOWER_HALF | 2378 | 36.39 | 18.15 | 0.50 | -0.00016 | +0.00100 | +0.00116 | +0.077 | [+0.00068, +0.00164] | 0.0005 | 0.0005 | 0.0120 | 0.0005 | 0.0120 | 2/3 | 2/3 | 4/5 | 4/5 | REJECTED_INSUFFICIENT_UPLIFT ⚠YEAR_CONCENTRATION_WARNING |
-| EXP_0001_T19 | 19 | DIR_PATH_SKEW_60 | RIDGE | UPPER_HALF | 2168 | 36.39 | 16.55 | 0.45 | +0.00012 | +0.00256 | +0.00244 | +0.151 | [+0.00192, +0.00296] | 0.0005 | 0.0005 | 0.0120 | 0.0005 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
-| EXP_0001_T20 | 20 | DIR_PATH_SKEW_60 | RIDGE | LOWER_HALF | 2599 | 36.39 | 19.84 | 0.55 | -0.00012 | +0.00191 | +0.00204 | +0.126 | [+0.00159, +0.00251] | 0.0005 | 0.0005 | 0.0120 | 0.0005 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
-| EXP_0001_T21 | 21 | DIR_PATH_SKEW_60 | SPLINE | UPPER_HALF | 2294 | 36.39 | 17.51 | 0.48 | +0.00012 | +0.00215 | +0.00203 | +0.125 | [+0.00157, +0.00247] | 0.0005 | 0.0005 | 0.0120 | 0.0005 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
-| EXP_0001_T22 | 22 | DIR_PATH_SKEW_60 | SPLINE | LOWER_HALF | 2473 | 36.39 | 18.88 | 0.52 | -0.00012 | +0.00176 | +0.00188 | +0.116 | [+0.00142, +0.00234] | 0.0005 | 0.0005 | 0.0120 | 0.0005 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
-| EXP_0001_T23 | 23 | DIR_PATH_SKEW_60 | XGB | UPPER_HALF | 2498 | 36.39 | 19.07 | 0.52 | +0.00012 | +0.00206 | +0.00193 | +0.120 | [+0.00148, +0.00236] | 0.0005 | 0.0005 | 0.0120 | 0.0005 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
-| EXP_0001_T24 | 24 | DIR_PATH_SKEW_60 | XGB | LOWER_HALF | 2269 | 36.39 | 17.32 | 0.48 | -0.00012 | +0.00201 | +0.00213 | +0.132 | [+0.00159, +0.00267] | 0.0005 | 0.0005 | 0.0120 | 0.0005 | 0.0120 | 2/3 | 3/3 | 5/5 | 5/5 | REJECTED_INSTABILITY ⚠YEAR_CONCENTRATION_WARNING |
+| EXP_0001_T01 | 1 | DIR_RETURN_15 | RIDGE | UPPER_HALF | 2357 | 36.39 | 17.99 | 0.49 | +0.00003 | +0.00143 | +0.00140 | +0.212 | [+0.00119, +0.00160] | 0.0005 | 0.0007 | 0.0120 | 0.0007 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
+| EXP_0001_T02 | 2 | DIR_RETURN_15 | RIDGE | LOWER_HALF | 2410 | 36.39 | 18.40 | 0.51 | -0.00003 | +0.00134 | +0.00137 | +0.207 | [+0.00116, +0.00157] | 0.0005 | 0.0007 | 0.0120 | 0.0007 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
+| EXP_0001_T03 | 3 | DIR_RETURN_15 | SPLINE | UPPER_HALF | 2452 | 36.39 | 18.72 | 0.51 | +0.00003 | +0.00143 | +0.00140 | +0.211 | [+0.00121, +0.00157] | 0.0005 | 0.0007 | 0.0120 | 0.0007 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
+| EXP_0001_T04 | 4 | DIR_RETURN_15 | SPLINE | LOWER_HALF | 2315 | 36.39 | 17.67 | 0.49 | -0.00003 | +0.00145 | +0.00148 | +0.224 | [+0.00126, +0.00168] | 0.0005 | 0.0007 | 0.0120 | 0.0007 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
+| EXP_0001_T05 | 5 | DIR_RETURN_15 | XGB | UPPER_HALF | 2524 | 36.39 | 19.27 | 0.53 | +0.00003 | +0.00143 | +0.00140 | +0.212 | [+0.00121, +0.00158] | 0.0005 | 0.0007 | 0.0120 | 0.0007 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
+| EXP_0001_T06 | 6 | DIR_RETURN_15 | XGB | LOWER_HALF | 2243 | 36.39 | 17.12 | 0.47 | -0.00003 | +0.00155 | +0.00158 | +0.239 | [+0.00137, +0.00179] | 0.0005 | 0.0007 | 0.0120 | 0.0007 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
+| EXP_0001_T07 | 7 | DIR_RETURN_60 | RIDGE | UPPER_HALF | 2046 | 36.39 | 15.62 | 0.43 | +0.00016 | +0.00161 | +0.00145 | +0.095 | [+0.00095, +0.00198] | 0.0005 | 0.0007 | 0.0120 | 0.0007 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | REJECTED_MODEL_AGREEMENT ⚠YEAR_CONCENTRATION_WARNING |
+| EXP_0001_T08 | 8 | DIR_RETURN_60 | RIDGE | LOWER_HALF | 2721 | 36.39 | 20.77 | 0.57 | -0.00016 | +0.00092 | +0.00109 | +0.072 | [+0.00070, +0.00149] | 0.0005 | 0.0007 | 0.0120 | 0.0007 | 0.0120 | 2/3 | 3/3 | 4/5 | 5/5 | REJECTED_INSTABILITY ⚠YEAR_CONCENTRATION_WARNING |
+| EXP_0001_T09 | 9 | DIR_RETURN_60 | SPLINE | UPPER_HALF | 2253 | 36.39 | 17.20 | 0.47 | +0.00016 | +0.00112 | +0.00095 | +0.063 | [+0.00051, +0.00140] | 0.0005 | 0.0007 | 0.0120 | 0.0007 | 0.0120 | 3/3 | 2/3 | 5/5 | 4/5 | REJECTED_INSTABILITY ⚠YEAR_CONCENTRATION_WARNING |
+| EXP_0001_T10 | 10 | DIR_RETURN_60 | SPLINE | LOWER_HALF | 2514 | 36.39 | 19.19 | 0.53 | -0.00016 | +0.00069 | +0.00085 | +0.056 | [+0.00045, +0.00128] | 0.0005 | 0.0007 | 0.0120 | 0.0007 | 0.0120 | 2/3 | 2/3 | 4/5 | 4/5 | REJECTED_INSTABILITY ⚠YEAR_CONCENTRATION_WARNING |
+| EXP_0001_T11 | 11 | DIR_RETURN_60 | XGB | UPPER_HALF | 2389 | 36.39 | 18.24 | 0.50 | +0.00016 | +0.00132 | +0.00116 | +0.076 | [+0.00068, +0.00160] | 0.0005 | 0.0007 | 0.0120 | 0.0007 | 0.0120 | 2/3 | 2/3 | 4/5 | 4/5 | REJECTED_INSTABILITY ⚠YEAR_CONCENTRATION_WARNING |
+| EXP_0001_T12 | 12 | DIR_RETURN_60 | XGB | LOWER_HALF | 2378 | 36.39 | 18.15 | 0.50 | -0.00016 | +0.00100 | +0.00116 | +0.077 | [+0.00068, +0.00164] | 0.0005 | 0.0007 | 0.0120 | 0.0007 | 0.0120 | 2/3 | 2/3 | 4/5 | 4/5 | REJECTED_INSTABILITY ⚠YEAR_CONCENTRATION_WARNING |
+| EXP_0001_T13 | 13 | DIR_RETURN_180 | RIDGE | UPPER_HALF | 1955 | 36.39 | 14.92 | 0.41 | +0.00051 | +0.00166 | +0.00115 | +0.045 | [-0.00002, +0.00243] | 0.0170 | 0.0185 | 0.4078 | 0.0185 | 0.4078 | 2/3 | 2/3 | 3/5 | 4/5 | REJECTED_STATISTICAL ⚠YEAR_CONCENTRATION_WARNING |
+| EXP_0001_T14 | 14 | DIR_RETURN_180 | RIDGE | LOWER_HALF | 2812 | 36.39 | 21.47 | 0.59 | -0.00051 | +0.00030 | +0.00080 | +0.032 | [-0.00001, +0.00170] | 0.0170 | 0.0185 | 0.4078 | 0.0185 | 0.4078 | 1/3 | 2/3 | 3/5 | 4/5 | REJECTED_STATISTICAL ⚠YEAR_CONCENTRATION_WARNING |
+| EXP_0001_T15 | 15 | DIR_RETURN_180 | SPLINE | UPPER_HALF | 2198 | 36.39 | 16.78 | 0.46 | +0.00051 | +0.00143 | +0.00093 | +0.036 | [-0.00010, +0.00197] | 0.0220 | 0.0220 | 0.5277 | 0.0220 | 0.5277 | 2/3 | 2/3 | 4/5 | 4/5 | REJECTED_STATISTICAL ⚠YEAR_CONCENTRATION_WARNING |
+| EXP_0001_T16 | 16 | DIR_RETURN_180 | SPLINE | LOWER_HALF | 2569 | 36.39 | 19.61 | 0.54 | -0.00051 | +0.00029 | +0.00079 | +0.031 | [-0.00009, +0.00168] | 0.0220 | 0.0220 | 0.5277 | 0.0220 | 0.5277 | 1/3 | 2/3 | 3/5 | 4/5 | REJECTED_STATISTICAL ⚠YEAR_CONCENTRATION_WARNING |
+| EXP_0001_T17 | 17 | DIR_RETURN_180 | XGB | UPPER_HALF | 2431 | 36.39 | 18.56 | 0.51 | +0.00051 | +0.00182 | +0.00131 | +0.052 | [+0.00046, +0.00218] | 0.0020 | 0.0024 | 0.0480 | 0.0024 | 0.0480 | 2/3 | 2/3 | 4/5 | 4/5 | REJECTED_INSTABILITY ⚠YEAR_CONCENTRATION_WARNING |
+| EXP_0001_T18 | 18 | DIR_RETURN_180 | XGB | LOWER_HALF | 2336 | 36.39 | 17.83 | 0.49 | -0.00051 | +0.00086 | +0.00137 | +0.054 | [+0.00046, +0.00229] | 0.0020 | 0.0024 | 0.0480 | 0.0024 | 0.0480 | 2/3 | 2/3 | 4/5 | 4/5 | REJECTED_INSTABILITY ⚠YEAR_CONCENTRATION_WARNING |
+| EXP_0001_T19 | 19 | DIR_PATH_SKEW_60 | RIDGE | UPPER_HALF | 2168 | 36.39 | 16.55 | 0.45 | +0.00012 | +0.00256 | +0.00244 | +0.151 | [+0.00192, +0.00296] | 0.0005 | 0.0007 | 0.0120 | 0.0007 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
+| EXP_0001_T20 | 20 | DIR_PATH_SKEW_60 | RIDGE | LOWER_HALF | 2599 | 36.39 | 19.84 | 0.55 | -0.00012 | +0.00191 | +0.00204 | +0.126 | [+0.00159, +0.00251] | 0.0005 | 0.0007 | 0.0120 | 0.0007 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
+| EXP_0001_T21 | 21 | DIR_PATH_SKEW_60 | SPLINE | UPPER_HALF | 2294 | 36.39 | 17.51 | 0.48 | +0.00012 | +0.00215 | +0.00203 | +0.125 | [+0.00157, +0.00247] | 0.0005 | 0.0007 | 0.0120 | 0.0007 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
+| EXP_0001_T22 | 22 | DIR_PATH_SKEW_60 | SPLINE | LOWER_HALF | 2473 | 36.39 | 18.88 | 0.52 | -0.00012 | +0.00176 | +0.00188 | +0.116 | [+0.00142, +0.00234] | 0.0005 | 0.0007 | 0.0120 | 0.0007 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
+| EXP_0001_T23 | 23 | DIR_PATH_SKEW_60 | XGB | UPPER_HALF | 2498 | 36.39 | 19.07 | 0.52 | +0.00012 | +0.00206 | +0.00193 | +0.120 | [+0.00148, +0.00236] | 0.0005 | 0.0007 | 0.0120 | 0.0007 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
+| EXP_0001_T24 | 24 | DIR_PATH_SKEW_60 | XGB | LOWER_HALF | 2269 | 36.39 | 17.32 | 0.48 | -0.00012 | +0.00201 | +0.00213 | +0.132 | [+0.00159, +0.00267] | 0.0005 | 0.0007 | 0.0120 | 0.0007 | 0.0120 | 2/3 | 3/3 | 5/5 | 5/5 | REJECTED_INSTABILITY ⚠YEAR_CONCENTRATION_WARNING |
 
 ## H. Multiplicity adjustments
 
@@ -91,22 +91,17 @@ Eligibility is the full hard IS gate set; ranking = standardized uplift DESC, ca
 
 | trial | opp # | target | model | state | N sel | parent f/wk | sel f/wk | retention | parent effect | selected effect | uplift | std uplift | 95% block-boot CI (uplift) | raw p | exp q | exp Bonf p | camp q | camp Bonf p | pos-eff yrs | pos-uplift yrs | pos-eff folds | pos-uplift folds | decision |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| EXP_0001_T06 | 6 | DIR_RETURN_15 | XGB | LOWER_HALF | 2243 | 36.39 | 17.12 | 0.47 | -0.00003 | +0.00155 | +0.00158 | +0.239 | [+0.00137, +0.00179] | 0.0005 | 0.0005 | 0.0120 | 0.0005 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
-| EXP_0001_T04 | 4 | DIR_RETURN_15 | SPLINE | LOWER_HALF | 2315 | 36.39 | 17.67 | 0.49 | -0.00003 | +0.00145 | +0.00148 | +0.224 | [+0.00126, +0.00168] | 0.0005 | 0.0005 | 0.0120 | 0.0005 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
-| EXP_0001_T05 | 5 | DIR_RETURN_15 | XGB | UPPER_HALF | 2524 | 36.39 | 19.27 | 0.53 | +0.00003 | +0.00143 | +0.00140 | +0.212 | [+0.00121, +0.00158] | 0.0005 | 0.0005 | 0.0120 | 0.0005 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
-| EXP_0001_T01 | 1 | DIR_RETURN_15 | RIDGE | UPPER_HALF | 2357 | 36.39 | 17.99 | 0.49 | +0.00003 | +0.00143 | +0.00140 | +0.212 | [+0.00119, +0.00160] | 0.0005 | 0.0005 | 0.0120 | 0.0005 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
-| EXP_0001_T03 | 3 | DIR_RETURN_15 | SPLINE | UPPER_HALF | 2452 | 36.39 | 18.72 | 0.51 | +0.00003 | +0.00143 | +0.00140 | +0.211 | [+0.00121, +0.00157] | 0.0005 | 0.0005 | 0.0120 | 0.0005 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
-| EXP_0001_T02 | 2 | DIR_RETURN_15 | RIDGE | LOWER_HALF | 2410 | 36.39 | 18.40 | 0.51 | -0.00003 | +0.00134 | +0.00137 | +0.207 | [+0.00116, +0.00157] | 0.0005 | 0.0005 | 0.0120 | 0.0005 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
-| EXP_0001_T09 | 9 | DIR_RETURN_30 | SPLINE | UPPER_HALF | 2257 | 36.39 | 17.23 | 0.47 | -0.00001 | +0.00157 | +0.00158 | +0.154 | [+0.00129, +0.00185] | 0.0005 | 0.0005 | 0.0120 | 0.0005 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
-| EXP_0001_T19 | 19 | DIR_PATH_SKEW_60 | RIDGE | UPPER_HALF | 2168 | 36.39 | 16.55 | 0.45 | +0.00012 | +0.00256 | +0.00244 | +0.151 | [+0.00192, +0.00296] | 0.0005 | 0.0005 | 0.0120 | 0.0005 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
-| EXP_0001_T12 | 12 | DIR_RETURN_30 | XGB | LOWER_HALF | 2255 | 36.39 | 17.21 | 0.47 | +0.00001 | +0.00148 | +0.00147 | +0.143 | [+0.00113, +0.00179] | 0.0005 | 0.0005 | 0.0120 | 0.0005 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
-| EXP_0001_T07 | 7 | DIR_RETURN_30 | RIDGE | UPPER_HALF | 2168 | 36.39 | 16.55 | 0.45 | -0.00001 | +0.00145 | +0.00145 | +0.142 | [+0.00112, +0.00179] | 0.0005 | 0.0005 | 0.0120 | 0.0005 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
-| EXP_0001_T10 | 10 | DIR_RETURN_30 | SPLINE | LOWER_HALF | 2510 | 36.39 | 19.16 | 0.53 | +0.00001 | +0.00143 | +0.00142 | +0.138 | [+0.00115, +0.00169] | 0.0005 | 0.0005 | 0.0120 | 0.0005 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
-| EXP_0001_T11 | 11 | DIR_RETURN_30 | XGB | UPPER_HALF | 2512 | 36.39 | 19.18 | 0.53 | -0.00001 | +0.00131 | +0.00132 | +0.128 | [+0.00102, +0.00158] | 0.0005 | 0.0005 | 0.0120 | 0.0005 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
-| EXP_0001_T20 | 20 | DIR_PATH_SKEW_60 | RIDGE | LOWER_HALF | 2599 | 36.39 | 19.84 | 0.55 | -0.00012 | +0.00191 | +0.00204 | +0.126 | [+0.00159, +0.00251] | 0.0005 | 0.0005 | 0.0120 | 0.0005 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
-| EXP_0001_T21 | 21 | DIR_PATH_SKEW_60 | SPLINE | UPPER_HALF | 2294 | 36.39 | 17.51 | 0.48 | +0.00012 | +0.00215 | +0.00203 | +0.125 | [+0.00157, +0.00247] | 0.0005 | 0.0005 | 0.0120 | 0.0005 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
-| EXP_0001_T23 | 23 | DIR_PATH_SKEW_60 | XGB | UPPER_HALF | 2498 | 36.39 | 19.07 | 0.52 | +0.00012 | +0.00206 | +0.00193 | +0.120 | [+0.00148, +0.00236] | 0.0005 | 0.0005 | 0.0120 | 0.0005 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
-| EXP_0001_T22 | 22 | DIR_PATH_SKEW_60 | SPLINE | LOWER_HALF | 2473 | 36.39 | 18.88 | 0.52 | -0.00012 | +0.00176 | +0.00188 | +0.116 | [+0.00142, +0.00234] | 0.0005 | 0.0005 | 0.0120 | 0.0005 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
+| EXP_0001_T06 | 6 | DIR_RETURN_15 | XGB | LOWER_HALF | 2243 | 36.39 | 17.12 | 0.47 | -0.00003 | +0.00155 | +0.00158 | +0.239 | [+0.00137, +0.00179] | 0.0005 | 0.0007 | 0.0120 | 0.0007 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
+| EXP_0001_T04 | 4 | DIR_RETURN_15 | SPLINE | LOWER_HALF | 2315 | 36.39 | 17.67 | 0.49 | -0.00003 | +0.00145 | +0.00148 | +0.224 | [+0.00126, +0.00168] | 0.0005 | 0.0007 | 0.0120 | 0.0007 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
+| EXP_0001_T05 | 5 | DIR_RETURN_15 | XGB | UPPER_HALF | 2524 | 36.39 | 19.27 | 0.53 | +0.00003 | +0.00143 | +0.00140 | +0.212 | [+0.00121, +0.00158] | 0.0005 | 0.0007 | 0.0120 | 0.0007 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
+| EXP_0001_T01 | 1 | DIR_RETURN_15 | RIDGE | UPPER_HALF | 2357 | 36.39 | 17.99 | 0.49 | +0.00003 | +0.00143 | +0.00140 | +0.212 | [+0.00119, +0.00160] | 0.0005 | 0.0007 | 0.0120 | 0.0007 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
+| EXP_0001_T03 | 3 | DIR_RETURN_15 | SPLINE | UPPER_HALF | 2452 | 36.39 | 18.72 | 0.51 | +0.00003 | +0.00143 | +0.00140 | +0.211 | [+0.00121, +0.00157] | 0.0005 | 0.0007 | 0.0120 | 0.0007 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
+| EXP_0001_T02 | 2 | DIR_RETURN_15 | RIDGE | LOWER_HALF | 2410 | 36.39 | 18.40 | 0.51 | -0.00003 | +0.00134 | +0.00137 | +0.207 | [+0.00116, +0.00157] | 0.0005 | 0.0007 | 0.0120 | 0.0007 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
+| EXP_0001_T19 | 19 | DIR_PATH_SKEW_60 | RIDGE | UPPER_HALF | 2168 | 36.39 | 16.55 | 0.45 | +0.00012 | +0.00256 | +0.00244 | +0.151 | [+0.00192, +0.00296] | 0.0005 | 0.0007 | 0.0120 | 0.0007 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
+| EXP_0001_T20 | 20 | DIR_PATH_SKEW_60 | RIDGE | LOWER_HALF | 2599 | 36.39 | 19.84 | 0.55 | -0.00012 | +0.00191 | +0.00204 | +0.126 | [+0.00159, +0.00251] | 0.0005 | 0.0007 | 0.0120 | 0.0007 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
+| EXP_0001_T21 | 21 | DIR_PATH_SKEW_60 | SPLINE | UPPER_HALF | 2294 | 36.39 | 17.51 | 0.48 | +0.00012 | +0.00215 | +0.00203 | +0.125 | [+0.00157, +0.00247] | 0.0005 | 0.0007 | 0.0120 | 0.0007 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
+| EXP_0001_T23 | 23 | DIR_PATH_SKEW_60 | XGB | UPPER_HALF | 2498 | 36.39 | 19.07 | 0.52 | +0.00012 | +0.00206 | +0.00193 | +0.120 | [+0.00148, +0.00236] | 0.0005 | 0.0007 | 0.0120 | 0.0007 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
+| EXP_0001_T22 | 22 | DIR_PATH_SKEW_60 | SPLINE | LOWER_HALF | 2473 | 36.39 | 18.88 | 0.52 | -0.00012 | +0.00176 | +0.00188 | +0.116 | [+0.00142, +0.00234] | 0.0005 | 0.0007 | 0.0120 | 0.0007 | 0.0120 | 3/3 | 3/3 | 5/5 | 5/5 | IS_SHORTLIST_ELIGIBLE ⚠YEAR_CONCENTRATION_WARNING |
 
 ### TOP 5 IS GROUPS (deterministic IS ranking; a human may choose one directly, or approve at most the top 2 of a near-tie cluster for the SELECTION HOLDOUT)
 
@@ -114,9 +109,8 @@ Eligibility is the full hard IS gate set; ranking = standardized uplift DESC, ca
 |---|---|---|---|---|---|
 | 1 | DIR_RETURN_15|LOWER_HALF | RIDGE, SPLINE, XGB | +0.224 | 0.0120 | 17.67 |
 | 2 | DIR_RETURN_15|UPPER_HALF | RIDGE, SPLINE, XGB | +0.212 | 0.0120 | 18.72 |
-| 3 | DIR_RETURN_30|UPPER_HALF | RIDGE, SPLINE, XGB | +0.142 | 0.0120 | 17.23 |
-| 4 | DIR_RETURN_30|LOWER_HALF | SPLINE, XGB | +0.141 | 0.0120 | 18.19 |
-| 5 | DIR_PATH_SKEW_60|UPPER_HALF | RIDGE, SPLINE, XGB | +0.125 | 0.0120 | 17.51 |
+| 3 | DIR_PATH_SKEW_60|UPPER_HALF | RIDGE, SPLINE, XGB | +0.125 | 0.0120 | 17.51 |
+| 4 | DIR_PATH_SKEW_60|LOWER_HALF | RIDGE, SPLINE | +0.121 | 0.0120 | 19.36 |
 
 ## J. Model agreement (>= 2 of 3 models required)
 
@@ -126,8 +120,8 @@ Eligibility is the full hard IS gate set; ranking = standardized uplift DESC, ca
 | DIR_PATH_SKEW_60|LOWER_HALF | RIDGE, SPLINE | - |
 | DIR_RETURN_15|UPPER_HALF | RIDGE, SPLINE, XGB | - |
 | DIR_RETURN_15|LOWER_HALF | RIDGE, SPLINE, XGB | - |
-| DIR_RETURN_30|UPPER_HALF | RIDGE, SPLINE, XGB | - |
-| DIR_RETURN_30|LOWER_HALF | SPLINE, XGB | - |
+| DIR_RETURN_180|UPPER_HALF | - | - |
+| DIR_RETURN_180|LOWER_HALF | - | - |
 | DIR_RETURN_60|UPPER_HALF | - | - |
 | DIR_RETURN_60|LOWER_HALF | - | - |
 
@@ -181,55 +175,7 @@ Eligibility is the full hard IS gate set; ranking = standardized uplift DESC, ca
 | 2017 | yes | 1907 | 910 | 17.50 | -0.00002 | +0.00153 | +0.00156 |
 | 2018 | yes | 1914 | 855 | 16.13 | -0.00002 | +0.00180 | +0.00182 |
 
-**EXP_0001_T07 DIR_RETURN_30/RIDGE/UPPER_HALF** — positive selected-effect years 3/3, positive-uplift years 3/3, largest-year share of total absolute uplift 0.50 — **YEAR_CONCENTRATION_WARNING** (> 35%)
-
-| year | eligible | N parent | N selected | selected f/wk | parent effect | selected effect | uplift |
-|---|---|---|---|---|---|---|---|
-| 2016 | yes | 946 | 349 | 13.42 | +0.00027 | +0.00055 | +0.00028 |
-| 2017 | yes | 1907 | 798 | 15.35 | -0.00002 | +0.00200 | +0.00202 |
-| 2018 | yes | 1914 | 1021 | 19.26 | -0.00013 | +0.00132 | +0.00146 |
-
-**EXP_0001_T08 DIR_RETURN_30/RIDGE/LOWER_HALF** — positive selected-effect years 2/3, positive-uplift years 3/3, largest-year share of total absolute uplift 0.50 — **YEAR_CONCENTRATION_WARNING** (> 35%)
-
-| year | eligible | N parent | N selected | selected f/wk | parent effect | selected effect | uplift |
-|---|---|---|---|---|---|---|---|
-| 2016 | yes | 946 | 597 | 22.96 | -0.00027 | -0.00011 | +0.00016 |
-| 2017 | yes | 1907 | 1109 | 21.33 | +0.00002 | +0.00147 | +0.00145 |
-| 2018 | yes | 1914 | 893 | 16.85 | +0.00013 | +0.00180 | +0.00166 |
-
-**EXP_0001_T09 DIR_RETURN_30/SPLINE/UPPER_HALF** — positive selected-effect years 3/3, positive-uplift years 3/3, largest-year share of total absolute uplift 0.48 — **YEAR_CONCENTRATION_WARNING** (> 35%)
-
-| year | eligible | N parent | N selected | selected f/wk | parent effect | selected effect | uplift |
-|---|---|---|---|---|---|---|---|
-| 2016 | yes | 946 | 379 | 14.58 | +0.00027 | +0.00088 | +0.00061 |
-| 2017 | yes | 1907 | 848 | 16.31 | -0.00002 | +0.00190 | +0.00192 |
-| 2018 | yes | 1914 | 1030 | 19.43 | -0.00013 | +0.00155 | +0.00169 |
-
-**EXP_0001_T10 DIR_RETURN_30/SPLINE/LOWER_HALF** — positive selected-effect years 3/3, positive-uplift years 3/3, largest-year share of total absolute uplift 0.48 — **YEAR_CONCENTRATION_WARNING** (> 35%)
-
-| year | eligible | N parent | N selected | selected f/wk | parent effect | selected effect | uplift |
-|---|---|---|---|---|---|---|---|
-| 2016 | yes | 946 | 567 | 21.81 | -0.00027 | +0.00014 | +0.00041 |
-| 2017 | yes | 1907 | 1059 | 20.37 | +0.00002 | +0.00156 | +0.00154 |
-| 2018 | yes | 1914 | 884 | 16.68 | +0.00013 | +0.00210 | +0.00196 |
-
-**EXP_0001_T11 DIR_RETURN_30/XGB/UPPER_HALF** — positive selected-effect years 3/3, positive-uplift years 3/3, largest-year share of total absolute uplift 0.50 — **YEAR_CONCENTRATION_WARNING** (> 35%)
-
-| year | eligible | N parent | N selected | selected f/wk | parent effect | selected effect | uplift |
-|---|---|---|---|---|---|---|---|
-| 2016 | yes | 946 | 420 | 16.15 | +0.00027 | +0.00090 | +0.00063 |
-| 2017 | yes | 1907 | 993 | 19.10 | -0.00002 | +0.00167 | +0.00169 |
-| 2018 | yes | 1914 | 1099 | 20.74 | -0.00013 | +0.00114 | +0.00127 |
-
-**EXP_0001_T12 DIR_RETURN_30/XGB/LOWER_HALF** — positive selected-effect years 3/3, positive-uplift years 3/3, largest-year share of total absolute uplift 0.50 — **YEAR_CONCENTRATION_WARNING** (> 35%)
-
-| year | eligible | N parent | N selected | selected f/wk | parent effect | selected effect | uplift |
-|---|---|---|---|---|---|---|---|
-| 2016 | yes | 946 | 526 | 20.23 | -0.00027 | +0.00023 | +0.00050 |
-| 2017 | yes | 1907 | 914 | 17.58 | +0.00002 | +0.00186 | +0.00184 |
-| 2018 | yes | 1914 | 815 | 15.38 | +0.00013 | +0.00185 | +0.00172 |
-
-**EXP_0001_T13 DIR_RETURN_60/RIDGE/UPPER_HALF** — positive selected-effect years 3/3, positive-uplift years 3/3, largest-year share of total absolute uplift 0.50 — **YEAR_CONCENTRATION_WARNING** (> 35%)
+**EXP_0001_T07 DIR_RETURN_60/RIDGE/UPPER_HALF** — positive selected-effect years 3/3, positive-uplift years 3/3, largest-year share of total absolute uplift 0.50 — **YEAR_CONCENTRATION_WARNING** (> 35%)
 
 | year | eligible | N parent | N selected | selected f/wk | parent effect | selected effect | uplift |
 |---|---|---|---|---|---|---|---|
@@ -237,7 +183,7 @@ Eligibility is the full hard IS gate set; ranking = standardized uplift DESC, ca
 | 2017 | yes | 1907 | 704 | 13.54 | +0.00040 | +0.00231 | +0.00191 |
 | 2018 | yes | 1914 | 1086 | 20.49 | -0.00015 | +0.00128 | +0.00143 |
 
-**EXP_0001_T14 DIR_RETURN_60/RIDGE/LOWER_HALF** — positive selected-effect years 2/3, positive-uplift years 3/3, largest-year share of total absolute uplift 0.50 — **YEAR_CONCENTRATION_WARNING** (> 35%)
+**EXP_0001_T08 DIR_RETURN_60/RIDGE/LOWER_HALF** — positive selected-effect years 2/3, positive-uplift years 3/3, largest-year share of total absolute uplift 0.50 — **YEAR_CONCENTRATION_WARNING** (> 35%)
 
 | year | eligible | N parent | N selected | selected f/wk | parent effect | selected effect | uplift |
 |---|---|---|---|---|---|---|---|
@@ -245,7 +191,7 @@ Eligibility is the full hard IS gate set; ranking = standardized uplift DESC, ca
 | 2017 | yes | 1907 | 1203 | 23.13 | -0.00040 | +0.00072 | +0.00112 |
 | 2018 | yes | 1914 | 828 | 15.62 | +0.00015 | +0.00203 | +0.00188 |
 
-**EXP_0001_T15 DIR_RETURN_60/SPLINE/UPPER_HALF** — positive selected-effect years 3/3, positive-uplift years 2/3, largest-year share of total absolute uplift 0.51 — **YEAR_CONCENTRATION_WARNING** (> 35%)
+**EXP_0001_T09 DIR_RETURN_60/SPLINE/UPPER_HALF** — positive selected-effect years 3/3, positive-uplift years 2/3, largest-year share of total absolute uplift 0.51 — **YEAR_CONCENTRATION_WARNING** (> 35%)
 
 | year | eligible | N parent | N selected | selected f/wk | parent effect | selected effect | uplift |
 |---|---|---|---|---|---|---|---|
@@ -253,7 +199,7 @@ Eligibility is the full hard IS gate set; ranking = standardized uplift DESC, ca
 | 2017 | yes | 1907 | 879 | 16.90 | +0.00040 | +0.00164 | +0.00124 |
 | 2018 | yes | 1914 | 1084 | 20.45 | -0.00015 | +0.00092 | +0.00107 |
 
-**EXP_0001_T16 DIR_RETURN_60/SPLINE/LOWER_HALF** — positive selected-effect years 2/3, positive-uplift years 2/3, largest-year share of total absolute uplift 0.51 — **YEAR_CONCENTRATION_WARNING** (> 35%)
+**EXP_0001_T10 DIR_RETURN_60/SPLINE/LOWER_HALF** — positive selected-effect years 2/3, positive-uplift years 2/3, largest-year share of total absolute uplift 0.51 — **YEAR_CONCENTRATION_WARNING** (> 35%)
 
 | year | eligible | N parent | N selected | selected f/wk | parent effect | selected effect | uplift |
 |---|---|---|---|---|---|---|---|
@@ -261,7 +207,7 @@ Eligibility is the full hard IS gate set; ranking = standardized uplift DESC, ca
 | 2017 | yes | 1907 | 1028 | 19.77 | -0.00040 | +0.00066 | +0.00106 |
 | 2018 | yes | 1914 | 830 | 15.66 | +0.00015 | +0.00155 | +0.00139 |
 
-**EXP_0001_T17 DIR_RETURN_60/XGB/UPPER_HALF** — positive selected-effect years 2/3, positive-uplift years 2/3, largest-year share of total absolute uplift 0.51 — **YEAR_CONCENTRATION_WARNING** (> 35%)
+**EXP_0001_T11 DIR_RETURN_60/XGB/UPPER_HALF** — positive selected-effect years 2/3, positive-uplift years 2/3, largest-year share of total absolute uplift 0.51 — **YEAR_CONCENTRATION_WARNING** (> 35%)
 
 | year | eligible | N parent | N selected | selected f/wk | parent effect | selected effect | uplift |
 |---|---|---|---|---|---|---|---|
@@ -269,13 +215,61 @@ Eligibility is the full hard IS gate set; ranking = standardized uplift DESC, ca
 | 2017 | yes | 1907 | 973 | 18.71 | +0.00040 | +0.00182 | +0.00142 |
 | 2018 | yes | 1914 | 1135 | 21.42 | -0.00015 | +0.00130 | +0.00145 |
 
-**EXP_0001_T18 DIR_RETURN_60/XGB/LOWER_HALF** — positive selected-effect years 2/3, positive-uplift years 2/3, largest-year share of total absolute uplift 0.51 — **YEAR_CONCENTRATION_WARNING** (> 35%)
+**EXP_0001_T12 DIR_RETURN_60/XGB/LOWER_HALF** — positive selected-effect years 2/3, positive-uplift years 2/3, largest-year share of total absolute uplift 0.51 — **YEAR_CONCENTRATION_WARNING** (> 35%)
 
 | year | eligible | N parent | N selected | selected f/wk | parent effect | selected effect | uplift |
 |---|---|---|---|---|---|---|---|
 | 2016 | yes | 946 | 665 | 25.58 | -0.00032 | -0.00061 | -0.00028 |
 | 2017 | yes | 1907 | 934 | 17.96 | -0.00040 | +0.00108 | +0.00148 |
 | 2018 | yes | 1914 | 779 | 14.70 | +0.00015 | +0.00227 | +0.00211 |
+
+**EXP_0001_T13 DIR_RETURN_180/RIDGE/UPPER_HALF** — positive selected-effect years 2/3, positive-uplift years 2/3, largest-year share of total absolute uplift 0.46 — **YEAR_CONCENTRATION_WARNING** (> 35%)
+
+| year | eligible | N parent | N selected | selected f/wk | parent effect | selected effect | uplift |
+|---|---|---|---|---|---|---|---|
+| 2016 | yes | 946 | 205 | 7.88 | +0.00023 | -0.00211 | -0.00234 |
+| 2017 | yes | 1907 | 541 | 10.40 | +0.00187 | +0.00529 | +0.00341 |
+| 2018 | yes | 1914 | 1209 | 22.81 | -0.00072 | +0.00067 | +0.00139 |
+
+**EXP_0001_T14 DIR_RETURN_180/RIDGE/LOWER_HALF** — positive selected-effect years 1/3, positive-uplift years 2/3, largest-year share of total absolute uplift 0.46 — **YEAR_CONCENTRATION_WARNING** (> 35%)
+
+| year | eligible | N parent | N selected | selected f/wk | parent effect | selected effect | uplift |
+|---|---|---|---|---|---|---|---|
+| 2016 | yes | 946 | 741 | 28.50 | -0.00023 | -0.00088 | -0.00065 |
+| 2017 | yes | 1907 | 1366 | 26.27 | -0.00187 | -0.00052 | +0.00135 |
+| 2018 | yes | 1914 | 705 | 13.30 | +0.00072 | +0.00311 | +0.00239 |
+
+**EXP_0001_T15 DIR_RETURN_180/SPLINE/UPPER_HALF** — positive selected-effect years 2/3, positive-uplift years 2/3, largest-year share of total absolute uplift 0.41 — **YEAR_CONCENTRATION_WARNING** (> 35%)
+
+| year | eligible | N parent | N selected | selected f/wk | parent effect | selected effect | uplift |
+|---|---|---|---|---|---|---|---|
+| 2016 | yes | 946 | 287 | 11.04 | +0.00023 | -0.00233 | -0.00255 |
+| 2017 | yes | 1907 | 836 | 16.08 | +0.00187 | +0.00372 | +0.00185 |
+| 2018 | yes | 1914 | 1075 | 20.28 | -0.00072 | +0.00066 | +0.00138 |
+
+**EXP_0001_T16 DIR_RETURN_180/SPLINE/LOWER_HALF** — positive selected-effect years 1/3, positive-uplift years 2/3, largest-year share of total absolute uplift 0.41 — **YEAR_CONCENTRATION_WARNING** (> 35%)
+
+| year | eligible | N parent | N selected | selected f/wk | parent effect | selected effect | uplift |
+|---|---|---|---|---|---|---|---|
+| 2016 | yes | 946 | 659 | 25.35 | -0.00023 | -0.00134 | -0.00111 |
+| 2017 | yes | 1907 | 1071 | 20.60 | -0.00187 | -0.00043 | +0.00144 |
+| 2018 | yes | 1914 | 839 | 15.83 | +0.00072 | +0.00249 | +0.00177 |
+
+**EXP_0001_T17 DIR_RETURN_180/XGB/UPPER_HALF** — positive selected-effect years 2/3, positive-uplift years 2/3, largest-year share of total absolute uplift 0.49 — **YEAR_CONCENTRATION_WARNING** (> 35%)
+
+| year | eligible | N parent | N selected | selected f/wk | parent effect | selected effect | uplift |
+|---|---|---|---|---|---|---|---|
+| 2016 | yes | 946 | 246 | 9.46 | +0.00023 | -0.00128 | -0.00151 |
+| 2017 | yes | 1907 | 910 | 17.50 | +0.00187 | +0.00421 | +0.00234 |
+| 2018 | yes | 1914 | 1275 | 24.06 | -0.00072 | +0.00071 | +0.00143 |
+
+**EXP_0001_T18 DIR_RETURN_180/XGB/LOWER_HALF** — positive selected-effect years 2/3, positive-uplift years 2/3, largest-year share of total absolute uplift 0.49 — **YEAR_CONCENTRATION_WARNING** (> 35%)
+
+| year | eligible | N parent | N selected | selected f/wk | parent effect | selected effect | uplift |
+|---|---|---|---|---|---|---|---|
+| 2016 | yes | 946 | 700 | 26.92 | -0.00023 | -0.00076 | -0.00053 |
+| 2017 | yes | 1907 | 997 | 19.17 | -0.00187 | +0.00026 | +0.00213 |
+| 2018 | yes | 1914 | 639 | 12.06 | +0.00072 | +0.00358 | +0.00286 |
 
 **EXP_0001_T19 DIR_PATH_SKEW_60/RIDGE/UPPER_HALF** — positive selected-effect years 3/3, positive-uplift years 3/3, largest-year share of total absolute uplift 0.48 — **YEAR_CONCENTRATION_WARNING** (> 35%)
 
@@ -333,17 +327,17 @@ Eligibility is the full hard IS gate set; ranking = standardized uplift DESC, ca
 
 **DIR_RETURN_15|XGB** fold records: fold 1: OK (train 951, validation 953); fold 2: OK (train 1904, validation 954); fold 3: OK (train 2858, validation 953); fold 4: OK (train 3811, validation 953); fold 5: OK (train 4764, validation 954)
 
-**DIR_RETURN_30|RIDGE** fold records: fold 1: OK (train 951, validation 953); fold 2: OK (train 1904, validation 954); fold 3: OK (train 2858, validation 953); fold 4: OK (train 3811, validation 953); fold 5: OK (train 4764, validation 954)
-
-**DIR_RETURN_30|SPLINE** fold records: fold 1: OK (train 951, validation 953); fold 2: OK (train 1904, validation 954); fold 3: OK (train 2858, validation 953); fold 4: OK (train 3811, validation 953); fold 5: OK (train 4764, validation 954)
-
-**DIR_RETURN_30|XGB** fold records: fold 1: OK (train 951, validation 953); fold 2: OK (train 1904, validation 954); fold 3: OK (train 2858, validation 953); fold 4: OK (train 3811, validation 953); fold 5: OK (train 4764, validation 954)
-
 **DIR_RETURN_60|RIDGE** fold records: fold 1: OK (train 951, validation 953); fold 2: OK (train 1904, validation 954); fold 3: OK (train 2858, validation 953); fold 4: OK (train 3811, validation 953); fold 5: OK (train 4764, validation 954)
 
 **DIR_RETURN_60|SPLINE** fold records: fold 1: OK (train 951, validation 953); fold 2: OK (train 1904, validation 954); fold 3: OK (train 2858, validation 953); fold 4: OK (train 3811, validation 953); fold 5: OK (train 4764, validation 954)
 
 **DIR_RETURN_60|XGB** fold records: fold 1: OK (train 951, validation 953); fold 2: OK (train 1904, validation 954); fold 3: OK (train 2858, validation 953); fold 4: OK (train 3811, validation 953); fold 5: OK (train 4764, validation 954)
+
+**DIR_RETURN_180|RIDGE** fold records: fold 1: OK (train 951, validation 953); fold 2: OK (train 1904, validation 954); fold 3: OK (train 2858, validation 953); fold 4: OK (train 3811, validation 953); fold 5: OK (train 4764, validation 954)
+
+**DIR_RETURN_180|SPLINE** fold records: fold 1: OK (train 951, validation 953); fold 2: OK (train 1904, validation 954); fold 3: OK (train 2858, validation 953); fold 4: OK (train 3811, validation 953); fold 5: OK (train 4764, validation 954)
+
+**DIR_RETURN_180|XGB** fold records: fold 1: OK (train 951, validation 953); fold 2: OK (train 1904, validation 954); fold 3: OK (train 2858, validation 953); fold 4: OK (train 3811, validation 953); fold 5: OK (train 4764, validation 954)
 
 **DIR_PATH_SKEW_60|RIDGE** fold records: fold 1: OK (train 951, validation 953); fold 2: OK (train 1904, validation 954); fold 3: OK (train 2858, validation 953); fold 4: OK (train 3811, validation 953); fold 5: OK (train 4764, validation 954)
 
@@ -415,73 +409,13 @@ Eligibility is the full hard IS gate set; ranking = standardized uplift DESC, ca
 
 | fold | N parent | N selected | selected f/wk | parent effect | selected effect | uplift |
 |---|---|---|---|---|---|---|
-| 1 | 953 | 351 | 13.00 | +0.00027 | +0.00059 | +0.00032 |
-| 2 | 954 | 415 | 15.37 | -0.00009 | +0.00157 | +0.00166 |
-| 3 | 953 | 385 | 14.26 | +0.00007 | +0.00239 | +0.00233 |
-| 4 | 953 | 476 | 17.63 | +0.00007 | +0.00150 | +0.00143 |
-| 5 | 954 | 541 | 20.04 | -0.00036 | +0.00119 | +0.00154 |
-
-**EXP_0001_T08** folds with evidence 5/5
-
-| fold | N parent | N selected | selected f/wk | parent effect | selected effect | uplift |
-|---|---|---|---|---|---|---|
-| 1 | 953 | 602 | 22.30 | -0.00027 | -0.00008 | +0.00019 |
-| 2 | 954 | 539 | 19.96 | +0.00009 | +0.00137 | +0.00128 |
-| 3 | 953 | 568 | 21.04 | -0.00007 | +0.00151 | +0.00158 |
-| 4 | 953 | 477 | 17.67 | -0.00007 | +0.00135 | +0.00142 |
-| 5 | 954 | 413 | 15.30 | +0.00036 | +0.00238 | +0.00202 |
-
-**EXP_0001_T09** folds with evidence 5/5
-
-| fold | N parent | N selected | selected f/wk | parent effect | selected effect | uplift |
-|---|---|---|---|---|---|---|
-| 1 | 953 | 381 | 14.11 | +0.00027 | +0.00091 | +0.00064 |
-| 2 | 954 | 449 | 16.63 | -0.00009 | +0.00158 | +0.00167 |
-| 3 | 953 | 401 | 14.85 | +0.00007 | +0.00223 | +0.00217 |
-| 4 | 953 | 474 | 17.56 | +0.00007 | +0.00201 | +0.00194 |
-| 5 | 954 | 552 | 20.44 | -0.00036 | +0.00115 | +0.00151 |
-
-**EXP_0001_T10** folds with evidence 5/5
-
-| fold | N parent | N selected | selected f/wk | parent effect | selected effect | uplift |
-|---|---|---|---|---|---|---|
-| 1 | 953 | 572 | 21.19 | -0.00027 | +0.00016 | +0.00043 |
-| 2 | 954 | 505 | 18.70 | +0.00009 | +0.00158 | +0.00149 |
-| 3 | 953 | 552 | 20.44 | -0.00007 | +0.00151 | +0.00158 |
-| 4 | 953 | 479 | 17.74 | -0.00007 | +0.00185 | +0.00192 |
-| 5 | 954 | 402 | 14.89 | +0.00036 | +0.00243 | +0.00207 |
-
-**EXP_0001_T11** folds with evidence 5/5
-
-| fold | N parent | N selected | selected f/wk | parent effect | selected effect | uplift |
-|---|---|---|---|---|---|---|
-| 1 | 953 | 424 | 15.70 | +0.00027 | +0.00094 | +0.00067 |
-| 2 | 954 | 483 | 17.89 | -0.00009 | +0.00142 | +0.00151 |
-| 3 | 953 | 510 | 18.89 | +0.00007 | +0.00188 | +0.00182 |
-| 4 | 953 | 546 | 20.22 | +0.00007 | +0.00103 | +0.00096 |
-| 5 | 954 | 549 | 20.33 | -0.00036 | +0.00124 | +0.00160 |
-
-**EXP_0001_T12** folds with evidence 5/5
-
-| fold | N parent | N selected | selected f/wk | parent effect | selected effect | uplift |
-|---|---|---|---|---|---|---|
-| 1 | 953 | 529 | 19.59 | -0.00027 | +0.00027 | +0.00054 |
-| 2 | 954 | 471 | 17.44 | +0.00009 | +0.00164 | +0.00155 |
-| 3 | 953 | 443 | 16.41 | -0.00007 | +0.00203 | +0.00209 |
-| 4 | 953 | 407 | 15.07 | -0.00007 | +0.00122 | +0.00129 |
-| 5 | 954 | 405 | 15.00 | +0.00036 | +0.00252 | +0.00217 |
-
-**EXP_0001_T13** folds with evidence 5/5
-
-| fold | N parent | N selected | selected f/wk | parent effect | selected effect | uplift |
-|---|---|---|---|---|---|---|
 | 1 | 953 | 259 | 9.59 | +0.00032 | +0.00113 | +0.00081 |
 | 2 | 954 | 337 | 12.48 | +0.00053 | +0.00218 | +0.00165 |
 | 3 | 953 | 370 | 13.70 | +0.00031 | +0.00246 | +0.00215 |
 | 4 | 953 | 498 | 18.44 | +0.00020 | +0.00170 | +0.00150 |
 | 5 | 954 | 582 | 21.56 | -0.00054 | +0.00088 | +0.00142 |
 
-**EXP_0001_T14** folds with evidence 5/5
+**EXP_0001_T08** folds with evidence 5/5
 
 | fold | N parent | N selected | selected f/wk | parent effect | selected effect | uplift |
 |---|---|---|---|---|---|---|
@@ -491,7 +425,7 @@ Eligibility is the full hard IS gate set; ranking = standardized uplift DESC, ca
 | 4 | 953 | 455 | 16.85 | -0.00020 | +0.00144 | +0.00164 |
 | 5 | 954 | 372 | 13.78 | +0.00054 | +0.00277 | +0.00223 |
 
-**EXP_0001_T15** folds with evidence 5/5
+**EXP_0001_T09** folds with evidence 5/5
 
 | fold | N parent | N selected | selected f/wk | parent effect | selected effect | uplift |
 |---|---|---|---|---|---|---|
@@ -501,7 +435,7 @@ Eligibility is the full hard IS gate set; ranking = standardized uplift DESC, ca
 | 4 | 953 | 522 | 19.33 | +0.00020 | +0.00111 | +0.00091 |
 | 5 | 954 | 557 | 20.63 | -0.00054 | +0.00071 | +0.00125 |
 
-**EXP_0001_T16** folds with evidence 5/5
+**EXP_0001_T10** folds with evidence 5/5
 
 | fold | N parent | N selected | selected f/wk | parent effect | selected effect | uplift |
 |---|---|---|---|---|---|---|
@@ -511,7 +445,7 @@ Eligibility is the full hard IS gate set; ranking = standardized uplift DESC, ca
 | 4 | 953 | 431 | 15.96 | -0.00020 | +0.00091 | +0.00111 |
 | 5 | 954 | 397 | 14.70 | +0.00054 | +0.00230 | +0.00175 |
 
-**EXP_0001_T17** folds with evidence 5/5
+**EXP_0001_T11** folds with evidence 5/5
 
 | fold | N parent | N selected | selected f/wk | parent effect | selected effect | uplift |
 |---|---|---|---|---|---|---|
@@ -521,7 +455,7 @@ Eligibility is the full hard IS gate set; ranking = standardized uplift DESC, ca
 | 4 | 953 | 580 | 21.48 | +0.00020 | +0.00163 | +0.00143 |
 | 5 | 954 | 550 | 20.37 | -0.00054 | +0.00093 | +0.00147 |
 
-**EXP_0001_T18** folds with evidence 5/5
+**EXP_0001_T12** folds with evidence 5/5
 
 | fold | N parent | N selected | selected f/wk | parent effect | selected effect | uplift |
 |---|---|---|---|---|---|---|
@@ -530,6 +464,66 @@ Eligibility is the full hard IS gate set; ranking = standardized uplift DESC, ca
 | 3 | 953 | 383 | 14.19 | -0.00031 | +0.00113 | +0.00144 |
 | 4 | 953 | 373 | 13.81 | -0.00020 | +0.00203 | +0.00223 |
 | 5 | 954 | 404 | 14.96 | +0.00054 | +0.00254 | +0.00200 |
+
+**EXP_0001_T13** folds with evidence 5/5
+
+| fold | N parent | N selected | selected f/wk | parent effect | selected effect | uplift |
+|---|---|---|---|---|---|---|
+| 1 | 953 | 206 | 7.63 | +0.00033 | -0.00222 | -0.00255 |
+| 2 | 954 | 223 | 8.26 | +0.00190 | +0.00389 | +0.00199 |
+| 3 | 953 | 323 | 11.96 | +0.00191 | +0.00673 | +0.00482 |
+| 4 | 953 | 624 | 23.11 | -0.00052 | +0.00114 | +0.00166 |
+| 5 | 954 | 579 | 21.44 | -0.00109 | -0.00010 | +0.00100 |
+
+**EXP_0001_T14** folds with evidence 5/5
+
+| fold | N parent | N selected | selected f/wk | parent effect | selected effect | uplift |
+|---|---|---|---|---|---|---|
+| 1 | 953 | 747 | 27.67 | -0.00033 | -0.00103 | -0.00070 |
+| 2 | 954 | 731 | 27.07 | -0.00190 | -0.00130 | +0.00061 |
+| 3 | 953 | 630 | 23.33 | -0.00191 | +0.00056 | +0.00247 |
+| 4 | 953 | 329 | 12.19 | +0.00052 | +0.00367 | +0.00315 |
+| 5 | 954 | 375 | 13.89 | +0.00109 | +0.00263 | +0.00154 |
+
+**EXP_0001_T15** folds with evidence 5/5
+
+| fold | N parent | N selected | selected f/wk | parent effect | selected effect | uplift |
+|---|---|---|---|---|---|---|
+| 1 | 953 | 287 | 10.63 | +0.00033 | -0.00233 | -0.00265 |
+| 2 | 954 | 292 | 10.81 | +0.00190 | +0.00330 | +0.00140 |
+| 3 | 953 | 549 | 20.33 | +0.00191 | +0.00416 | +0.00225 |
+| 4 | 953 | 568 | 21.04 | -0.00052 | +0.00100 | +0.00152 |
+| 5 | 954 | 502 | 18.59 | -0.00109 | +0.00001 | +0.00110 |
+
+**EXP_0001_T16** folds with evidence 5/5
+
+| fold | N parent | N selected | selected f/wk | parent effect | selected effect | uplift |
+|---|---|---|---|---|---|---|
+| 1 | 953 | 666 | 24.67 | -0.00033 | -0.00147 | -0.00114 |
+| 2 | 954 | 662 | 24.52 | -0.00190 | -0.00128 | +0.00062 |
+| 3 | 953 | 404 | 14.96 | -0.00191 | +0.00114 | +0.00305 |
+| 4 | 953 | 385 | 14.26 | +0.00052 | +0.00275 | +0.00224 |
+| 5 | 954 | 452 | 16.74 | +0.00109 | +0.00232 | +0.00122 |
+
+**EXP_0001_T17** folds with evidence 5/5
+
+| fold | N parent | N selected | selected f/wk | parent effect | selected effect | uplift |
+|---|---|---|---|---|---|---|
+| 1 | 953 | 247 | 9.15 | +0.00033 | -0.00138 | -0.00170 |
+| 2 | 954 | 353 | 13.07 | +0.00190 | +0.00549 | +0.00359 |
+| 3 | 953 | 562 | 20.81 | +0.00191 | +0.00369 | +0.00178 |
+| 4 | 953 | 704 | 26.07 | -0.00052 | +0.00083 | +0.00135 |
+| 5 | 954 | 565 | 20.93 | -0.00109 | +0.00030 | +0.00139 |
+
+**EXP_0001_T18** folds with evidence 5/5
+
+| fold | N parent | N selected | selected f/wk | parent effect | selected effect | uplift |
+|---|---|---|---|---|---|---|
+| 1 | 953 | 706 | 26.15 | -0.00033 | -0.00092 | -0.00060 |
+| 2 | 954 | 601 | 22.26 | -0.00190 | +0.00021 | +0.00211 |
+| 3 | 953 | 391 | 14.48 | -0.00191 | +0.00064 | +0.00256 |
+| 4 | 953 | 249 | 9.22 | +0.00052 | +0.00432 | +0.00380 |
+| 5 | 954 | 389 | 14.41 | +0.00109 | +0.00312 | +0.00202 |
 
 **EXP_0001_T19** folds with evidence 5/5
 
@@ -607,9 +601,9 @@ Feature-family importance (share of total importance), score/target decile monot
 | DIR_RETURN_15|RIDGE | brownian:0.19, candles:0.14, hurst:0.04, kaufman_er:0.04, range:0.07 |
 | DIR_RETURN_15|SPLINE | brownian:0.20, candles:0.12, hurst:0.05, kaufman_er:0.06, range:0.13 |
 | DIR_RETURN_15|XGB | brownian:0.22, candles:0.08, hurst:0.05, kaufman_er:0.07, range:0.11 |
-| DIR_RETURN_30|RIDGE | brownian:0.20, candles:0.14, hurst:0.05, kaufman_er:0.04, range:0.06 |
-| DIR_RETURN_30|SPLINE | brownian:0.19, candles:0.11, hurst:0.08, kaufman_er:0.07, range:0.10 |
-| DIR_RETURN_30|XGB | brownian:0.22, candles:0.09, hurst:0.05, kaufman_er:0.08, range:0.09 |
+| DIR_RETURN_180|RIDGE | brownian:0.27, candles:0.14, hurst:0.04, kaufman_er:0.02, range:0.09 |
+| DIR_RETURN_180|SPLINE | brownian:0.26, candles:0.08, hurst:0.09, kaufman_er:0.09, range:0.07 |
+| DIR_RETURN_180|XGB | brownian:0.24, candles:0.08, hurst:0.05, kaufman_er:0.08, range:0.07 |
 | DIR_RETURN_60|RIDGE | brownian:0.17, candles:0.16, hurst:0.06, kaufman_er:0.05, range:0.05 |
 | DIR_RETURN_60|SPLINE | brownian:0.21, candles:0.09, hurst:0.08, kaufman_er:0.07, range:0.07 |
 | DIR_RETURN_60|XGB | brownian:0.23, candles:0.11, hurst:0.05, kaufman_er:0.08, range:0.08 |
@@ -622,9 +616,9 @@ Feature-family importance (share of total importance), score/target decile monot
 | DIR_RETURN_15|RIDGE | +0.99 |
 | DIR_RETURN_15|SPLINE | +0.99 |
 | DIR_RETURN_15|XGB | +0.99 |
-| DIR_RETURN_30|RIDGE | +0.96 |
-| DIR_RETURN_30|SPLINE | +0.95 |
-| DIR_RETURN_30|XGB | +0.96 |
+| DIR_RETURN_180|RIDGE | +0.58 |
+| DIR_RETURN_180|SPLINE | +0.72 |
+| DIR_RETURN_180|XGB | +0.76 |
 | DIR_RETURN_60|RIDGE | +0.96 |
 | DIR_RETURN_60|SPLINE | +0.85 |
 | DIR_RETURN_60|XGB | +0.72 |
@@ -633,7 +627,7 @@ Ridge coefficient stability DIR_PATH_SKEW_60: COUNT_BALANCE_15 (-0.187, sign agr
 
 Ridge coefficient stability DIR_RETURN_15: BROWNIAN_DISP_60 (+0.164, sign agreement 100%), COUNT_BALANCE_30 (-0.0894, sign agreement 100%), COUNT_BALANCE_60 (-0.163, sign agreement 100%), RANGE_POS_120 (-0.109, sign agreement 100%), RET_15 (-0.113, sign agreement 100%), RET_5 (+0.315, sign agreement 100%), SIGNED_VOLUME_30 (+0.171, sign agreement 100%), day_of_week (+0.251, sign agreement 100%)
 
-Ridge coefficient stability DIR_RETURN_30: BROWNIAN_DISP_60 (+0.121, sign agreement 100%), COUNT_BALANCE_15 (-0.115, sign agreement 100%), HURST_240 (-0.106, sign agreement 100%), RET_15 (-0.0975, sign agreement 100%), RET_5 (+0.213, sign agreement 100%), SIGNED_VOLUME_30 (+0.129, sign agreement 100%), VOV_120 (-0.116, sign agreement 100%), day_of_week (+0.236, sign agreement 100%)
+Ridge coefficient stability DIR_RETURN_180: BODY_BALANCE_15 (-0.0992, sign agreement 100%), BODY_BALANCE_30 (+0.00804, sign agreement 40%), BROWNIAN_DISP_120 (+0.104, sign agreement 80%), BROWNIAN_DISP_15 (+0.144, sign agreement 100%), RANGE_POS_15 (+0.115, sign agreement 100%), SIGNED_VOLUME_30 (+0.0905, sign agreement 100%), SIGNED_VOLUME_60 (-0.141, sign agreement 100%), day_of_week (+0.312, sign agreement 100%)
 
 Ridge coefficient stability DIR_RETURN_60: BROWNIAN_DISP_240 (+0.0924, sign agreement 100%), COUNT_BALANCE_15 (-0.22, sign agreement 100%), HURST_240 (-0.118, sign agreement 100%), RET_5 (+0.147, sign agreement 100%), RET_60 (+0.0305, sign agreement 40%), SIGNED_VOLUME_30 (+0.0903, sign agreement 100%), VOV_120 (-0.114, sign agreement 100%), day_of_week (+0.251, sign agreement 100%)
 
@@ -782,74 +776,74 @@ Year-by-year mean target by decile:
 | 2017 | -0.00327 | -0.00269 | -0.00136 | +0.00003 | +0.00018 | +0.00071 | +0.00108 | +0.00145 | +0.00151 | +0.00289 |
 | 2018 | -0.00341 | -0.00273 | -0.00155 | -0.00063 | -0.00008 | +0.00071 | -0.00031 | +0.00180 | +0.00216 | +0.00351 |
 
-#### DIR_RETURN_30 / RIDGE — DIAGNOSTIC ONLY — NOT A SELECTION TRIAL
+#### DIR_RETURN_180 / RIDGE — DIAGNOSTIC ONLY — NOT A SELECTION TRIAL
 
 | decile | N | events / week | mean target (event direction) |
 |---|---|---|---|
-| 1 | 477 | 3.641 | -0.003319 |
-| 2 | 477 | 3.641 | -0.001892 |
-| 3 | 477 | 3.641 | -0.001465 |
-| 4 | 476 | 3.634 | -0.001025 |
-| 5 | 477 | 3.641 | +0.000761 |
-| 6 | 477 | 3.641 | +0.000294 |
-| 7 | 476 | 3.634 | +0.000618 |
-| 8 | 477 | 3.641 | +0.001250 |
-| 9 | 477 | 3.641 | +0.001524 |
-| 10 | 476 | 3.634 | +0.003178 |
+| 1 | 477 | 3.641 | -0.000198 |
+| 2 | 477 | 3.641 | -0.001303 |
+| 3 | 477 | 3.641 | -0.000894 |
+| 4 | 476 | 3.634 | -0.000628 |
+| 5 | 477 | 3.641 | +0.000012 |
+| 6 | 477 | 3.641 | +0.001495 |
+| 7 | 476 | 3.634 | +0.003081 |
+| 8 | 477 | 3.641 | +0.001212 |
+| 9 | 477 | 3.641 | +0.002800 |
+| 10 | 476 | 3.634 | -0.000524 |
 
 Year-by-year mean target by decile:
 
 | year | D1 | D2 | D3 | D4 | D5 | D6 | D7 | D8 | D9 | D10 |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 2016 | -0.00186 | -0.00013 | -0.00163 | -0.00000 | +0.00300 | +0.00111 | -0.00005 | +0.00004 | -0.00026 | +0.00212 |
-| 2017 | -0.00318 | -0.00282 | -0.00134 | -0.00062 | -0.00051 | +0.00051 | +0.00103 | +0.00170 | +0.00255 | +0.00367 |
-| 2018 | -0.00470 | -0.00185 | -0.00155 | -0.00187 | +0.00097 | -0.00025 | +0.00053 | +0.00137 | +0.00156 | +0.00353 |
+| 2016 | +0.00142 | +0.00714 | -0.00506 | +0.00322 | +0.00529 | -0.00402 | -0.00055 | +0.00339 | -0.00209 | -0.00195 |
+| 2017 | -0.00037 | -0.00191 | -0.00028 | +0.00014 | +0.00437 | +0.00250 | +0.00633 | +0.00382 | +0.00864 | +0.00069 |
+| 2018 | -0.00462 | -0.00472 | +0.00002 | -0.00289 | -0.00469 | +0.00216 | +0.00148 | -0.00084 | +0.00164 | +0.00057 |
 
-#### DIR_RETURN_30 / SPLINE — DIAGNOSTIC ONLY — NOT A SELECTION TRIAL
+#### DIR_RETURN_180 / SPLINE — DIAGNOSTIC ONLY — NOT A SELECTION TRIAL
 
 | decile | N | events / week | mean target (event direction) |
 |---|---|---|---|
-| 1 | 477 | 3.641 | -0.003037 |
-| 2 | 477 | 3.641 | -0.001599 |
-| 3 | 477 | 3.641 | -0.001922 |
-| 4 | 476 | 3.634 | -0.001202 |
-| 5 | 477 | 3.641 | +0.000094 |
-| 6 | 477 | 3.641 | +0.001237 |
-| 7 | 476 | 3.634 | +0.000816 |
-| 8 | 477 | 3.641 | +0.001129 |
-| 9 | 477 | 3.641 | +0.001353 |
-| 10 | 476 | 3.634 | +0.003057 |
+| 1 | 477 | 3.641 | -0.001761 |
+| 2 | 477 | 3.641 | -0.000615 |
+| 3 | 477 | 3.641 | -0.000962 |
+| 4 | 476 | 3.634 | +0.000080 |
+| 5 | 477 | 3.641 | +0.000385 |
+| 6 | 477 | 3.641 | +0.003555 |
+| 7 | 476 | 3.634 | +0.001278 |
+| 8 | 477 | 3.641 | +0.001659 |
+| 9 | 477 | 3.641 | +0.001347 |
+| 10 | 476 | 3.634 | +0.000085 |
 
 Year-by-year mean target by decile:
 
 | year | D1 | D2 | D3 | D4 | D5 | D6 | D7 | D8 | D9 | D10 |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 2016 | -0.00180 | -0.00068 | +0.00049 | +0.00042 | -0.00023 | +0.00133 | +0.00141 | -0.00035 | +0.00140 | +0.00116 |
-| 2017 | -0.00305 | -0.00135 | -0.00205 | -0.00159 | +0.00021 | +0.00105 | +0.00086 | +0.00189 | +0.00142 | +0.00356 |
-| 2018 | -0.00391 | -0.00238 | -0.00281 | -0.00165 | +0.00014 | +0.00137 | +0.00050 | +0.00117 | +0.00128 | +0.00346 |
+| 2016 | +0.00270 | +0.00351 | +0.00228 | +0.00005 | -0.00319 | +0.00111 | +0.00454 | -0.00467 | +0.00181 | -0.00437 |
+| 2017 | -0.00149 | -0.00002 | -0.00079 | -0.00108 | +0.00299 | +0.00645 | +0.00318 | +0.00388 | +0.00456 | +0.00223 |
+| 2018 | -0.00842 | -0.00383 | -0.00261 | +0.00128 | -0.00083 | +0.00147 | -0.00110 | +0.00188 | -0.00124 | +0.00247 |
 
-#### DIR_RETURN_30 / XGB — DIAGNOSTIC ONLY — NOT A SELECTION TRIAL
+#### DIR_RETURN_180 / XGB — DIAGNOSTIC ONLY — NOT A SELECTION TRIAL
 
 | decile | N | events / week | mean target (event direction) |
 |---|---|---|---|
-| 1 | 477 | 3.641 | -0.003319 |
-| 2 | 477 | 3.641 | -0.001956 |
-| 3 | 477 | 3.641 | -0.002007 |
-| 4 | 476 | 3.634 | +0.000381 |
-| 5 | 477 | 3.641 | -0.000069 |
-| 6 | 477 | 3.641 | +0.000770 |
-| 7 | 476 | 3.634 | +0.000734 |
-| 8 | 477 | 3.641 | +0.000978 |
-| 9 | 477 | 3.641 | +0.001597 |
-| 10 | 476 | 3.634 | +0.002819 |
+| 1 | 477 | 3.641 | -0.001630 |
+| 2 | 477 | 3.641 | -0.000642 |
+| 3 | 477 | 3.641 | -0.001774 |
+| 4 | 476 | 3.634 | -0.000150 |
+| 5 | 477 | 3.641 | +0.001091 |
+| 6 | 477 | 3.641 | +0.002046 |
+| 7 | 476 | 3.634 | +0.000901 |
+| 8 | 477 | 3.641 | +0.001609 |
+| 9 | 477 | 3.641 | +0.002584 |
+| 10 | 476 | 3.634 | +0.001017 |
 
 Year-by-year mean target by decile:
 
 | year | D1 | D2 | D3 | D4 | D5 | D6 | D7 | D8 | D9 | D10 |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 2016 | -0.00077 | -0.00069 | +0.00006 | +0.00030 | -0.00036 | +0.00069 | +0.00258 | +0.00029 | +0.00009 | +0.00120 |
-| 2017 | -0.00432 | -0.00174 | -0.00196 | -0.00004 | +0.00009 | +0.00147 | +0.00093 | +0.00092 | +0.00170 | +0.00334 |
-| 2018 | -0.00364 | -0.00310 | -0.00363 | +0.00096 | -0.00008 | +0.00006 | -0.00003 | +0.00128 | +0.00207 | +0.00327 |
+| 2016 | +0.00222 | +0.00281 | +0.00233 | -0.00408 | +0.00019 | -0.00006 | -0.00193 | -0.00142 | -0.00348 | -0.00067 |
+| 2017 | -0.00247 | +0.00027 | -0.00224 | +0.00146 | +0.00281 | +0.00641 | +0.00065 | +0.00309 | +0.00901 | +0.00293 |
+| 2018 | -0.00970 | -0.00538 | -0.00357 | -0.00080 | -0.00021 | -0.00147 | +0.00173 | +0.00113 | +0.00067 | +0.00126 |
 
 #### DIR_RETURN_60 / RIDGE — DIAGNOSTIC ONLY — NOT A SELECTION TRIAL
 
@@ -954,14 +948,12 @@ No `filter_ladder` declared in EVENT_SPEC.
 
 ## T. Sensitivity diagnostics
 
-status RUN; verdicts per candidate group: {'DIR_PATH_SKEW_60|LOWER_HALF': 'PASSED', 'DIR_PATH_SKEW_60|UPPER_HALF': 'PASSED', 'DIR_RETURN_15|LOWER_HALF': 'PASSED', 'DIR_RETURN_15|UPPER_HALF': 'PASSED', 'DIR_RETURN_30|LOWER_HALF': 'PASSED', 'DIR_RETURN_30|UPPER_HALF': 'PASSED'}
+status RUN; verdicts per candidate group: {'DIR_PATH_SKEW_60|LOWER_HALF': 'PASSED', 'DIR_PATH_SKEW_60|UPPER_HALF': 'PASSED', 'DIR_RETURN_15|LOWER_HALF': 'PASSED', 'DIR_RETURN_15|UPPER_HALF': 'PASSED'}
 
 * DIR_PATH_SKEW_60|LOWER_HALF: **PASSED**; every_n_bars×0.75→34: models uplift>0 3/3, freq ok 3/3; every_n_bars×1.25→56: models uplift>0 3/3, freq ok 3/3
 * DIR_PATH_SKEW_60|UPPER_HALF: **PASSED**; every_n_bars×0.75→34: models uplift>0 3/3, freq ok 3/3; every_n_bars×1.25→56: models uplift>0 3/3, freq ok 3/3
 * DIR_RETURN_15|LOWER_HALF: **PASSED**; every_n_bars×0.75→34: models uplift>0 3/3, freq ok 3/3; every_n_bars×1.25→56: models uplift>0 3/3, freq ok 3/3
 * DIR_RETURN_15|UPPER_HALF: **PASSED**; every_n_bars×0.75→34: models uplift>0 3/3, freq ok 3/3; every_n_bars×1.25→56: models uplift>0 3/3, freq ok 3/3
-* DIR_RETURN_30|LOWER_HALF: **PASSED**; every_n_bars×0.75→34: models uplift>0 3/3, freq ok 3/3; every_n_bars×1.25→56: models uplift>0 3/3, freq ok 3/3
-* DIR_RETURN_30|UPPER_HALF: **PASSED**; every_n_bars×0.75→34: models uplift>0 3/3, freq ok 3/3; every_n_bars×1.25→56: models uplift>0 3/3, freq ok 3/3
 
 Probes can only confirm or veto; a better probe never replaces the base parameter.
 
@@ -975,9 +967,9 @@ Probes can only confirm or veto; a better probe never replaces the base paramete
 | DIR_RETURN_15|RIDGE | RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE | strong |
 | DIR_RETURN_15|SPLINE | RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE | strong |
 | DIR_RETURN_15|XGB | RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE | strong |
-| DIR_RETURN_30|RIDGE | RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE | strong |
-| DIR_RETURN_30|SPLINE | RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE | strong |
-| DIR_RETURN_30|XGB | RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE | strong |
+| DIR_RETURN_180|RIDGE | RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE | strong |
+| DIR_RETURN_180|SPLINE | RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE | strong |
+| DIR_RETURN_180|XGB | RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE | strong |
 | DIR_RETURN_60|RIDGE | RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE | strong |
 | DIR_RETURN_60|SPLINE | RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE | strong |
 | DIR_RETURN_60|XGB | RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE | strong |
@@ -997,7 +989,7 @@ How this configuration emerged
 - RIDGE: positive uplift in 3/3 eligible years; positive selected effect in 3/3 years; positive uplift in 5/5 DEVELOPMENT_CV folds; bootstrap CI lower bound +0.00116.
 - SPLINE: positive uplift in 3/3 eligible years; positive selected effect in 3/3 years; positive uplift in 5/5 DEVELOPMENT_CV folds; bootstrap CI lower bound +0.00126.
 - XGB: positive uplift in 3/3 eligible years; positive selected effect in 3/3 years; positive uplift in 5/5 DEVELOPMENT_CV folds; bootstrap CI lower bound +0.00137.
-- Bonferroni adjusted p (experiment): 0.01199; campaign Bonferroni adjusted p: 0.01199; BH q experiment 0.0004998, campaign 0.0004998.
+- Bonferroni adjusted p (experiment): 0.01199; campaign Bonferroni adjusted p: 0.01199; BH q experiment 0.0006663, campaign 0.0006663.
 - Model agreement: 3/3.
 - Selection trial count when observed: 24.
 - CONCERNS surfaced: YEAR_CONCENTRATION_WARNING: one calendar year carries > 35% of total absolute uplift; external verification: RIDGE=RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE(strong), SPLINE=RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE(strong), XGB=RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE(strong); campaign-adjusted values will keep changing as more experiments are revealed.
@@ -1015,47 +1007,12 @@ How this configuration emerged
 - RIDGE: positive uplift in 3/3 eligible years; positive selected effect in 3/3 years; positive uplift in 5/5 DEVELOPMENT_CV folds; bootstrap CI lower bound +0.00119.
 - SPLINE: positive uplift in 3/3 eligible years; positive selected effect in 3/3 years; positive uplift in 5/5 DEVELOPMENT_CV folds; bootstrap CI lower bound +0.00121.
 - XGB: positive uplift in 3/3 eligible years; positive selected effect in 3/3 years; positive uplift in 5/5 DEVELOPMENT_CV folds; bootstrap CI lower bound +0.00121.
-- Bonferroni adjusted p (experiment): 0.01199; campaign Bonferroni adjusted p: 0.01199; BH q experiment 0.0004998, campaign 0.0004998.
+- Bonferroni adjusted p (experiment): 0.01199; campaign Bonferroni adjusted p: 0.01199; BH q experiment 0.0006663, campaign 0.0006663.
 - Model agreement: 3/3.
 - Selection trial count when observed: 24.
 - CONCERNS surfaced: YEAR_CONCENTRATION_WARNING: one calendar year carries > 35% of total absolute uplift; external verification: RIDGE=RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE(strong), SPLINE=RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE(strong), XGB=RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE(strong); campaign-adjusted values will keep changing as more experiments are revealed.
 
-### Rank 3: DIR_RETURN_30|UPPER_HALF
-
-How this configuration emerged
-
-- Base event frequency: 36.5/week.
-- RIDGE, SPLINE, XGB all evaluated the same frozen 56-feature bank.
-- No feature threshold was searched; no feature subset, lookback or horizon was searched.
-- UPPER_HALF was predeclared before results (frozen score-state definition: train-only median).
-- Selected frequency: 17.23/week (retention 0.47).
-- Parent effect: -0.000008; selected effect: +0.001446; uplift: +0.001454 (standardized +0.142) — medians over the 3 eligible models.
-- RIDGE: positive uplift in 3/3 eligible years; positive selected effect in 3/3 years; positive uplift in 5/5 DEVELOPMENT_CV folds; bootstrap CI lower bound +0.00112.
-- SPLINE: positive uplift in 3/3 eligible years; positive selected effect in 3/3 years; positive uplift in 5/5 DEVELOPMENT_CV folds; bootstrap CI lower bound +0.00129.
-- XGB: positive uplift in 3/3 eligible years; positive selected effect in 3/3 years; positive uplift in 5/5 DEVELOPMENT_CV folds; bootstrap CI lower bound +0.00102.
-- Bonferroni adjusted p (experiment): 0.01199; campaign Bonferroni adjusted p: 0.01199; BH q experiment 0.0004998, campaign 0.0004998.
-- Model agreement: 3/3.
-- Selection trial count when observed: 24.
-- CONCERNS surfaced: YEAR_CONCENTRATION_WARNING: one calendar year carries > 35% of total absolute uplift; external verification: RIDGE=RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE(strong), SPLINE=RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE(strong), XGB=RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE(strong); campaign-adjusted values will keep changing as more experiments are revealed.
-
-### Rank 4: DIR_RETURN_30|LOWER_HALF
-
-How this configuration emerged
-
-- Base event frequency: 36.5/week.
-- RIDGE, SPLINE, XGB all evaluated the same frozen 56-feature bank.
-- No feature threshold was searched; no feature subset, lookback or horizon was searched.
-- LOWER_HALF was predeclared before results (frozen score-state definition: train-only median).
-- Selected frequency: 18.19/week (retention 0.50).
-- Parent effect: +0.000008; selected effect: +0.001452; uplift: +0.001444 (standardized +0.141) — medians over the 2 eligible models.
-- SPLINE: positive uplift in 3/3 eligible years; positive selected effect in 3/3 years; positive uplift in 5/5 DEVELOPMENT_CV folds; bootstrap CI lower bound +0.00115.
-- XGB: positive uplift in 3/3 eligible years; positive selected effect in 3/3 years; positive uplift in 5/5 DEVELOPMENT_CV folds; bootstrap CI lower bound +0.00113.
-- Bonferroni adjusted p (experiment): 0.01199; campaign Bonferroni adjusted p: 0.01199; BH q experiment 0.0004998, campaign 0.0004998.
-- Model agreement: 2/3.
-- Selection trial count when observed: 24.
-- CONCERNS surfaced: YEAR_CONCENTRATION_WARNING: one calendar year carries > 35% of total absolute uplift; not every model is eligible: RIDGE=REJECTED_INSTABILITY; external verification: RIDGE=RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE(strong), SPLINE=RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE(strong), XGB=RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE(strong); campaign-adjusted values will keep changing as more experiments are revealed.
-
-### Rank 5: DIR_PATH_SKEW_60|UPPER_HALF
+### Rank 3: DIR_PATH_SKEW_60|UPPER_HALF
 
 How this configuration emerged
 
@@ -1068,45 +1025,163 @@ How this configuration emerged
 - RIDGE: positive uplift in 3/3 eligible years; positive selected effect in 3/3 years; positive uplift in 5/5 DEVELOPMENT_CV folds; bootstrap CI lower bound +0.00192.
 - SPLINE: positive uplift in 3/3 eligible years; positive selected effect in 3/3 years; positive uplift in 5/5 DEVELOPMENT_CV folds; bootstrap CI lower bound +0.00157.
 - XGB: positive uplift in 3/3 eligible years; positive selected effect in 3/3 years; positive uplift in 5/5 DEVELOPMENT_CV folds; bootstrap CI lower bound +0.00148.
-- Bonferroni adjusted p (experiment): 0.01199; campaign Bonferroni adjusted p: 0.01199; BH q experiment 0.0004998, campaign 0.0004998.
+- Bonferroni adjusted p (experiment): 0.01199; campaign Bonferroni adjusted p: 0.01199; BH q experiment 0.0006663, campaign 0.0006663.
 - Model agreement: 3/3.
 - Selection trial count when observed: 24.
 - CONCERNS surfaced: YEAR_CONCENTRATION_WARNING: one calendar year carries > 35% of total absolute uplift; external verification: RIDGE=RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE(strong), SPLINE=RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE(strong), XGB=RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE(strong); campaign-adjusted values will keep changing as more experiments are revealed.
+
+### Rank 4: DIR_PATH_SKEW_60|LOWER_HALF
+
+How this configuration emerged
+
+- Base event frequency: 36.5/week.
+- RIDGE, SPLINE, XGB all evaluated the same frozen 56-feature bank.
+- No feature threshold was searched; no feature subset, lookback or horizon was searched.
+- LOWER_HALF was predeclared before results (frozen score-state definition: train-only median).
+- Selected frequency: 19.36/week (retention 0.53).
+- Parent effect: -0.000125; selected effect: +0.001834; uplift: +0.001959 (standardized +0.121) — medians over the 2 eligible models.
+- RIDGE: positive uplift in 3/3 eligible years; positive selected effect in 3/3 years; positive uplift in 5/5 DEVELOPMENT_CV folds; bootstrap CI lower bound +0.00159.
+- SPLINE: positive uplift in 3/3 eligible years; positive selected effect in 3/3 years; positive uplift in 5/5 DEVELOPMENT_CV folds; bootstrap CI lower bound +0.00142.
+- Bonferroni adjusted p (experiment): 0.01199; campaign Bonferroni adjusted p: 0.01199; BH q experiment 0.0006663, campaign 0.0006663.
+- Model agreement: 2/3.
+- Selection trial count when observed: 24.
+- CONCERNS surfaced: YEAR_CONCENTRATION_WARNING: one calendar year carries > 35% of total absolute uplift; not every model is eligible: XGB=REJECTED_INSTABILITY; external verification: RIDGE=RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE(strong), SPLINE=RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE(strong), XGB=RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE(strong); campaign-adjusted values will keep changing as more experiments are revealed.
 
 ## V. Why every other configuration was rejected
 
 | trial | target/model/state | decision | reason |
 |---|---|---|---|
-| EXP_0001_T08 | DIR_RETURN_30/RIDGE/LOWER_HALF | REJECTED_INSTABILITY | [REJECTED_INSTABILITY] positive selected-effect years 2/3 < 70% |
-| EXP_0001_T13 | DIR_RETURN_60/RIDGE/UPPER_HALF | REJECTED_INSUFFICIENT_UPLIFT | [REJECTED_INSUFFICIENT_UPLIFT] standardized uplift 0.095 < 0.1 at retention 0.43 (REJECTED_INSUFFICIENT_UPLIFT_FOR_FREQUENCY_LOSS) |
-| EXP_0001_T14 | DIR_RETURN_60/RIDGE/LOWER_HALF | REJECTED_INSUFFICIENT_UPLIFT | [REJECTED_INSUFFICIENT_UPLIFT] standardized uplift 0.072 < 0.1 at retention 0.57 (REJECTED_INSUFFICIENT_UPLIFT_FOR_FREQUENCY_LOSS); [REJECTED_INSTABILITY] positive selected-effect years 2/3 < 70% |
-| EXP_0001_T15 | DIR_RETURN_60/SPLINE/UPPER_HALF | REJECTED_INSUFFICIENT_UPLIFT | [REJECTED_INSUFFICIENT_UPLIFT] standardized uplift 0.063 < 0.1 at retention 0.47 (REJECTED_INSUFFICIENT_UPLIFT_FOR_FREQUENCY_LOSS); [REJECTED_INSTABILITY] positive-uplift years 2/3 < 70% |
-| EXP_0001_T16 | DIR_RETURN_60/SPLINE/LOWER_HALF | REJECTED_INSUFFICIENT_UPLIFT | [REJECTED_INSUFFICIENT_UPLIFT] standardized uplift 0.056 < 0.1 at retention 0.53 (REJECTED_INSUFFICIENT_UPLIFT_FOR_FREQUENCY_LOSS); [REJECTED_INSTABILITY] positive selected-effect years 2/3 < 70%, positive-uplift years 2/3 < 70% |
-| EXP_0001_T17 | DIR_RETURN_60/XGB/UPPER_HALF | REJECTED_INSUFFICIENT_UPLIFT | [REJECTED_INSUFFICIENT_UPLIFT] standardized uplift 0.076 < 0.1 at retention 0.50 (REJECTED_INSUFFICIENT_UPLIFT_FOR_FREQUENCY_LOSS); [REJECTED_INSTABILITY] positive selected-effect years 2/3 < 70%, positive-uplift years 2/3 < 70% |
-| EXP_0001_T18 | DIR_RETURN_60/XGB/LOWER_HALF | REJECTED_INSUFFICIENT_UPLIFT | [REJECTED_INSUFFICIENT_UPLIFT] standardized uplift 0.077 < 0.1 at retention 0.50 (REJECTED_INSUFFICIENT_UPLIFT_FOR_FREQUENCY_LOSS); [REJECTED_INSTABILITY] positive selected-effect years 2/3 < 70%, positive-uplift years 2/3 < 70% |
-| EXP_0001_T20 | DIR_PATH_SKEW_60/RIDGE/LOWER_HALF | IS_SHORTLIST_ELIGIBLE | - |
-| EXP_0001_T22 | DIR_PATH_SKEW_60/SPLINE/LOWER_HALF | IS_SHORTLIST_ELIGIBLE | - |
+| EXP_0001_T07 | DIR_RETURN_60/RIDGE/UPPER_HALF | REJECTED_MODEL_AGREEMENT | passes own experiment-level gates but only 1 of 3 models qualify (need 2) |
+| EXP_0001_T08 | DIR_RETURN_60/RIDGE/LOWER_HALF | REJECTED_INSTABILITY | [REJECTED_INSTABILITY] positive selected-effect years 2/3 < 70% |
+| EXP_0001_T09 | DIR_RETURN_60/SPLINE/UPPER_HALF | REJECTED_INSTABILITY | [REJECTED_INSTABILITY] positive-uplift years 2/3 < 70% |
+| EXP_0001_T10 | DIR_RETURN_60/SPLINE/LOWER_HALF | REJECTED_INSTABILITY | [REJECTED_INSTABILITY] positive selected-effect years 2/3 < 70%, positive-uplift years 2/3 < 70% |
+| EXP_0001_T11 | DIR_RETURN_60/XGB/UPPER_HALF | REJECTED_INSTABILITY | [REJECTED_INSTABILITY] positive selected-effect years 2/3 < 70%, positive-uplift years 2/3 < 70% |
+| EXP_0001_T12 | DIR_RETURN_60/XGB/LOWER_HALF | REJECTED_INSTABILITY | [REJECTED_INSTABILITY] positive selected-effect years 2/3 < 70%, positive-uplift years 2/3 < 70% |
+| EXP_0001_T13 | DIR_RETURN_180/RIDGE/UPPER_HALF | REJECTED_STATISTICAL | [REJECTED_STATISTICAL] bootstrap CI lower bound -1.86e-05 <= 0, experiment_bonferroni_p 0.4078 > 0.05, campaign_bonferroni_p 0.4078 > 0.05; [REJECTED_INSTABILITY] positive selected-effect years 2/3 < 70%, positive-uplift years 2/3 < 70%, positive selected-effect DEVELOPMENT_CV folds 3/5 < 4 |
+| EXP_0001_T14 | DIR_RETURN_180/RIDGE/LOWER_HALF | REJECTED_STATISTICAL | [REJECTED_STATISTICAL] bootstrap CI lower bound -1.357e-05 <= 0, experiment_bonferroni_p 0.4078 > 0.05, campaign_bonferroni_p 0.4078 > 0.05; [REJECTED_INSTABILITY] positive selected-effect years 1/3 < 70%, positive-uplift years 2/3 < 70%, positive selected-effect DEVELOPMENT_CV folds 3/5 < 4 |
+| EXP_0001_T15 | DIR_RETURN_180/SPLINE/UPPER_HALF | REJECTED_STATISTICAL | [REJECTED_STATISTICAL] bootstrap CI lower bound -0.0001047 <= 0, experiment_bonferroni_p 0.5277 > 0.05, campaign_bonferroni_p 0.5277 > 0.05; [REJECTED_INSTABILITY] positive selected-effect years 2/3 < 70%, positive-uplift years 2/3 < 70% |
+| EXP_0001_T16 | DIR_RETURN_180/SPLINE/LOWER_HALF | REJECTED_STATISTICAL | [REJECTED_STATISTICAL] bootstrap CI lower bound -9.04e-05 <= 0, experiment_bonferroni_p 0.5277 > 0.05, campaign_bonferroni_p 0.5277 > 0.05; [REJECTED_INSTABILITY] positive selected-effect years 1/3 < 70%, positive-uplift years 2/3 < 70%, positive selected-effect DEVELOPMENT_CV folds 3/5 < 4 |
+| EXP_0001_T17 | DIR_RETURN_180/XGB/UPPER_HALF | REJECTED_INSTABILITY | [REJECTED_INSTABILITY] positive selected-effect years 2/3 < 70%, positive-uplift years 2/3 < 70% |
+| EXP_0001_T18 | DIR_RETURN_180/XGB/LOWER_HALF | REJECTED_INSTABILITY | [REJECTED_INSTABILITY] positive selected-effect years 2/3 < 70%, positive-uplift years 2/3 < 70% |
 | EXP_0001_T24 | DIR_PATH_SKEW_60/XGB/LOWER_HALF | REJECTED_INSTABILITY | [REJECTED_INSTABILITY] positive selected-effect years 2/3 < 70% |
 
 ## NT. CONFIGURATION UNCERTAINTY / NEAR-TIES
 
 Frozen rule (frozen/v1/SELECTION_PROCESS.yaml, not tuned): two IS-shortlist-eligible TARGET x SIDE groups of this experiment on the SAME side are a NEAR-TIE iff |difference of median standardized uplift| <= 0.03 AND the 95% paired weekly-block bootstrap CI (2000 repetitions, seed 1729) of the difference contains 0. Near-tie edges form connected clusters ranked by the existing frozen IS group ranking; only the top 2 of a cluster may be proposed for the selection holdout. This is a diagnostic: it creates no selection trial and never promotes a rejected configuration. The engine does not choose a configuration for you.
 
-### NEAR-TIE CLUSTER 01  (`NEAR_TIE_CLUSTER_01`, side UPPER_HALF)
+No near-tie among the 4 eligible configurations: DIR_RETURN_15|LOWER_HALF vs DIR_PATH_SKEW_60|LOWER_HALF: |difference| 0.1028 > 0.03: not a near tie; DIR_RETURN_15|UPPER_HALF vs DIR_PATH_SKEW_60|UPPER_HALF: |difference| 0.0864 > 0.03: not a near tie.
 
-| config ID | target | side | freq/wk | median std uplift | median selected effect | campaign BH q | campaign Bonf p | positive years | positive folds | IS rank | proposable |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| EXP_0001|DIR_RETURN_30|UPPER_HALF | DIR_RETURN_30 | UPPER_HALF | 17.23 | +0.142 | +0.001446 | 0.0004998 | 0.01199 | 3/3 3/3 3/3 | 5/5 5/5 5/5 | 3 | yes |
-| EXP_0001|DIR_PATH_SKEW_60|UPPER_HALF | DIR_PATH_SKEW_60 | UPPER_HALF | 17.51 | +0.125 | +0.002153 | 0.0004998 | 0.01199 | 3/3 3/3 3/3 | 5/5 5/5 5/5 | 5 | yes |
+## WM. WHERE IT WORKS / WHERE IT DOES NOT (top IS groups)
 
-A: DIR_RETURN_30 × UPPER_HALF — std uplift = 0.142, frequency = 17.2/week
-B: DIR_PATH_SKEW_60 × UPPER_HALF — std uplift = 0.125, frequency = 17.5/week
+**DESCRIPTIVE — NOT A SELECTION TRIAL.** Out-of-fold DEVELOPMENT_CV events only. A report, not a selection step: any region worth trading is a NEW pre-registered experiment.
 
-| pair | median std uplift difference | median selected-effect difference | 95% paired weekly-block CI | reason classified as near-tie |
+### DIR_RETURN_15|LOWER_HALF
+
+by calendar year:
+
+| bucket | events | median selected events | median uplift | verdict |
 |---|---|---|---|---|
-| EXP_0001|DIR_RETURN_30|UPPER_HALF vs EXP_0001|DIR_PATH_SKEW_60|UPPER_HALF | +0.0163 | -0.000707 | [-0.0087, +0.0380] | |difference| 0.0163 <= 0.03 and the 95% paired weekly-block CI [-0.0087, +0.0380] contains 0 |
+| 2016 | 946 | 482 | +0.001012 | works (uplift > 0) |
+| 2017 | 1907 | 952 | +0.001433 | works (uplift > 0) |
+| 2018 | 1914 | 881 | +0.001796 | works (uplift > 0) |
 
-**Conclusion: IS evidence does not clearly distinguish these configurations.** The engine does not choose one automatically. Human options: (A) choose one configuration directly and skip the selection holdout; (B) approve at most the top 2 (`EXP_0001|DIR_RETURN_30|UPPER_HALF, EXP_0001|DIR_PATH_SKEW_60|UPPER_HALF`) for the selection holdout; (C) decline the experiment.
+by exchange-local hour of the event:
+
+| bucket | events | median selected events | median uplift | verdict |
+|---|---|---|---|---|
+| 09:00 | 433 | 229 | +0.001238 | works (uplift > 0) |
+| 10:00 | 867 | 426 | +0.001255 | works (uplift > 0) |
+| 11:00 | 867 | 404 | +0.001799 | works (uplift > 0) |
+| 12:00 | 866 | 377 | +0.001601 | works (uplift > 0) |
+| 13:00 | 867 | 412 | +0.001661 | works (uplift > 0) |
+| 14:00 | 867 | 468 | +0.001274 | works (uplift > 0) |
+
+full horizon vs truncated at the session close:
+
+| bucket | events | median selected events | median uplift | verdict |
+|---|---|---|---|---|
+| full_horizon | 4767 | 2315 | +0.001478 | works (uplift > 0) |
+
+### DIR_RETURN_15|UPPER_HALF
+
+by calendar year:
+
+| bucket | events | median selected events | median uplift | verdict |
+|---|---|---|---|---|
+| 2016 | 946 | 464 | +0.001051 | works (uplift > 0) |
+| 2017 | 1907 | 955 | +0.001428 | works (uplift > 0) |
+| 2018 | 1914 | 1033 | +0.001473 | works (uplift > 0) |
+
+by exchange-local hour of the event:
+
+| bucket | events | median selected events | median uplift | verdict |
+|---|---|---|---|---|
+| 09:00 | 433 | 204 | +0.001390 | works (uplift > 0) |
+| 10:00 | 867 | 441 | +0.001198 | works (uplift > 0) |
+| 11:00 | 867 | 463 | +0.001570 | works (uplift > 0) |
+| 12:00 | 866 | 489 | +0.001228 | works (uplift > 0) |
+| 13:00 | 867 | 455 | +0.001471 | works (uplift > 0) |
+| 14:00 | 867 | 399 | +0.001495 | works (uplift > 0) |
+
+full horizon vs truncated at the session close:
+
+| bucket | events | median selected events | median uplift | verdict |
+|---|---|---|---|---|
+| full_horizon | 4767 | 2452 | +0.001398 | works (uplift > 0) |
+
+### DIR_PATH_SKEW_60|UPPER_HALF
+
+by calendar year:
+
+| bucket | events | median selected events | median uplift | verdict |
+|---|---|---|---|---|
+| 2016 | 946 | 322 | +0.000558 | works (uplift > 0) |
+| 2017 | 1907 | 897 | +0.002399 | works (uplift > 0) |
+| 2018 | 1914 | 1066 | +0.002234 | works (uplift > 0) |
+
+by exchange-local hour of the event:
+
+| bucket | events | median selected events | median uplift | verdict |
+|---|---|---|---|---|
+| 09:00 | 433 | 174 | +0.002312 | works (uplift > 0) |
+| 10:00 | 867 | 404 | +0.001858 | works (uplift > 0) |
+| 11:00 | 867 | 426 | +0.001940 | works (uplift > 0) |
+| 12:00 | 866 | 440 | +0.002581 | works (uplift > 0) |
+| 13:00 | 867 | 430 | +0.002187 | works (uplift > 0) |
+| 14:00 | 867 | 420 | +0.001753 | works (uplift > 0) |
+
+full horizon vs truncated at the session close:
+
+| bucket | events | median selected events | median uplift | verdict |
+|---|---|---|---|---|
+| full_horizon | 4767 | 2294 | +0.002029 | works (uplift > 0) |
+
+### DIR_PATH_SKEW_60|LOWER_HALF
+
+by calendar year:
+
+| bucket | events | median selected events | median uplift | verdict |
+|---|---|---|---|---|
+| 2016 | 946 | 621 | +0.000479 | works (uplift > 0) |
+| 2017 | 1907 | 1061 | +0.002146 | works (uplift > 0) |
+| 2018 | 1914 | 853 | +0.002892 | works (uplift > 0) |
+
+by exchange-local hour of the event:
+
+| bucket | events | median selected events | median uplift | verdict |
+|---|---|---|---|---|
+| 09:00 | 433 | 260 | +0.001480 | works (uplift > 0) |
+| 10:00 | 867 | 473 | +0.001623 | works (uplift > 0) |
+| 11:00 | 867 | 451 | +0.001908 | works (uplift > 0) |
+| 12:00 | 866 | 435 | +0.002419 | works (uplift > 0) |
+| 13:00 | 867 | 450 | +0.002162 | works (uplift > 0) |
+| 14:00 | 867 | 465 | +0.001953 | works (uplift > 0) |
+
+full horizon vs truncated at the session close:
+
+| bucket | events | median selected events | median uplift | verdict |
+|---|---|---|---|---|
+| full_horizon | 4767 | 2536 | +0.001959 | works (uplift > 0) |
 
 ## W. Non-promotable interesting observations (registry/observations.csv)
 
@@ -1120,18 +1195,18 @@ B: DIR_PATH_SKEW_60 × UPPER_HALF — std uplift = 0.125, frequency = 17.5/week
 | OBS_00004 | feature_importance | DIR_RETURN_15/SPLINE: top features RET_5 (1.939), RANGE_POS_15 (1.192), RANGE_POS_30 (0.7684) (diagnostic importance; models still consume the whole bank) |
 | OBS_00005 | score_decile_shape | DIR_RETURN_15/XGB: mean target top decile +0.00307 vs bottom decile -0.00315 (pooled DEVELOPMENT_CV deciles; not selection trials) |
 | OBS_00006 | feature_importance | DIR_RETURN_15/XGB: top features RET_5 (0.06643), RANGE_POS_15 (0.05322), day_of_week (0.04875) (diagnostic importance; models still consume the whole bank) |
-| OBS_00007 | score_decile_shape | DIR_RETURN_30/RIDGE: mean target top decile +0.00318 vs bottom decile -0.00332 (pooled DEVELOPMENT_CV deciles; not selection trials) |
-| OBS_00008 | feature_importance | DIR_RETURN_30/RIDGE: top features day_of_week (0.2358), RET_5 (0.2126), SIGNED_VOLUME_30 (0.1286) (diagnostic importance; models still consume the whole bank) |
-| OBS_00009 | score_decile_shape | DIR_RETURN_30/SPLINE: mean target top decile +0.00306 vs bottom decile -0.00304 (pooled DEVELOPMENT_CV deciles; not selection trials) |
-| OBS_00010 | feature_importance | DIR_RETURN_30/SPLINE: top features RET_5 (1.287), RANGE_POS_15 (0.7884), COUNT_BALANCE_15 (0.7209) (diagnostic importance; models still consume the whole bank) |
-| OBS_00011 | score_decile_shape | DIR_RETURN_30/XGB: mean target top decile +0.00282 vs bottom decile -0.00332 (pooled DEVELOPMENT_CV deciles; not selection trials) |
-| OBS_00012 | feature_importance | DIR_RETURN_30/XGB: top features day_of_week (0.05351), RET_5 (0.04554), RANGE_POS_15 (0.03796) (diagnostic importance; models still consume the whole bank) |
-| OBS_00013 | score_decile_shape | DIR_RETURN_60/RIDGE: mean target top decile +0.00212 vs bottom decile -0.00293 (pooled DEVELOPMENT_CV deciles; not selection trials) |
-| OBS_00014 | feature_importance | DIR_RETURN_60/RIDGE: top features day_of_week (0.2509), COUNT_BALANCE_15 (0.2204), RET_5 (0.1468) (diagnostic importance; models still consume the whole bank) |
-| OBS_00015 | score_decile_shape | DIR_RETURN_60/SPLINE: mean target top decile +0.00289 vs bottom decile -0.00301 (pooled DEVELOPMENT_CV deciles; not selection trials) |
-| OBS_00016 | feature_importance | DIR_RETURN_60/SPLINE: top features RET_5 (1.043), HURST_240 (0.8424), VR_60_2 (0.708) (diagnostic importance; models still consume the whole bank) |
-| OBS_00017 | score_decile_shape | DIR_RETURN_60/XGB: mean target top decile +0.00314 vs bottom decile -0.00347 (pooled DEVELOPMENT_CV deciles; not selection trials) |
-| OBS_00018 | feature_importance | DIR_RETURN_60/XGB: top features day_of_week (0.05609), RET_5 (0.03022), RANGE_POS_15 (0.02681) (diagnostic importance; models still consume the whole bank) |
+| OBS_00007 | score_decile_shape | DIR_RETURN_60/RIDGE: mean target top decile +0.00212 vs bottom decile -0.00293 (pooled DEVELOPMENT_CV deciles; not selection trials) |
+| OBS_00008 | feature_importance | DIR_RETURN_60/RIDGE: top features day_of_week (0.2509), COUNT_BALANCE_15 (0.2204), RET_5 (0.1468) (diagnostic importance; models still consume the whole bank) |
+| OBS_00009 | score_decile_shape | DIR_RETURN_60/SPLINE: mean target top decile +0.00289 vs bottom decile -0.00301 (pooled DEVELOPMENT_CV deciles; not selection trials) |
+| OBS_00010 | feature_importance | DIR_RETURN_60/SPLINE: top features RET_5 (1.043), HURST_240 (0.8424), VR_60_2 (0.708) (diagnostic importance; models still consume the whole bank) |
+| OBS_00011 | score_decile_shape | DIR_RETURN_60/XGB: mean target top decile +0.00314 vs bottom decile -0.00347 (pooled DEVELOPMENT_CV deciles; not selection trials) |
+| OBS_00012 | feature_importance | DIR_RETURN_60/XGB: top features day_of_week (0.05609), RET_5 (0.03022), RANGE_POS_15 (0.02681) (diagnostic importance; models still consume the whole bank) |
+| OBS_00013 | score_decile_shape | DIR_RETURN_180/RIDGE: mean target top decile -0.00052 vs bottom decile -0.00020 (pooled DEVELOPMENT_CV deciles; not selection trials) |
+| OBS_00014 | feature_importance | DIR_RETURN_180/RIDGE: top features day_of_week (0.3116), BROWNIAN_DISP_15 (0.1438), SIGNED_VOLUME_60 (0.1413) (diagnostic importance; models still consume the whole bank) |
+| OBS_00015 | score_decile_shape | DIR_RETURN_180/SPLINE: mean target top decile +0.00009 vs bottom decile -0.00176 (pooled DEVELOPMENT_CV deciles; not selection trials) |
+| OBS_00016 | feature_importance | DIR_RETURN_180/SPLINE: top features HURST_240 (0.7394), VOV_120 (0.7197), VR_60_2 (0.701) (diagnostic importance; models still consume the whole bank) |
+| OBS_00017 | score_decile_shape | DIR_RETURN_180/XGB: mean target top decile +0.00102 vs bottom decile -0.00163 (pooled DEVELOPMENT_CV deciles; not selection trials) |
+| OBS_00018 | feature_importance | DIR_RETURN_180/XGB: top features day_of_week (0.0672), minutes_since_RTH_open (0.0262), VOV_120 (0.02345) (diagnostic importance; models still consume the whole bank) |
 | OBS_00019 | score_decile_shape | DIR_PATH_SKEW_60/RIDGE: mean target top decile +0.00529 vs bottom decile -0.00547 (pooled DEVELOPMENT_CV deciles; not selection trials) |
 | OBS_00020 | feature_importance | DIR_PATH_SKEW_60/RIDGE: top features day_of_week (0.2232), RET_5 (0.2061), COUNT_BALANCE_15 (0.1866) (diagnostic importance; models still consume the whole bank) |
 | OBS_00021 | score_decile_shape | DIR_PATH_SKEW_60/SPLINE: mean target top decile +0.00410 vs bottom decile -0.00464 (pooled DEVELOPMENT_CV deciles; not selection trials) |
@@ -1139,8 +1214,8 @@ B: DIR_PATH_SKEW_60 × UPPER_HALF — std uplift = 0.125, frequency = 17.5/week
 | OBS_00023 | score_decile_shape | DIR_PATH_SKEW_60/XGB: mean target top decile +0.00464 vs bottom decile -0.00532 (pooled DEVELOPMENT_CV deciles; not selection trials) |
 | OBS_00024 | feature_importance | DIR_PATH_SKEW_60/XGB: top features day_of_week (0.05753), RET_5 (0.04162), RANGE_POS_15 (0.03721) (diagnostic importance; models still consume the whole bank) |
 | OBS_00025 | long_short_asymmetry | DIR_RETURN_15: mean uplift UPPER_HALF +0.00140 vs LOWER_HALF +0.00147 across models |
-| OBS_00026 | long_short_asymmetry | DIR_RETURN_30: mean uplift UPPER_HALF +0.00145 vs LOWER_HALF +0.00137 across models |
-| OBS_00027 | long_short_asymmetry | DIR_RETURN_60: mean uplift UPPER_HALF +0.00118 vs LOWER_HALF +0.00103 across models |
+| OBS_00026 | long_short_asymmetry | DIR_RETURN_60: mean uplift UPPER_HALF +0.00118 vs LOWER_HALF +0.00103 across models |
+| OBS_00027 | long_short_asymmetry | DIR_RETURN_180: mean uplift UPPER_HALF +0.00113 vs LOWER_HALF +0.00099 across models |
 | OBS_00028 | long_short_asymmetry | DIR_PATH_SKEW_60: mean uplift UPPER_HALF +0.00213 vs LOWER_HALF +0.00202 across models |
 | OBS_00029 | year_concentration | EXP_0001_T01: YEAR_CONCENTRATION_WARNING (largest year share 0.43 of total absolute uplift) |
 | OBS_00030 | year_concentration | EXP_0001_T02: YEAR_CONCENTRATION_WARNING (largest year share 0.43 of total absolute uplift) |
@@ -1150,16 +1225,16 @@ B: DIR_PATH_SKEW_60 × UPPER_HALF — std uplift = 0.125, frequency = 17.5/week
 | OBS_00034 | year_concentration | EXP_0001_T06: YEAR_CONCENTRATION_WARNING (largest year share 0.44 of total absolute uplift) |
 | OBS_00035 | year_concentration | EXP_0001_T07: YEAR_CONCENTRATION_WARNING (largest year share 0.50 of total absolute uplift) |
 | OBS_00036 | year_concentration | EXP_0001_T08: YEAR_CONCENTRATION_WARNING (largest year share 0.50 of total absolute uplift) |
-| OBS_00037 | year_concentration | EXP_0001_T09: YEAR_CONCENTRATION_WARNING (largest year share 0.48 of total absolute uplift) |
-| OBS_00038 | year_concentration | EXP_0001_T10: YEAR_CONCENTRATION_WARNING (largest year share 0.48 of total absolute uplift) |
-| OBS_00039 | year_concentration | EXP_0001_T11: YEAR_CONCENTRATION_WARNING (largest year share 0.50 of total absolute uplift) |
-| OBS_00040 | year_concentration | EXP_0001_T12: YEAR_CONCENTRATION_WARNING (largest year share 0.50 of total absolute uplift) |
-| OBS_00041 | year_concentration | EXP_0001_T13: YEAR_CONCENTRATION_WARNING (largest year share 0.50 of total absolute uplift) |
-| OBS_00042 | year_concentration | EXP_0001_T14: YEAR_CONCENTRATION_WARNING (largest year share 0.50 of total absolute uplift) |
-| OBS_00043 | year_concentration | EXP_0001_T15: YEAR_CONCENTRATION_WARNING (largest year share 0.51 of total absolute uplift) |
-| OBS_00044 | year_concentration | EXP_0001_T16: YEAR_CONCENTRATION_WARNING (largest year share 0.51 of total absolute uplift) |
-| OBS_00045 | year_concentration | EXP_0001_T17: YEAR_CONCENTRATION_WARNING (largest year share 0.51 of total absolute uplift) |
-| OBS_00046 | year_concentration | EXP_0001_T18: YEAR_CONCENTRATION_WARNING (largest year share 0.51 of total absolute uplift) |
+| OBS_00037 | year_concentration | EXP_0001_T09: YEAR_CONCENTRATION_WARNING (largest year share 0.51 of total absolute uplift) |
+| OBS_00038 | year_concentration | EXP_0001_T10: YEAR_CONCENTRATION_WARNING (largest year share 0.51 of total absolute uplift) |
+| OBS_00039 | year_concentration | EXP_0001_T11: YEAR_CONCENTRATION_WARNING (largest year share 0.51 of total absolute uplift) |
+| OBS_00040 | year_concentration | EXP_0001_T12: YEAR_CONCENTRATION_WARNING (largest year share 0.51 of total absolute uplift) |
+| OBS_00041 | year_concentration | EXP_0001_T13: YEAR_CONCENTRATION_WARNING (largest year share 0.46 of total absolute uplift) |
+| OBS_00042 | year_concentration | EXP_0001_T14: YEAR_CONCENTRATION_WARNING (largest year share 0.46 of total absolute uplift) |
+| OBS_00043 | year_concentration | EXP_0001_T15: YEAR_CONCENTRATION_WARNING (largest year share 0.41 of total absolute uplift) |
+| OBS_00044 | year_concentration | EXP_0001_T16: YEAR_CONCENTRATION_WARNING (largest year share 0.41 of total absolute uplift) |
+| OBS_00045 | year_concentration | EXP_0001_T17: YEAR_CONCENTRATION_WARNING (largest year share 0.49 of total absolute uplift) |
+| OBS_00046 | year_concentration | EXP_0001_T18: YEAR_CONCENTRATION_WARNING (largest year share 0.49 of total absolute uplift) |
 | OBS_00047 | year_concentration | EXP_0001_T19: YEAR_CONCENTRATION_WARNING (largest year share 0.48 of total absolute uplift) |
 | OBS_00048 | year_concentration | EXP_0001_T20: YEAR_CONCENTRATION_WARNING (largest year share 0.48 of total absolute uplift) |
 | OBS_00049 | year_concentration | EXP_0001_T21: YEAR_CONCENTRATION_WARNING (largest year share 0.50 of total absolute uplift) |
@@ -1404,46 +1479,6 @@ Horizons [5, 15, 30, 60, 120] bars; tick size 0.25 points (instrument config); s
 | 2017 | 910 | 17.50 | 361/910 = 0.397 | 394/910 = 0.433 | 413/910 = 0.454 | 349/722 = 0.483 | 25.48 | 41.35 | 63.11 | 77.52 | -0.001472 | -0.001828 |
 | 2018 | 855 | 16.13 | 339/855 = 0.396 | 355/855 = 0.415 | 400/855 = 0.468 | 348/706 = 0.493 | 34.04 | 59.10 | 88.11 | 114.53 | -0.001927 | -0.001271 |
 
-**EXP_0001_T07 DIR_RETURN_30/RIDGE/UPPER_HALF**
-
-| YEAR | N | events/wk | CONT_15 | CONT_30 | CONT_60 | CONT_120 | med MFE60 | med |MAE|60 | P75 MFE60 | P75 |MAE|60 | mean ret60 | median ret60 |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 2016 | 349 | 13.42 | 186/349 = 0.533 | 177/349 = 0.507 | 182/349 = 0.521 | 137/297 = 0.461 | 25.89 | 22.33 | 53.00 | 49.01 | 0.000272 | 0.000577 |
-| 2017 | 798 | 15.35 | 478/798 = 0.599 | 471/798 = 0.590 | 443/798 = 0.555 | 373/677 = 0.551 | 43.48 | 22.83 | 84.26 | 61.16 | 0.002478 | 0.001862 |
-| 2018 | 1021 | 19.26 | 614/1021 = 0.601 | 560/1021 = 0.548 | 560/1021 = 0.548 | 441/834 = 0.529 | 59.36 | 37.99 | 112.86 | 94.05 | 0.001517 | 0.002003 |
-
-**EXP_0001_T09 DIR_RETURN_30/SPLINE/UPPER_HALF**
-
-| YEAR | N | events/wk | CONT_15 | CONT_30 | CONT_60 | CONT_120 | med MFE60 | med |MAE|60 | P75 MFE60 | P75 |MAE|60 | mean ret60 | median ret60 |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 2016 | 379 | 14.58 | 207/379 = 0.546 | 194/379 = 0.512 | 211/379 = 0.557 | 156/316 = 0.494 | 27.32 | 21.77 | 56.15 | 52.11 | 0.001229 | 0.001434 |
-| 2017 | 848 | 16.31 | 498/848 = 0.587 | 485/848 = 0.572 | 478/848 = 0.564 | 383/707 = 0.542 | 42.68 | 23.60 | 80.79 | 60.97 | 0.002345 | 0.002202 |
-| 2018 | 1030 | 19.43 | 619/1030 = 0.601 | 571/1030 = 0.554 | 561/1030 = 0.545 | 453/835 = 0.543 | 58.01 | 37.67 | 112.81 | 92.72 | 0.001518 | 0.001975 |
-
-**EXP_0001_T10 DIR_RETURN_30/SPLINE/LOWER_HALF**
-
-| YEAR | N | events/wk | CONT_15 | CONT_30 | CONT_60 | CONT_120 | med MFE60 | med |MAE|60 | P75 MFE60 | P75 |MAE|60 | mean ret60 | median ret60 |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 2016 | 567 | 21.81 | 274/567 = 0.483 | 279/567 = 0.492 | 274/567 = 0.483 | 223/458 = 0.487 | 24.86 | 26.21 | 55.20 | 52.06 | -0.000280 | -0.000682 |
-| 2017 | 1059 | 20.37 | 438/1059 = 0.414 | 481/1059 = 0.454 | 492/1059 = 0.465 | 423/853 = 0.496 | 27.84 | 37.77 | 67.69 | 79.66 | -0.001156 | -0.001551 |
-| 2018 | 884 | 16.68 | 353/884 = 0.399 | 366/884 = 0.414 | 403/884 = 0.456 | 347/731 = 0.475 | 34.90 | 59.79 | 88.33 | 116.93 | -0.002096 | -0.001661 |
-
-**EXP_0001_T11 DIR_RETURN_30/XGB/UPPER_HALF**
-
-| YEAR | N | events/wk | CONT_15 | CONT_30 | CONT_60 | CONT_120 | med MFE60 | med |MAE|60 | P75 MFE60 | P75 |MAE|60 | mean ret60 | median ret60 |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 2016 | 420 | 16.15 | 218/420 = 0.519 | 220/420 = 0.524 | 227/420 = 0.540 | 169/340 = 0.497 | 28.46 | 21.26 | 58.35 | 52.24 | 0.001488 | 0.001310 |
-| 2017 | 993 | 19.10 | 568/993 = 0.572 | 562/993 = 0.566 | 557/993 = 0.561 | 445/816 = 0.545 | 42.70 | 24.64 | 82.90 | 62.62 | 0.002096 | 0.001856 |
-| 2018 | 1099 | 20.74 | 643/1099 = 0.585 | 593/1099 = 0.540 | 586/1099 = 0.533 | 464/886 = 0.524 | 57.01 | 40.08 | 110.05 | 95.33 | 0.001169 | 0.001553 |
-
-**EXP_0001_T12 DIR_RETURN_30/XGB/LOWER_HALF**
-
-| YEAR | N | events/wk | CONT_15 | CONT_30 | CONT_60 | CONT_120 | med MFE60 | med |MAE|60 | P75 MFE60 | P75 |MAE|60 | mean ret60 | median ret60 |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 2016 | 526 | 20.23 | 263/526 = 0.500 | 253/526 = 0.481 | 258/526 = 0.490 | 210/434 = 0.484 | 23.78 | 26.88 | 51.26 | 51.96 | -0.000604 | -0.000487 |
-| 2017 | 914 | 17.58 | 368/914 = 0.403 | 404/914 = 0.442 | 413/914 = 0.452 | 361/744 = 0.485 | 25.82 | 40.38 | 64.67 | 79.76 | -0.001441 | -0.001719 |
-| 2018 | 815 | 15.38 | 329/815 = 0.404 | 344/815 = 0.422 | 378/815 = 0.464 | 336/680 = 0.494 | 34.11 | 60.35 | 91.49 | 115.47 | -0.001932 | -0.001427 |
-
 **EXP_0001_T19 DIR_PATH_SKEW_60/RIDGE/UPPER_HALF**
 
 | YEAR | N | events/wk | CONT_15 | CONT_30 | CONT_60 | CONT_120 | med MFE60 | med |MAE|60 | P75 MFE60 | P75 |MAE|60 | mean ret60 | median ret60 |
@@ -1511,25 +1546,25 @@ _no filter_ladder declared_
 
 | item | sha256 |
 |---|---|
-| manifest_sha256 | a69ca5219d1062f903a467fcc2efc040beade5fd00bceb540947ba8620cc228d |
-| manifest_hash | 1e9de0712bf357f0683a28f9acf9ff874af2f5ec0a23ba32e5fd4231e341b7b7 |
+| manifest_sha256 | 391c85da00931a735bad6d9e62ff59c1609baf8ce4320ea2c032408eabf4ea2b |
+| manifest_hash | 3a4dc07e3e7bd5e3daa6035ce341b668af70ca071a7b41e15f00099bf41b10e1 |
 | event_hash | 33075c486274c70b10d1ed5b04172844c3d6c631d92aec62a9fd87eaac5fc0c9 |
 | event_py | 47e3f563c012e50b1a7f8a30d8bf81e106793a1d594ffd5bb2d922660ad10585 |
 | event_spec | 7bf96905a5ea2dc0858450aaeca0a92da9c1bf43bde56ffecf5e1fa6de774d55 |
 | partitions_hash | 057e193f2d09a4751b8983471186cc6a4b3c1831ffbd0cfbd6f814c0c190235e |
-| frozen_bundle_hash | e9b842adaa84ffaa5166c6a0407bbfee9c85317e328379b2edabfd3137f061e0 |
-| engine_code_hash | 536d6977433d09f4ba6a71c602799ac9ebfaf448e7c42b840d62fa21adc5db1a |
-| engine_version | v1.2.1 |
-| trial_ledger_hash | 701a3d810b07da2323999eae878d750f066ee947f3f0eb99b15e45e52da61173 |
+| frozen_bundle_hash | 98b1d47b695d7d4ccd91b773d1a53e7da43be87f7af915df2d4b22ea4cc5af67 |
+| engine_code_hash | 6273560f300ea953e44285d0b694bf5b4fc480b51bb48a80c464634e85102def |
+| engine_version | v2.0.0 |
+| trial_ledger_hash | 9ec7b5261f281cdd9210df35398e96ccb925a4cffe8bf72dd2d545ae8bb942b5 |
 | is_data_fingerprint | 99deba244cd2790651042661941d558e73e3f0c42b3f508c0acf26dee9be2371 |
-| results_sha256 | a9e99e7d8afaa8c9c1f92ef923c1f2c2c31e0005a19775b95304de3c585738ab |
-| path_diagnostics_sha256 | 6a071b13673aeb0589f9a75995effcb2565de9dfc8972cf8cd4b3394fd88ea2f |
+| results_sha256 | d07640a79a6d8b7152d22a4bc5e300114fcaee10cbfad7ca85cbe9370b2fa290 |
+| path_diagnostics_sha256 | 9e127480bdfc5561c69a9c5b62cbdaa2d34a7b24d407e6a5ad0cd62a2e1bf6fc |
 | verifier_pin | 624c8b7f0502abf6c5d453d501e96e3172367035 |
 
 ## Y. SELECTION HOLDOUT status
 
 **SELECTION HOLDOUT status = NOT ACCESSED**
 
-* Selection holdout available: **YES**; recommended: **YES** — IS evidence does not clearly distinguish the configurations of the listed near-tie cluster(s); the holdout may compare at most the top 2 of one cluster. The human may instead choose one config directly or decline.
+* Selection holdout available: **NO**; recommended: **NO** — no near-tie cluster: the selection holdout can only compare near-tied configs; a clearly preferred eligible config may be chosen directly
 The engine stops here. The human may (A) choose ONE eligible configuration directly (`approvals/<EXP>_FINAL_CONFIG_SELECTION.yaml`, selection holdout skipped), (B) if a near-tie cluster exists, approve its top 2 configurations for the campaign SELECTION HOLDOUT (`approvals/<EXP>_SELECTION_HOLDOUT_APPROVAL.yaml`, then the campaign-open approval after `freeze_campaign_selection_holdout.py`), or (C) decline. The SELECTION HOLDOUT is selection data, NOT final confirmation. Hashes to cite: `python scripts/show_approval_hashes.py --experiment EXP_0001`. The LLM / scripts never create any file in `approvals/`; at most 2 configurations per experiment and 6 per campaign, each running all three frozen models.
 

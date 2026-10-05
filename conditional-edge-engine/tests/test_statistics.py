@@ -159,7 +159,7 @@ def test_decile_diagnostics_shapes_and_disclaimer_fields():
 
 # ---- acceptance gates ----------------------------------------------------------------------
 def good_row(**kw):
-    row = dict(target="DIR_RETURN_30", model="RIDGE", state=UPPER, trial_id="T", n_selected_events=500, selected_frequency=2.0,
+    row = dict(target="DIR_RETURN_180", model="RIDGE", state=UPPER, trial_id="T", n_selected_events=500, selected_frequency=2.0,
                retention_ratio=0.5, standardized_uplift=0.2, selected_effect=0.2, bootstrap_ci_low=0.01, experiment_q=0.01,
                campaign_q=0.01, experiment_bonferroni_p=0.01, campaign_bonferroni_p=0.01, positive_years=4, positive_uplift_years=4,
                eligible_years=5, folds_evaluated=5, positive_effect_folds=5, positive_uplift_folds=5)
@@ -171,7 +171,7 @@ def test_each_gate_blocks_eligibility_independently():
     assert classify_trial(good_row(), ACC)[0]
     cases = {
         LOW_FREQ: dict(selected_frequency=0.99),
-        LOW_UPLIFT: dict(standardized_uplift=0.099),
+        LOW_UPLIFT: dict(standardized_uplift=0.0099),
         STAT: dict(bootstrap_ci_low=0.0),
         INSTAB: dict(positive_years=3, eligible_years=5),
     }
@@ -182,7 +182,7 @@ def test_each_gate_blocks_eligibility_independently():
         ok, dec, why = classify_trial(good_row(**{k: 0.0501}), ACC)
         assert not ok and dec == STAT and k in why, k
     assert classify_trial(good_row(selected_frequency=1.0), ACC)[0]              # floors are inclusive
-    assert classify_trial(good_row(standardized_uplift=0.10), ACC)[0]
+    assert classify_trial(good_row(standardized_uplift=0.01), ACC)[0]
     assert classify_trial(good_row(positive_years=7, positive_uplift_years=7, eligible_years=10), ACC)[0]   # 70% inclusive
     assert classify_trial(good_row(eligible_years=0, positive_years=0, positive_uplift_years=0), ACC)[1] == INSTAB
     assert classify_trial(good_row(n_selected_events=0), ACC)[1] == DIAG
@@ -194,7 +194,7 @@ def test_negative_absolute_selected_effect_cannot_promote():
     assert not ok and dec == COND_IMPROVE == "DIAGNOSTIC_CONDITIONAL_IMPROVEMENT" and "less bad than the parent" in why
     assert not classify_trial(good_row(selected_effect=0.0), ACC)[0]              # must be strictly positive
     rows = decide_experiment([good_row(selected_effect=-0.05, model=m, trial_id=m) for m in ("RIDGE", "SPLINE", "XGB")], ACC,
-                             {"DIR_RETURN_30|UPPER_HALF": "PASSED"}, VER_ALL)
+                             {"DIR_RETURN_180|UPPER_HALF": "PASSED"}, VER_ALL)
     assert {r["decision"] for r in rows} == {COND_IMPROVE}
 
 
@@ -214,28 +214,28 @@ def test_five_fold_consistency_gate_never_relaxed():
 
 
 def test_frequency_destruction_is_labelled_not_hidden():
-    ok, dec, why = classify_trial(good_row(standardized_uplift=0.04, retention_ratio=0.49, selected_frequency=2.1), ACC)
+    ok, dec, why = classify_trial(good_row(standardized_uplift=0.004, retention_ratio=0.49, selected_frequency=2.1), ACC)
     assert not ok and dec == LOW_UPLIFT and "REJECTED_INSUFFICIENT_UPLIFT_FOR_FREQUENCY_LOSS" in why
 
 
-VER_ALL = {f"DIR_RETURN_30|{m}": {"label": "RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE", "mode": "strong"} for m in ("RIDGE", "SPLINE", "XGB")}
+VER_ALL = {f"DIR_RETURN_180|{m}": {"label": "RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE", "mode": "strong"} for m in ("RIDGE", "SPLINE", "XGB")}
 
 
 def mk_rows(passing, **extra):
     rows = []
     for st in (UPPER, "LOWER_HALF"):
         for m in ("RIDGE", "SPLINE", "XGB"):
-            ok = ("DIR_RETURN_30", st, m) in passing
+            ok = ("DIR_RETURN_180", st, m) in passing
             rows.append(good_row(state=st, model=m, trial_id=f"{st}-{m}", **extra) if ok else
                         good_row(state=st, model=m, trial_id=f"{st}-{m}", standardized_uplift=0.0, **extra))
     return rows
 
 
 def test_two_of_three_model_agreement_required():
-    one = decide_experiment(mk_rows({("DIR_RETURN_30", UPPER, "RIDGE")}), ACC, {"DIR_RETURN_30|UPPER_HALF": "PASSED"}, VER_ALL)
+    one = decide_experiment(mk_rows({("DIR_RETURN_180", UPPER, "RIDGE")}), ACC, {"DIR_RETURN_180|UPPER_HALF": "PASSED"}, VER_ALL)
     assert {r["decision"] for r in one if r["model"] == "RIDGE" and r["state"] == UPPER} == {AGREE}
-    two = decide_experiment(mk_rows({("DIR_RETURN_30", UPPER, "RIDGE"), ("DIR_RETURN_30", UPPER, "XGB")}), ACC,
-                            {"DIR_RETURN_30|UPPER_HALF": "PASSED"}, VER_ALL)
+    two = decide_experiment(mk_rows({("DIR_RETURN_180", UPPER, "RIDGE"), ("DIR_RETURN_180", UPPER, "XGB")}), ACC,
+                            {"DIR_RETURN_180|UPPER_HALF": "PASSED"}, VER_ALL)
     by = {(r["model"], r["state"]): r["decision"] for r in two}
     assert by[("RIDGE", UPPER)] == by[("XGB", UPPER)] == SHORTLIST
     assert by[("SPLINE", UPPER)] == LOW_UPLIFT                  # the third model is still shown, rejected
@@ -243,8 +243,8 @@ def test_two_of_three_model_agreement_required():
 
 
 def test_campaign_level_gates_make_a_group_provisional_not_eligible():
-    rows = mk_rows({("DIR_RETURN_30", UPPER, m) for m in ("RIDGE", "SPLINE", "XGB")}, campaign_bonferroni_p=0.2)
-    out = decide_experiment(rows, ACC, {"DIR_RETURN_30|UPPER_HALF": "PASSED"}, VER_ALL)
+    rows = mk_rows({("DIR_RETURN_180", UPPER, m) for m in ("RIDGE", "SPLINE", "XGB")}, campaign_bonferroni_p=0.2)
+    out = decide_experiment(rows, ACC, {"DIR_RETURN_180|UPPER_HALF": "PASSED"}, VER_ALL)
     up = [r for r in out if r["state"] == UPPER]
     assert {r["decision"] for r in up} == {PROVISIONAL} and "campaign-level gates" in up[0]["rejection_reason"]
     assert A.is_status_of(r["decision"] for r in out) == PROVISIONAL
@@ -252,8 +252,8 @@ def test_campaign_level_gates_make_a_group_provisional_not_eligible():
 
 
 def test_path_verification_gates_model_agreement():
-    passing = {("DIR_RETURN_30", UPPER, m) for m in ("RIDGE", "SPLINE", "XGB")}
-    sens = {"DIR_RETURN_30|UPPER_HALF": "PASSED"}
+    passing = {("DIR_RETURN_180", UPPER, m) for m in ("RIDGE", "SPLINE", "XGB")}
+    sens = {"DIR_RETURN_180|UPPER_HALF": "PASSED"}
     none = decide_experiment(mk_rows(passing), ACC, sens, {})                                    # nothing verified yet
     assert {r["decision"] for r in none if r["state"] == UPPER} == {PROVISIONAL}
     assert A.is_status_of(r["decision"] for r in none) == PROVISIONAL                           # cannot be shortlist-eligible
@@ -261,22 +261,22 @@ def test_path_verification_gates_model_agreement():
     assert {r["decision"] for r in decide_experiment(mk_rows(passing), ACC, sens, fast) if r["state"] == UPPER} == {PROVISIONAL}
     two = {k: v for k, v in VER_ALL.items() if not k.endswith("XGB")}
     assert {r["decision"] for r in decide_experiment(mk_rows(passing), ACC, sens, two) if r["state"] == UPPER and r["model"] != "XGB"} == {SHORTLIST}
-    failed = dict(VER_ALL); failed["DIR_RETURN_30|XGB"] = {"label": "FAILED", "mode": "strong"}
+    failed = dict(VER_ALL); failed["DIR_RETURN_180|XGB"] = {"label": "FAILED", "mode": "strong"}
     out = decide_experiment(mk_rows(passing), ACC, sens, failed)
     assert next(r for r in out if r["model"] == "XGB" and r["state"] == UPPER)["decision"] == VERIF       # failed path rejected
     assert {r["decision"] for r in out if r["model"] != "XGB" and r["state"] == UPPER} == {SHORTLIST}     # other 2 still agree
-    failed2 = dict(failed); failed2["DIR_RETURN_30|SPLINE"] = {"label": "FAILED", "mode": "strong"}
+    failed2 = dict(failed); failed2["DIR_RETURN_180|SPLINE"] = {"label": "FAILED", "mode": "strong"}
     out2 = decide_experiment(mk_rows(passing), ACC, sens, failed2)
     assert next(r for r in out2 if r["model"] == "RIDGE" and r["state"] == UPPER)["decision"] == AGREE    # only 1 trustworthy model
 
 
 def test_sensitivity_veto_and_pending_states():
-    passing = {("DIR_RETURN_30", UPPER, m) for m in ("RIDGE", "SPLINE", "XGB")}
-    failed = decide_experiment(mk_rows(passing), ACC, {"DIR_RETURN_30|UPPER_HALF": "FAILED"}, VER_ALL)
+    passing = {("DIR_RETURN_180", UPPER, m) for m in ("RIDGE", "SPLINE", "XGB")}
+    failed = decide_experiment(mk_rows(passing), ACC, {"DIR_RETURN_180|UPPER_HALF": "FAILED"}, VER_ALL)
     assert {r["decision"] for r in failed if r["state"] == UPPER} == {SENS}
     pend = decide_experiment(mk_rows(passing), ACC, {}, VER_ALL)
     assert {r["decision"] for r in pend if r["state"] == UPPER} == {PROVISIONAL}
-    skipped = decide_experiment(mk_rows(passing), ACC, {"DIR_RETURN_30|UPPER_HALF": "SKIPPED_NO_PARAMETERS"}, VER_ALL)
+    skipped = decide_experiment(mk_rows(passing), ACC, {"DIR_RETURN_180|UPPER_HALF": "SKIPPED_NO_PARAMETERS"}, VER_ALL)
     assert {r["decision"] for r in skipped if r["state"] == UPPER} == {SHORTLIST}
 
 
@@ -293,7 +293,7 @@ def test_deterministic_ranking_rule_and_top5_cap():
     assert [r["trial_id"] for r in rank_trials(tie)] == ["T03", "T05", "T09"]            # final tie-break: trial_id ASC
     assert rank_trials([good_row(decision=PROVISIONAL), good_row(decision=STAT)]) == []  # only eligible trials are ranked
     rows = []
-    targets = ["DIR_RETURN_15", "DIR_RETURN_30", "DIR_RETURN_60", "DIR_PATH_SKEW_60"]
+    targets = ["DIR_RETURN_15", "DIR_RETURN_180", "DIR_RETURN_60", "DIR_PATH_SKEW_60"]
     for gi, (t, st) in enumerate([(t, s) for t in targets for s in (UPPER, "LOWER_HALF")]):
         for m in ("RIDGE", "SPLINE", "XGB"):
             rows.append(good_row(target=t, state=st, model=m, trial_id=f"{t}-{st}-{m}", decision=SHORTLIST,

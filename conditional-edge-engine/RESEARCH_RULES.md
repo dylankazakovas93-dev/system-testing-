@@ -1,4 +1,4 @@
-# RESEARCH RULES — conditional-edge-engine v1.2.0 (frozen v1 research rules; v1.2 lifecycle)
+# RESEARCH RULES — conditional-edge-engine v2.0.0 (frozen research rules in `frozen/v1/`; v2 targets and uplift floor; v1.2 lifecycle)
 
 > The engine may search only inside the predefined development (IS) research space. It stops and presents the human with the
 > entire in-sample selection history **and the configuration uncertainty (near-ties)** before it is technically permitted to touch the SELECTION HOLDOUT.
@@ -12,7 +12,7 @@ which problems I found. Nothing below has been run on real NQ data.
 
 ## 0. Gates that must never be weakened to make a test pass
 
-1 trade/week floor, 0.10 standardized-uplift floor, exactly 24 selection trials per experiment, 20 experiments per campaign,
+1 trade/week floor, 0.01 standardized-uplift floor (v2), exactly 24 selection trials per experiment, 20 experiments per campaign,
 2-of-3 model agreement, 70% year consistency, 4/5 fold consistency, the Bonferroni **and** BH universes, single-direction events,
 the same-session target rule, the human SELECTION HOLDOUT gate, and the CPCV 6-choose-2 specification. If a synthetic scenario fails one of
 them the **planted effect** is changed, never the rule. `tests/test_policy_invariants.py` pins the frozen constants.
@@ -63,8 +63,7 @@ revealed is a **new lineage** (`new_experiment.py --lineage-of EXP_xxxx`) that c
 ## 4. What is frozen (v1)
 
 * **56 features** (`FEATURE_BANK.yaml`), open-stamped bars, information-time features; NaN after warm-up is a hard `FeatureQualityFailure`. Unchanged from the original build.
-* **4 primary targets** — all **same-session**. An event whose longest (60-bar) forward window would cross the RTH close is `TARGET_TIMESTAMP_INELIGIBLE`,
-  decided from timestamps only (never from returns or outcomes), dropped before modelling and counted in the report. Diagnostic targets are restricted to in-session windows.
+* **4 primary targets (v2)**: `DIR_RETURN_15`, `DIR_RETURN_60`, `DIR_RETURN_180` and `DIR_PATH_SKEW_60`, all **same-session**. An event whose N-bar window would cross the RTH close is **not dropped**: its window is **truncated at the close** (effective horizon = whole bars left before 16:00, decided from timestamps only, never from outcomes) and the row carries `truncated=True` / `horizon_bars_effective`; the report splits results by full-horizon vs truncated events. Only an event with no complete forward bar before the close is `TARGET_TIMESTAMP_INELIGIBLE`. Diagnostic targets are restricted to in-session windows.
 * **3 models** (`MODEL_BANK.yaml`): Ridge, additive cubic spline + Ridge, XGBoost; unchanged since the original build (XGB uses `train_only_standardization`, §7 issue 1).
 * **2 states**: `UPPER_HALF` / `LOWER_HALF` around the train-only median of inner out-of-fold scores. No other threshold exists.
 * **Single-direction events only.** `direction_definition.values` must be `[1]` or `[-1]`; any event table with both signs, or with a sign other than the spec's, is `FAIL EVENT CONTRACT`.
@@ -79,7 +78,7 @@ revealed is a **new lineage** (`new_experiment.py --lineage-of EXP_xxxx`) that c
   (`campaign_bonferroni_p = min(raw_p×24E, 1)`, `campaign_q`, universe = every revealed trial of the campaign including rejected experiments, models and sides).
   Campaign values are recomputed over all revealed trials after **every** new reveal, and earlier experiments' statuses are re-evaluated retroactively
   (candidates can be downgraded to `IS_NO_CANDIDATE`; tested).
-* **IS shortlist eligibility of one model trial** (`ACCEPTANCE_RULES.yaml`) = all of: selected frequency ≥ 1.0/week (events ÷ eligible weeks **from bars**); standardized uplift ≥ 0.10;
+* **IS shortlist eligibility of one model trial** (`ACCEPTANCE_RULES.yaml`) = all of: selected frequency ≥ 1.0/week (events ÷ eligible weeks **from bars**); standardized uplift ≥ 0.01 (v2: uplift must beat the null by 0.01 sd; the null-based gates — adjusted p, CI > 0, year/fold/model consistency — carry the burden of proof);
   **absolute selected effect > 0** (a trial with positive uplift but non-positive selected effect is `DIAGNOSTIC_CONDITIONAL_IMPROVEMENT`, never eligible); bootstrap CI lower bound > 0;
   `experiment_q`, `campaign_q`, `experiment_bonferroni_p`, `campaign_bonferroni_p` all ≤ 0.05; year consistency; fold consistency. A TARGET|SIDE group needs ≥ 2 of 3 eligible models.
   The statuses are `IS_REJECTED`, `IS_PROVISIONAL_CANDIDATE` (gates pass but verification/sensitivity not yet complete), `IS_SHORTLIST_ELIGIBLE`.
@@ -167,7 +166,7 @@ rows and its `future_label_poisoning` / `future_feature_poisoning` checks are "n
 1. Window conventions, VR/Hurst windows, session VWAP, `eligible_session` ⊂ `[09:31, 16:00)`, ties belong to neither state — as in the original build (see `features/` docstrings and `frozen/v1/FEATURE_BANK.yaml`).
 2. **Blocks are cut by event count, not by calendar,** and snapped to exchange-local day starts so no trading day is split. The block cut uses timestamps only.
 3. **The `years` in the year-consistency rule are UTC calendar years** of `event_time` (matches the external verifier's fold construction); the trading week is the ISO week of the exchange-local date.
-4. **Selection-holdout evidence-gate constants are my definition.** You specified BH + Bonferroni across all approved config × 3 model evaluations and ≥ 2/3 models; the remaining numeric gates (frequency ≥ 1/week, uplift ≥ 0.10, effect > 0, CI low > 0) mirror the IS gates (`selection_holdout_evidence:` in `ACCEPTANCE_RULES.yaml`). They are informational labels on selection data, not a confirmation.
+4. **Selection-holdout evidence-gate constants are my definition.** You specified BH + Bonferroni across all approved config × 3 model evaluations and ≥ 2/3 models; the remaining numeric gates (frequency ≥ 1/week, uplift ≥ 0.01, effect > 0, CI low > 0) mirror the IS gates (`selection_holdout_evidence:` in `ACCEPTANCE_RULES.yaml`). They are informational labels on selection data, not a confirmation.
 5. **The CPCV group rule (≥ 2 of 3 models) mirrors model agreement;** you specified the per-model pass rule only.
 6. **PBO configurations** = the (target, side, model) configs of the one final configuration (3 highly dependent configs); the diagnostic is descriptive only.
 7. **Permutation statistic** = uplift, one-sided; `p = (1+#≥)/(B+1)`; bootstrap CI = percentile interval over resampled weeks.
@@ -181,8 +180,8 @@ rows and its `future_label_poisoning` / `future_feature_poisoning` checks are "n
 1. **XGBoost is not invariant to the unit of the target — ACTED ON in the original build, reversible.** `reg_alpha`/`reg_lambda` are absolute; on log-return targets (sd ≈ 1e-3) the literal model fits a constant. `MODEL_BANK.yaml: target_transform: train_only_standardization`; set `none` to reproduce the literal spec. **Please confirm.**
 2. **Previous issue 2 (uplift vs parent could promote a losing state) is now addressed by the absolute `selected_effect > 0` gate.** The two states are still not independent (`uplift_LOWER = (n_UPPER/n_LOWER)·uplift_UPPER`, tested), so there are ≤ 12 independent p-values; Bonferroni over 24 and BH over 24 are conservative accordingly.
 3. **Previous issue 3 (mixed-direction events) is now closed by the single-direction rule;** the cost is that a bidirectional indicator consumes two campaign slots.
-4. **Previous issue 5 (windows across session gaps) is now closed by the same-session rule,** at the price of dropping events near the close (counted and reported).
-5. **The 0.10 standardized-uplift floor is demanding at 15–60 minute horizons;** most real signals are expected to be `REJECTED_INSUFFICIENT_UPLIFT`.
+4. **Previous issue 5 (windows across session gaps) is now closed by the same-session rule,** superseded in v2: events near the close are kept with a window truncated at the close and flagged (no event is dropped for that reason).
+5. **The 0.01 uplift floor is permissive by design (v2):** a statistically real but economically tiny effect can pass the IS gates. The 3-tick round-trip cost is NOT a gate in this engine; it matters for the later bracketing/monetisation study. Truncated (late-session) 180-minute windows are shorter than 180 minutes: read the full-horizon vs truncated split in section WM.
 6. **Short development windows make the year gate nearly unanimous:** with 3 eligible years 70% requires 3/3, with 2 it requires 2/2, and `YEAR_CONCENTRATION_WARNING` is structurally likely with ≤ 3 years. Choose a long development window.
 7. **SELECTION HOLDOUT multiplicity and access are campaign-wide, with a hard campaign cap:** `MAX_SELECTION_HOLDOUT_CONFIGS_PER_CAMPAIGN = 6` approved configs across ALL experiments (2 per experiment) ⇒ at most 6 × 3 = **18** evaluations in the one family. More than 6 refuses the freeze atomically (nothing is written or changed); the cap is frozen policy and is never relaxed because Bonferroni gets strict (×18 at most). Exactly 6 is accepted; 0 never opens SELECTION HOLDOUT.
 8. **The verifier pin** (`624c8b7f…`, on branch `claude/relaxed-lamport-119uli` of `engine-verification-`) is the commit that introduced `scripts/verify_research.py`; there are no tags. **The human must confirm or replace it.**

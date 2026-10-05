@@ -156,14 +156,14 @@ def test_event_time_between_bars_uses_the_first_bar_that_opens_at_or_after_it():
     assert _elig(bars, "2024-01-08", "14:00:00", 120) and not _elig(bars, "2024-01-08", "14:00:01", 120)
 
 
-def test_path_rule_equals_the_primary_target_rule_at_60_bars_for_every_minute_of_the_day():
-    from engine.target_engine import target_timestamp_ineligible
+def test_path_rule_is_the_same_session_arithmetic_at_60_bars_for_every_minute_of_the_day():
+    from engine.target_engine import session_close_utc
     day = "2024-07-08"
     bars = _day(day)
     minutes = pd.date_range(f"{day} 09:31", f"{day} 15:59", freq="1min", tz=NY).tz_convert("UTC")
     ev = pd.DataFrame({"event_time": minutes, "direction": 1})
     T = pdx.make_paths(bars, ev, np.full(len(ev), 0.01), F)
-    assert (T.elig[60] == ~target_timestamp_ineligible(minutes, F)).all()                      # same arithmetic as the frozen primary-target rule
+    assert (T.elig[60] == np.asarray(minutes + 60 * F.interval <= session_close_utc(minutes, F))).all()     # event + 60 bars must end by the close (the path layer keeps its own same-session rule)
     local = minutes.tz_convert(NY)
     for h, last in LATEST.items():
         expected = np.array([t.strftime("%H:%M") <= last for t in local])
@@ -689,7 +689,7 @@ class TestPipeline:
         ws = reg.Workspace(dst)
         f = experiment_dir(ws, exp) / "results" / "PATH_DIAGNOSTICS.json"
         f.write_text(f.read_text().replace('"promotion_eligible":false', '"promotion_eligible":true', 1))
-        human_approval(ws, exp, [f"{exp}|DIR_RETURN_30|UPPER_HALF"])
+        human_approval(ws, exp, [f"{exp}|DIR_RETURN_180|UPPER_HALF"])
         with pytest.raises(ApprovalError, match="PATH_DIAGNOSTICS.json changed|PATH_DIAGNOSTICS.json was edited|edited"):
             validate_approval(ws, exp)
 

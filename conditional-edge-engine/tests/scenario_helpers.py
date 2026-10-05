@@ -136,6 +136,11 @@ def proposable(ws, exp, cluster_index=0):
     return list(j["NT_configuration_uncertainty"]["clusters"][cluster_index]["proposable_for_holdout"])
 
 
+def pair_60_first(cfgs):
+    """Order a near-tied 15/60 pair as [60, 15]: with tied labels the IS rank between them is arbitrary, so tests address them by target."""
+    return sorted(cfgs, key=lambda c: "DIR_RETURN_15" in c)
+
+
 def human_approval(ws, exp, configs, **override):
     """TEST CODE PLAYING THE HUMAN: writes approvals/EXP_xxxx_SELECTION_HOLDOUT_APPROVAL.yaml for the exact frozen state.
     (No production script or LLM may do this - AGENTS.md rule 1.)  ``configs`` are config ids '<exp>|<TARGET>|<STATE>'."""
@@ -225,15 +230,15 @@ def finalize_config(ws, exp, tables, config, *, run_cpcv=True, **override):
 
 
 # table fixtures: which targets carry the planted relation (target_scale) -------------------------------------------------------------------------
-CLEAR_WINNER = dict(signal="linear", slope=0.35, target_scale={"DIR_RETURN_15": 0.0, "DIR_RETURN_60": 0.0, "DIR_PATH_SKEW_60": 0.0})   # only DIR_RETURN_30 eligible
-NEAR_TIE_PAIR = dict(signal="linear", slope=0.35, target_scale={"DIR_RETURN_30": 0.0, "DIR_PATH_SKEW_60": 0.0})                         # 15 and 60 near-tie per side
+CLEAR_WINNER = dict(signal="linear", slope=0.35, target_scale={"DIR_RETURN_15": 0.0, "DIR_RETURN_60": 0.0, "DIR_PATH_SKEW_60": 0.0})   # only DIR_RETURN_180 eligible
+NEAR_TIE_PAIR = dict(signal="linear", slope=0.35, target_scale={"DIR_RETURN_180": 0.0, "DIR_PATH_SKEW_60": 0.0}, tie={"DIR_RETURN_60": "DIR_RETURN_15"})                         # 15 and 60 near-tie per side
 
 
 def make_tie_tables(**kw):
     """Event tables where DIR_RETURN_15 and DIR_RETURN_60 carry the same planted relation AND the same noise (60's labels are 15's): the pair is
-    near-tied on both sides by construction, for any seed. DIR_RETURN_30 / path-skew carry no effect."""
+    near-tied on both sides by construction, for any seed. DIR_RETURN_180 / path-skew carry no effect."""
     kw.setdefault("signal", "linear")
-    kw["target_scale"] = {"DIR_RETURN_30": 0.0, "DIR_PATH_SKEW_60": 0.0}
+    kw["target_scale"] = {"DIR_RETURN_180": 0.0, "DIR_PATH_SKEW_60": 0.0}
     events, features, eligible, targets, cal = make_event_tables(**kw)
     targets = {k: v.copy() for k, v in targets.items()}
     targets["DIR_RETURN_60"]["value"] = targets["DIR_RETURN_15"]["value"].to_numpy().copy()

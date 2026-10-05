@@ -7,6 +7,6 @@ campaign_id: C001
 manifest_sha256: "<from scripts/show_approval_hashes.py --experiment EXP_XXXX --final>"
 is_report_sha256: "<from scripts/show_approval_hashes.py --experiment EXP_XXXX --final>"
 selection_holdout_report_sha256: null   # null if the selection holdout was skipped; otherwise the hash of results/SELECTION_HOLDOUT_REPORT.json
-selected_config_id: "EXP_XXXX|DIR_RETURN_30|UPPER_HALF"
+selected_config_id: "EXP_XXXX|DIR_RETURN_180|UPPER_HALF"
 selected_by: HUMAN_USER
 selection_note: "why this one configuration (HOLDOUT_PREFERRED_CONFIG is advisory only)"

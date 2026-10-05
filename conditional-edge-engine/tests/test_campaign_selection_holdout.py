@@ -424,7 +424,7 @@ class TestCampaignConfigCap:
         ws = clone(four[0], tmp_path)
         ids = four[1]
         self.approve(ws, ids, (1, 0, 0, 0))
-        human_approval(ws, ids[1], proposable(ws, ids[1], 0) + ["EXP_X|DIR_RETURN_30|UPPER_HALF"])      # 3 configs for one experiment, only 5 campaign-wide
+        human_approval(ws, ids[1], proposable(ws, ids[1], 0) + ["EXP_X|DIR_RETURN_180|UPPER_HALF"])      # 3 configs for one experiment, only 5 campaign-wide
         before = tree_snapshot(ws)
         with pytest.raises(ApprovalError, match="MAX_SELECTION_HOLDOUT_CONFIGS_PER_EXPERIMENT = 2"):
             freeze_campaign_selection_holdout(ws, "C001")

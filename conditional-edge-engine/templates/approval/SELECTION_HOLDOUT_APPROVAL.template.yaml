@@ -9,6 +9,6 @@ near_tie_cluster_id: NEAR_TIE_CLUSTER_01
 approved: true
 approved_by: HUMAN_USER
 approved_configs:                 # config ids "<experiment>|<TARGET>|<STATE>"; each runs RIDGE, SPLINE and XGB
-  - "EXP_XXXX|DIR_RETURN_30|UPPER_HALF"
+  - "EXP_XXXX|DIR_RETURN_180|UPPER_HALF"
   - "EXP_XXXX|DIR_RETURN_60|UPPER_HALF"
 approval_note: "why I am spending part of the selection holdout on these near-tied configurations"

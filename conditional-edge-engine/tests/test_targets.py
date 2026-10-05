@@ -33,11 +33,10 @@ def test_long_and_short_signs_hand_calculated():
     ev_short = H.events_at(bars, [0], direction=-1)
     tl = compute_primary_targets(bars, ev_long, F)
     ts = compute_primary_targets(bars, ev_short, F)
-    # 15th forward bar is bar 15 -> close 101 ; 30th -> bar 30 close 98 ; 60th -> bar 60 close 104
+    # 15th forward bar is bar 15 -> close 101 ; 60th -> bar 60 close 104
     assert tl["DIR_RETURN_15"]["value"].iloc[0] == pytest.approx(math.log(101 / 100))
     assert ts["DIR_RETURN_15"]["value"].iloc[0] == pytest.approx(-math.log(101 / 100))
-    assert tl["DIR_RETURN_30"]["value"].iloc[0] == pytest.approx(math.log(98 / 100))
-    assert ts["DIR_RETURN_30"]["value"].iloc[0] == pytest.approx(-math.log(98 / 100))
+    assert "DIR_RETURN_180" not in tl or len(tl["DIR_RETURN_180"]) == 0         # only 69 forward bars exist: the 180-bar window is unresolved (omitted by data end, not truncated)
     assert tl["DIR_RETURN_60"]["value"].iloc[0] == pytest.approx(math.log(104 / 100))
     # long: MFE = log(104/100) (bar 60 high 104 > bar1 high 103) ; MAE = log(96/100)
     mfe_l, mae_l = math.log(104 / 100), math.log(96 / 100)
@@ -76,7 +75,7 @@ def test_target_bars_start_at_event_time_and_exclude_signal_bar():
 
 
 def test_signal_bar_movement_never_enters_target():
-    bars = bars_for_targets(200, seed=3)
+    bars = bars_for_targets(400, seed=3)
     pos = 60
     ev = H.events_at(bars, [pos])
     a = compute_primary_targets(bars, ev, F)
@@ -104,17 +103,17 @@ def test_unresolved_tail_events_omitted_by_timestamp_only():
 
 
 def test_to_long_shape_and_names():
-    bars = bars_for_targets(200, seed=6)
+    bars = bars_for_targets(400, seed=6)
     ev = H.events_at(bars, [10, 20])
     long = to_long(compute_primary_targets(bars, ev, F))
-    assert set(long["target_name"]) == {"DIR_RETURN_15", "DIR_RETURN_30", "DIR_RETURN_60", "DIR_PATH_SKEW_60"}
+    assert set(long["target_name"]) == {"DIR_RETURN_15", "DIR_RETURN_60", "DIR_RETURN_180", "DIR_PATH_SKEW_60"}
     assert len(long) == 8
     assert (long["target_start"] >= pd.to_datetime(ev["event_time"].iloc[0])).all()
 
 
-def test_exactly_four_primary_targets():
+def test_exactly_four_primary_targets_15_60_180_and_path_skew():
     from engine.common import primary_target_names
-    assert primary_target_names(F) == ["DIR_RETURN_15", "DIR_RETURN_30", "DIR_RETURN_60", "DIR_PATH_SKEW_60"]
+    assert primary_target_names(F) == ["DIR_RETURN_15", "DIR_RETURN_60", "DIR_RETURN_180", "DIR_PATH_SKEW_60"]
 
 
 def test_diagnostic_targets_computed_but_separate():
@@ -144,39 +143,66 @@ def test_window_span_violation_counter():
 
 # ================================= same-session primary targets =========================================
 def test_target_timestamp_ineligible_is_decided_from_clock_and_session_rules_only():
-    from engine.target_engine import (TargetSessionError, max_primary_horizon_bars, session_close_utc,
-                                      target_timestamp_ineligible)
-    assert max_primary_horizon_bars(F) == 60
-    # winter (EST): close 16:00 NY = 21:00 UTC ; summer (EDT): close = 20:00 UTC (DST-safe)
-    t = pd.DatetimeIndex(["2020-01-08 20:00", "2020-01-08 20:01", "2020-06-08 19:00", "2020-06-08 19:01"], tz="UTC")
-    assert target_timestamp_ineligible(t, F).tolist() == [False, True, False, True]
+    from engine.target_engine import max_primary_horizon_bars, session_close_utc, target_timestamp_ineligible
+    assert max_primary_horizon_bars(F) == 180
+    # winter (EST): close 16:00 NY = 21:00 UTC ; summer (EDT): close = 20:00 UTC (DST-safe). Ineligible = no complete forward bar before the close.
+    t = pd.DatetimeIndex(["2020-01-08 20:58", "2020-01-08 20:59", "2020-01-08 20:59:30", "2020-01-08 21:00",
+                          "2020-06-08 19:58", "2020-06-08 19:59", "2020-06-08 19:59:30"], tz="UTC")
+    assert target_timestamp_ineligible(t, F).tolist() == [False, False, True, True, False, False, True]
     assert session_close_utc(t, F)[0] == pd.Timestamp("2020-01-08 21:00", tz="UTC")
-    assert session_close_utc(t, F)[2] == pd.Timestamp("2020-06-08 20:00", tz="UTC")
-    # eligibility never looks at outcomes: identical for any price path (function takes timestamps only)
+    assert session_close_utc(t, F)[4] == pd.Timestamp("2020-06-08 20:00", tz="UTC")
     import inspect
-    assert list(inspect.signature(target_timestamp_ineligible).parameters) == ["event_time", "frozen"]
+    assert list(inspect.signature(target_timestamp_ineligible).parameters) == ["event_time", "frozen"]       # timestamps only, never outcomes
 
 
-def test_primary_target_crossing_the_rth_close_is_refused_not_silently_truncated():
-    from engine.target_engine import TargetSessionError
-    # RTH-only bars: 09:30-16:00 NY on two days; an event at 15:30 NY has a 60-bar window that would run into the next day
+def _two_sessions(days=("2020-01-08", "2020-01-09")):
     idx = []
-    for day in ("2020-01-08", "2020-01-09"):
+    for day in days:
         idx += list(pd.date_range(f"{day} 14:30", periods=390, freq="1min", tz="UTC"))
     idx = pd.DatetimeIndex(idx)
     closes = np.linspace(100, 120, len(idx))
-    bars = pd.DataFrame({"open": closes, "high": closes + 1, "low": closes - 1, "close": closes, "volume": 1.0}, index=idx)
-    late = pd.DataFrame({"event_id": ["L"], "event_time": [pd.Timestamp("2020-01-08 20:30", tz="UTC")], "direction": 1})   # 15:30 NY
-    with pytest.raises(TargetSessionError, match="TARGET_TIMESTAMP_INELIGIBLE"):
-        compute_primary_targets(bars, late, F)
-    ok = pd.DataFrame({"event_id": ["O"], "event_time": [pd.Timestamp("2020-01-08 19:59", tz="UTC")], "direction": 1})      # 14:59 NY
-    t = compute_primary_targets(bars, ok, F)
-    assert (pd.DatetimeIndex(t["DIR_RETURN_60"]["target_end"]) <= pd.Timestamp("2020-01-08 21:00", tz="UTC")).all()
-    # a gap INSIDE the session that pushes the 60th bar past the close is also refused
-    idx3 = pd.DatetimeIndex(list(idx) + list(pd.date_range("2020-01-10 14:30", periods=390, freq="1min", tz="UTC")))
-    c3 = np.linspace(100, 130, len(idx3))
-    bars3 = pd.DataFrame({"open": c3, "high": c3 + 1, "low": c3 - 1, "close": c3, "volume": 1.0}, index=idx3)
-    gap = bars3.drop(bars3.index[390 + 340:390 + 351])                     # 11 bars missing at 15:10-15:20 NY on day 2
+    return pd.DataFrame({"open": closes, "high": closes + 1, "low": closes - 1, "close": closes, "volume": 1.0}, index=idx)
+
+
+def test_windows_that_would_cross_the_rth_close_are_truncated_at_the_close_and_flagged_not_dropped():
+    bars = _two_sessions()
+    ev = pd.DataFrame({"event_id": ["early", "mid", "late"], "direction": 1,
+                       "event_time": [pd.Timestamp("2020-01-08 15:00", tz="UTC"),      # 10:00 NY: 180 bars fit
+                                      pd.Timestamp("2020-01-08 19:59", tz="UTC"),      # 14:59 NY: 61 bars to the close
+                                      pd.Timestamp("2020-01-08 20:30", tz="UTC")]})    # 15:30 NY: 30 bars to the close
+    t = compute_primary_targets(bars, ev, F)
+    eff = {k: dict(zip(v["event_id"], v["horizon_bars_effective"])) for k, v in t.items()}
+    trunc = {k: dict(zip(v["event_id"], v["truncated"])) for k, v in t.items()}
+    assert eff["DIR_RETURN_180"] == {"early": 180, "mid": 61, "late": 30} and trunc["DIR_RETURN_180"] == {"early": False, "mid": True, "late": True}
+    assert eff["DIR_RETURN_60"] == {"early": 60, "mid": 60, "late": 30} and trunc["DIR_RETURN_60"] == {"early": False, "mid": False, "late": True}
+    assert eff["DIR_RETURN_15"] == {"early": 15, "mid": 15, "late": 15} and not any(trunc["DIR_RETURN_15"].values())
+    assert trunc["DIR_PATH_SKEW_60"] == {"early": False, "mid": False, "late": True}
+    assert all(len(v) == 3 for v in t.values())                                              # no event was dropped from any target
+    for name in ("DIR_RETURN_60", "DIR_RETURN_180", "DIR_PATH_SKEW_60"):                     # the truncated window ends exactly at the session close
+        late = t[name][t[name]["event_id"] == "late"].iloc[0]
+        assert late["target_end"] == pd.Timestamp("2020-01-08 21:00", tz="UTC")
+    # the truncated 180-bar return is the return to the last in-session bar
+    o, c = bars["open"], bars["close"]
+    first = bars.index.get_loc(pd.Timestamp("2020-01-08 20:30", tz="UTC"))
+    assert t["DIR_RETURN_180"].set_index("event_id").loc["late", "value"] == pytest.approx(math.log(c.iloc[first + 29] / o.iloc[first]))
+
+
+def test_nothing_after_the_session_close_ever_enters_a_truncated_target():
+    bars = _two_sessions()
+    ev = pd.DataFrame({"event_id": ["late"], "event_time": [pd.Timestamp("2020-01-08 20:30", tz="UTC")], "direction": 1})
+    a = compute_primary_targets(bars, ev, F)
+    wrecked = bars.copy()
+    after = wrecked.index >= pd.Timestamp("2020-01-08 21:00", tz="UTC")
+    wrecked.loc[after, ["open", "high", "low", "close"]] = 1e6                              # next session's rows destroyed
+    b = compute_primary_targets(wrecked, ev, F)
+    for k in a:
+        assert a[k]["value"].tolist() == b[k]["value"].tolist(), k
+
+
+def test_a_gap_inside_the_session_that_pushes_a_window_past_the_close_is_still_refused():
+    from engine.target_engine import TargetSessionError
+    bars = _two_sessions(days=("2020-01-08", "2020-01-09", "2020-01-10"))                # a third session so the window can actually be completed
+    gap = bars.drop(bars.index[390 + 340:390 + 351])                                         # 11 bars missing at 15:10-15:20 NY on day 2
     inside = pd.DataFrame({"event_id": ["G"], "event_time": [pd.Timestamp("2020-01-09 20:00", tz="UTC")], "direction": 1})
     with pytest.raises(TargetSessionError):
         compute_primary_targets(gap, inside, F)

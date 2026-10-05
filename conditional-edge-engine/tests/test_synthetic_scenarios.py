@@ -15,7 +15,7 @@ from engine.synthetic import make_event_tables
 from tests.scenario_helpers import pass_all_paths, pass_sensitivity, run_is_tables
 
 F = load_frozen()
-TARGETS = ["DIR_RETURN_15", "DIR_RETURN_30", "DIR_RETURN_60", "DIR_PATH_SKEW_60"]
+TARGETS = ["DIR_RETURN_15", "DIR_RETURN_180", "DIR_RETURN_60", "DIR_PATH_SKEW_60"]
 CANDIDATE = {SHORTLIST, PROVISIONAL}
 
 
@@ -90,7 +90,7 @@ class TestLinearEdge:
     def test_effect_size_matches_planted_truth(self, res):
         # planted: y = 0.35*z + N(0,1). Upper half of a good score has E[y|upper] ~ 0.35*0.8 = 0.28; sd ~ 1.06
         _, _, t, _, _ = res
-        r = q(t, target="DIR_RETURN_30", model="RIDGE", state="UPPER_HALF").iloc[0]
+        r = q(t, target="DIR_RETURN_180", model="RIDGE", state="UPPER_HALF").iloc[0]
         assert 0.15 < r["standardized_uplift"] < 0.32 and 0.15 < r["selected_effect"] < 0.40
 
 
@@ -112,7 +112,7 @@ class TestNonlinearEdge:
 
     def test_promotion_is_at_target_side_level_with_all_models_still_shown(self, res):
         _, _, t, _, _ = res
-        g = q(t, target="DIR_RETURN_30", state="UPPER_HALF")
+        g = q(t, target="DIR_RETURN_180", state="UPPER_HALF")
         assert sorted(g["model"]) == ["RIDGE", "SPLINE", "XGB"] and (g["decision"] != "PENDING").all()
         assert (g["decision"] == SHORTLIST).sum() == 2                 # exactly the 2-of-3 that pass
 
@@ -152,7 +152,7 @@ class TestSpuriousTail:
     def test_tail_effect_visible_in_deciles_but_cannot_promote(self, res):
         ws, exp, t, panels, _ = res
         assert not t["decision"].isin(CANDIDATE).any()
-        dec = panels[("DIR_RETURN_30", "XGB")].deciles["deciles"]
+        dec = panels[("DIR_RETURN_180", "XGB")].deciles["deciles"]
         assert len(dec) == 10 and dec[-1]["mean_target"] > dec[0]["mean_target"] + 0.05      # visible as a diagnostic...
         assert len(t) == 24 and (t["standardized_uplift"] < 0.10).all()                       # ...but adds no selection trial
 

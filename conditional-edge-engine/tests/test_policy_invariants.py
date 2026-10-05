@@ -33,8 +33,8 @@ def test_frozen_feature_bank_matches_the_specification():
 
 
 def test_frozen_targets_models_policy_acceptance_values():
-    assert [t["name"] for t in F.target_bank["primary_targets"]] == ["DIR_RETURN_15", "DIR_RETURN_30", "DIR_RETURN_60", "DIR_PATH_SKEW_60"]
-    assert F.target_bank["session_rule"] == "primary_targets_must_resolve_inside_event_rth_session"
+    assert [t["name"] for t in F.target_bank["primary_targets"]] == ["DIR_RETURN_15", "DIR_RETURN_60", "DIR_RETURN_180", "DIR_PATH_SKEW_60"]
+    assert F.target_bank["session_rule"] == "primary_targets_truncate_at_event_rth_session_close"
     m = F.model_bank["models"]
     assert list(m) == ["RIDGE", "SPLINE", "XGB"]
     assert m["RIDGE"]["params"] == {"alpha": 10.0, "fit_intercept": True}
@@ -53,7 +53,7 @@ def test_frozen_targets_models_policy_acceptance_values():
     assert (p["cpcv"]["n_groups"], p["cpcv"]["n_test_groups"], p["cpcv"]["n_splits"]) == (6, 2, 15) and 15 == len(list(__import__("itertools").combinations(range(6), 2)))
     assert p["single_direction_events_only"] is True and p["shortlist"]["top_groups_reported"] == 5
     a = F.acceptance
-    assert a["min_selected_frequency_per_week"] == 1.0 and a["min_standardized_uplift"] == 0.10 and a["selected_effect_must_exceed"] == 0.0
+    assert a["min_selected_frequency_per_week"] == 1.0 and a["min_standardized_uplift"] == 0.01 and a["selected_effect_must_exceed"] == 0.0
     assert (a["max_experiment_q"], a["max_campaign_q"]) == (0.05, 0.05) and p["ci_level"] == 0.95
     assert a["bonferroni"] == {"max_experiment_p": 0.05, "max_campaign_p": 0.05}
     assert a["year_consistency"] == {"min_selected_events_for_eligible_year": 20, "min_positive_effect_year_fraction": 0.70,
@@ -188,7 +188,7 @@ def test_seeds_are_fixed_everywhere_no_unseeded_randomness():
 
 
 def test_frozen_v1_release_version_and_verifier_pin_are_exact():
-    assert (CODE_ROOT / "ENGINE_VERSION").read_text().strip() == "v1.2.1"
+    assert (CODE_ROOT / "ENGINE_VERSION").read_text().strip() == "v2.0.0"
     pin = F.__class__ and __import__("engine.verifier_bridge", fromlist=["x"]).verifier_pin()
     assert pin["commit"] == "624c8b7f0502abf6c5d453d501e96e3172367035" and pin["required_mode"] == "strong"
     assert pin["required_models"] == ["RIDGE", "SPLINE", "XGB"]

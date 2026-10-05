@@ -56,15 +56,15 @@ def test_cpcv_purges_training_events_whose_label_windows_overlap_a_held_out_regi
 
 
 def test_cpcv_embargo_is_applied_at_every_held_out_boundary_on_both_sides():
-    emb = 60 * 60 * 10**9                                                         # 60 bars of information time (max primary horizon)
+    emb = 180 * 60 * 10**9                                                        # 180 bars of information time (max primary horizon)
     from engine.target_engine import max_primary_horizon_bars
     assert emb == max_primary_horizon_bars(F) * int(F.interval.value)
     regions = [(_day(10), _day(20)), (_day(40), _day(50))]
     minute = 60 * 10**9
-    probes = {"before_r1_inside_embargo": _day(10) - 30 * minute, "before_r1_outside": _day(10) - 61 * minute,
-              "after_r1_inside_embargo": _day(20) + 30 * minute, "after_r1_outside": _day(20) + 61 * minute,
-              "before_r2_inside_embargo": _day(40) - 59 * minute, "before_r2_outside": _day(40) - 61 * minute,
-              "after_r2_inside_embargo": _day(50) + 59 * minute, "after_r2_outside": _day(50) + 61 * minute,
+    probes = {"before_r1_inside_embargo": _day(10) - 90 * minute, "before_r1_outside": _day(10) - 181 * minute,
+              "after_r1_inside_embargo": _day(20) + 90 * minute, "after_r1_outside": _day(20) + 181 * minute,
+              "before_r2_inside_embargo": _day(40) - 179 * minute, "before_r2_outside": _day(40) - 181 * minute,
+              "after_r2_inside_embargo": _day(50) + 179 * minute, "after_r2_outside": _day(50) + 181 * minute,
               "far": _day(30)}
     ev = np.array(list(probes.values()), dtype=np.int64)
     eff = ev + 1                                                                   # tiny labels: only the embargo can remove them
@@ -119,7 +119,7 @@ def test_pbo_diagnostic_cannot_influence_verdicts_or_ranking(monkeypatch):
     from engine.synthetic import make_event_tables
     tables = make_event_tables(years=range(2015, 2021), events_per_week=6, signal="linear", slope=0.4, seed=3)
     events, features, eligible, targets, calendar = tables
-    groups = ["DIR_RETURN_30|UPPER_HALF"]
+    groups = ["DIR_RETURN_180|UPPER_HALF"]
     a = C.run_cpcv_tables(events, features, targets, eligible, calendar, groups, F, models=["RIDGE"])
     monkeypatch.setattr(C, "pbo_diagnostic", lambda *x, **k: {"pbo": 0.999, "status": "COMPUTED", "n_configs": 99})
     b = C.run_cpcv_tables(events, features, targets, eligible, calendar, groups, F, models=["RIDGE"])
@@ -156,7 +156,8 @@ def test_cpcv_fits_are_train_only_purged_embargoed_and_use_no_global_statistics(
     eff = pd.DatetimeIndex(tdf["effective_target_end"]).as_unit("ns").asi8
     recs = res["records"][("DIR_RETURN_60", "UPPER_HALF", "RIDGE")]
     assert len(recs) == 15 and all(r["valid"] for r in recs)
-    emb = 60 * int(F.interval.value)
+    from engine.target_engine import max_primary_horizon_bars
+    emb = max_primary_horizon_bars(F) * int(F.interval.value)
     # every FINAL fit of a split used exactly the legal training rows of that split (the other fits are inner OOF fits)
     finals = [l for l in _Probe.log if len(l[1]) in {r["n_train"] for r in recs}]
     for r in recs:
@@ -195,7 +196,7 @@ def test_selection_holdout_evidence_gates_and_group_rule_unit():
     assert [r["gates_pass"] for r in rows] == [True, True, False]                    # negative selected effect fails the SELECTION HOLDOUT gate too
     assert rows[0]["selection_holdout_trials_in_family"] == 3 and rows[0]["selection_holdout_bonferroni_p"] == pytest.approx(0.003)
     assert group_verdicts(rows, rule)["G|U"] == {"models_passing": 2, "models": ["RIDGE", "SPLINE"], "evidence_gates_met": True}
-    one = selection_holdout_evaluations([row("RIDGE"), row("SPLINE", standardized_uplift=0.05), row("XGB", selected_frequency=0.5)], rule)
+    one = selection_holdout_evaluations([row("RIDGE"), row("SPLINE", standardized_uplift=0.005), row("XGB", selected_frequency=0.5)], rule)
     assert group_verdicts(one, rule)["G|U"]["evidence_gates_met"] is False                      # 1 of 3 is not a confirmation
     big_family = selection_holdout_evaluations([row(m, group=f"G{g}|U", raw_p=0.01) for g in range(2) for m in ("RIDGE", "SPLINE", "XGB")], rule)
     assert big_family[0]["selection_holdout_bonferroni_p"] == pytest.approx(0.06) and not big_family[0]["gates_pass"]    # 0.01 * 6 > 0.05

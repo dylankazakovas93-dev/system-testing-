@@ -14,10 +14,11 @@ Explicit sign conventions, direction d in {-1,+1}, N forward bars, P0 as above:
 
 Only the four PRIMARY targets can take part in selection. Diagnostic targets are report-only.
 
-SAME-SESSION RULE (v1): a primary target window must resolve inside the event's own RTH session. An event whose
-max-horizon window would end after the RTH close is TARGET_TIMESTAMP_INELIGIBLE (decided from timestamps and session
-rules only, never from outcomes); the experiment pipeline drops such events up front, and ``compute_primary_targets``
-raises if it is ever handed a window that actually crosses the close (a data gap inside the session).
+SAME-SESSION RULE (v2): a primary target window resolves inside the event's own RTH session. An event whose N-bar window would
+end after the RTH close is NOT dropped: the window is TRUNCATED at the close (effective horizon = bars remaining before the close,
+from timestamps and session rules only, never from outcomes) and the row carries ``truncated=True`` / ``horizon_bars_effective``.
+Only an event with no complete forward bar before the close is TARGET_TIMESTAMP_INELIGIBLE. ``compute_primary_targets`` raises if a
+window actually crosses the close (a data gap inside the session).
 """
 from __future__ import annotations
 
@@ -46,10 +47,17 @@ def session_close_utc(times, frozen: Frozen) -> pd.DatetimeIndex:
 
 
 def target_timestamp_ineligible(event_time, frozen: Frozen) -> np.ndarray:
-    """TARGET_TIMESTAMP_INELIGIBLE mask: event_time + max_horizon*interval > RTH close of the event's session."""
+    """TARGET_TIMESTAMP_INELIGIBLE mask (v2): not even ONE complete forward bar fits before the RTH close of the event's session.
+    Longer horizons are truncated at the close, not dropped."""
     idx = pd.DatetimeIndex(event_time).tz_convert("UTC")
-    end = idx + max_primary_horizon_bars(frozen) * frozen.interval
-    return np.asarray(end > session_close_utc(idx, frozen))
+    return np.asarray(idx + frozen.interval > session_close_utc(idx, frozen))
+
+
+def effective_horizon_bars(event_time, horizon_bars: int, frozen: Frozen) -> np.ndarray:
+    """min(N, whole bars between event_time and the RTH close): the session-truncated horizon (timestamps only)."""
+    idx = pd.DatetimeIndex(event_time).tz_convert("UTC")
+    left = (session_close_utc(idx, frozen) - idx) // frozen.interval
+    return np.minimum(horizon_bars, np.asarray(left, dtype="int64"))
 
 
 def declared_resolution_times(bars_index: pd.DatetimeIndex, event_time, horizon_bars: int, interval: pd.Timedelta) -> pd.DatetimeIndex:
@@ -59,6 +67,17 @@ def declared_resolution_times(bars_index: pd.DatetimeIndex, event_time, horizon_
     last = first + horizon_bars - 1
     ok = last < len(ns)
     out = pd.DatetimeIndex([pd.NaT] * len(first), tz="UTC")
+    vals = np.full(len(first), np.iinfo(np.int64).min, dtype="int64")
+    vals[ok] = ns[last[ok]] + int(interval.value)
+    return pd.DatetimeIndex(pd.to_datetime(vals, utc=True)).where(ok, pd.NaT)
+
+
+def declared_resolution_times_n(bars_index: pd.DatetimeIndex, event_time, n_eff: np.ndarray, interval: pd.Timedelta) -> pd.DatetimeIndex:
+    """Like ``declared_resolution_times`` with a per-event (session-truncated) horizon."""
+    ns = utc_ns(bars_index)
+    first = np.searchsorted(ns, utc_ns(pd.DatetimeIndex(event_time)), side="left")
+    last = first + np.asarray(n_eff) - 1
+    ok = last < len(ns)
     vals = np.full(len(first), np.iinfo(np.int64).min, dtype="int64")
     vals[ok] = ns[last[ok]] + int(interval.value)
     return pd.DatetimeIndex(pd.to_datetime(vals, utc=True)).where(ok, pd.NaT)
@@ -102,26 +121,32 @@ def compute_primary_targets(bars: pd.DataFrame, events: pd.DataFrame, frozen: Fr
     n = len(bars)
     o, h, l, c = (bars[k].to_numpy("float64") for k in ("open", "high", "low", "close"))
     out: dict[str, pd.DataFrame] = {}
+    ev_utc = pd.DatetimeIndex(events["event_time"]).tz_convert("UTC")
     for spec in frozen.target_bank["primary_targets"]:
         N = int(spec["horizon_bars"])
-        ok = (first + N - 1) < n
-        f, d = first[ok], d_all[ok]
+        n_eff_all = np.maximum(effective_horizon_bars(ev_utc, N, frozen), 1)       # session-truncated horizon, timestamps only
+        ok = (first + n_eff_all - 1) < n
+        f, d, ne = first[ok], d_all[ok], n_eff_all[ok]
         p0 = o[f]
+        last = f + ne - 1
         if spec["kind"] == "directional_return":
-            val = directional_return(c[f + N - 1], p0, d)
+            val = directional_return(c[last], p0, d)
         elif spec["kind"] == "path_skew":
-            fav, adv = excursions(gather(h, f + N - 1, N), gather(l, f + N - 1, N), p0, d)
-            val = fav.max(axis=1) + adv.min(axis=1)
+            pos = np.arange(N)[None, :]
+            idx = np.minimum(f[:, None] + pos, n - 1)
+            fav, adv = excursions(h[idx], l[idx], p0, d)
+            inside = pos < ne[:, None]
+            val = np.where(inside, fav, -np.inf).max(axis=1) + np.where(inside, adv, np.inf).min(axis=1)
         else:
             raise EngineError(f"unknown target kind {spec['kind']}")
-        claimed = bars.index[f + N - 1].tz_convert("UTC") + interval
-        ev_t = pd.DatetimeIndex(events["event_time"]).tz_convert("UTC")[ok]
+        claimed = bars.index[last].tz_convert("UTC") + interval
+        ev_t = ev_utc[ok]
         if len(f) and (claimed > session_close_utc(ev_t, frozen)).any():
             bad = events["event_id"].to_numpy()[ok][np.asarray(claimed > session_close_utc(ev_t, frozen))][:5].tolist()
             raise TargetSessionError(f"{spec['name']}: window crosses the RTH close / a session gap for events {bad}; "
-                                     f"primary targets must resolve inside the event's session (TARGET_TIMESTAMP_INELIGIBLE "
-                                     f"events must be removed by timestamp rules before target computation)")
-        declared = declared_resolution_times(bars.index, ev_t, N, interval)
+                                     f"primary windows must resolve inside the event's session (events without one complete "
+                                     f"forward bar before the close are TARGET_TIMESTAMP_INELIGIBLE and must be removed first)")
+        declared = declared_resolution_times_n(bars.index, ev_t, ne, interval)
         eff = pd.DatetimeIndex(np.maximum(claimed.as_unit("ns").asi8, declared.as_unit("ns").asi8)).tz_localize("UTC") if len(f) else claimed
         out[spec["name"]] = pd.DataFrame({
             "event_id": events["event_id"].to_numpy()[ok],
@@ -129,6 +154,8 @@ def compute_primary_targets(bars: pd.DataFrame, events: pd.DataFrame, frozen: Fr
             "target_end": claimed,
             "effective_target_end": eff,
             "value": val,
+            "horizon_bars_effective": ne.astype("int64"),
+            "truncated": ne < N,
         }).reset_index(drop=True)
     return out
 

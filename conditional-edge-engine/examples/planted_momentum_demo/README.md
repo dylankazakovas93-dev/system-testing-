@@ -1,22 +1,18 @@
 # SYNTHETIC DATA — NOT REAL NQ
 
-Canonical snapshot of one IS run through the real CLIs with **engine v1.2.1** on **synthetic** 1-minute bars with a planted AR(1) momentum
+Canonical snapshot of one IS run through the real CLIs with **engine v2.0.0** on **synthetic** 1-minute bars with a planted AR(1) momentum
 (`make_bars(1100, seed=7, phi=0.8)`, 2016-01-04 … 2020-03). It shows that the pipeline runs end to end. It says nothing about real NQ.
 
-* **Engine**: `FROZEN_MANIFEST.json` records `engine_version v1.2.1`, the engine code hash and the frozen specs incl. `frozen/v1/SELECTION_PROCESS.yaml` (checked equal to the final code when built).
-* **Partitions** (frozen in the manifest; `new_experiment.py --development-end 2019-01-01 --selection-holdout-years 1`): DEVELOPMENT < 2019-01-01 · SELECTION_HOLDOUT 2019-01-01 … 2020-01-01 (1 calendar year; selection data, not confirmation) · FINAL_LOCKBOX from 2020-01-01. The IS run read **only** development rows.
-* **Campaign state** (`registry/campaigns.csv`): `C001` is `OPEN`; no freeze hash; `registry/selection_holdout_access.csv` (one row per *campaign*) and `registry/final_configs.csv` are header-only; the IS report says `SELECTION HOLDOUT status = NOT ACCESSED`; the lockbox was never read.
-* **Lifecycle**: `EXP_0001` stopped at `NEAR_TIE_REVIEW_REQUIRED` (`IS_SHORTLIST_ELIGIBLE` after strong-mode verification) because the IS report found one near-tie cluster
-  (`NEAR_TIE_CLUSTER_01`: `DIR_RETURN_30|UPPER_HALF` and `DIR_PATH_SKEW_60|UPPER_HALF`; the engine proposes at most these two for a holdout). The IS-rank-1/2 configs (`DIR_RETURN_15` on each side) are on opposite sides and in no cluster.
-  No human approval, no campaign freeze, no holdout opening, no final-config selection and no CPCV were performed — those are human decisions (`approvals/` is empty). Limits: ≤ 2 configs per experiment, ≤ 6 per campaign (= ≤ 18 holdout evaluations).
-* **Selection**: 24 selection trials (`registry/selection_trials.csv`): 16 `IS_SHORTLIST_ELIGIBLE`, 6 `REJECTED_INSUFFICIENT_UPLIFT` (`DIR_RETURN_60`), 2 `REJECTED_INSTABILITY`.
-  **All 24 rows (every numeric column, every decision and rejection reason) are bit-identical to the engine v1.1.1 snapshot of the same data** (compared when this snapshot was built): the v1.2 patch changed lifecycle semantics, not the research.
-* **Forward-path diagnostics (DIAGNOSTIC ONLY)**: `experiment/results/IS_REPORT.md` section **Z** (`sigma_ref = RV_60 / sqrt(60)`, 64-cell gross bracket surface, `GROSS — COSTS NOT APPLIED`, `DIAGNOSTIC ONLY — NO BRACKET WAS SELECTED`).
-  The full `results/PATH_DIAGNOSTICS.json` (~6 MB) is **not included**; its sha256 `6a071b13…` (in `IS_REPORT.json`) differs from the v1.1.1 snapshot only because the frozen text of `non_promotable_rule` / `lifecycle` embedded in that file was reworded ("OOS" → "SELECTION HOLDOUT"); no formula changed.
-* **IS report**: new section **NT. CONFIGURATION UNCERTAINTY / NEAR-TIES** (per cluster: config IDs, side, frequency, median standardized uplift, selected effect, campaign BH / Bonferroni, year and fold consistency, pairwise differences, paired weekly-block CI, reason) and the selection-holdout recommendation.
-* **External verification**: `verify_experiment.py` at the pinned commit `624c8b7f…`, **strong** mode, RIDGE/SPLINE/XGB × **all 4 primary targets = 12 runs**. Every path: all research families `PASS`, label `RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE`
-  (exit code 2: no roll provenance in synthetic data). Never `VERIFIED`. See `verify_experiment_*.log`. Local paths replaced by `WS` / `DATA` / `VERIFIER`.
-* Large intermediates (CV panels, path-diagnostics file, staged verifier copy, data) are intentionally not included.
+* **Engine**: `FROZEN_MANIFEST.json` records `engine_version v2.0.0` and the engine code hash (checked equal to the committed code when built).
+* **Partitions** (`--development-end 2019-01-01 --selection-holdout-years 1`): DEVELOPMENT < 2019-01-01 · SELECTION_HOLDOUT 2019-01-01 … 2020-01-01 · FINAL_LOCKBOX from 2020-01-01. The IS run read **only** development rows.
+* **State**: `C001` is `OPEN`; the holdout access ledger and `final_configs.csv` are header-only; no approvals exist; the lockbox was never read.
+* **Targets (v2)**: 15-, 60-, 180-minute directional returns (windows truncated at the 16:00 close and flagged, never dropped) and the 60-bar path skew. Uplift floor 0.01.
+* **Selection**: 24 trials. `DIR_RETURN_15`: 6 `IS_SHORTLIST_ELIGIBLE`; `DIR_PATH_SKEW_60`: 5 eligible + 1 `REJECTED_INSTABILITY`; `DIR_RETURN_60`: all rejected (year consistency: only 2 of 3 development years positive, plus model agreement);
+  `DIR_RETURN_180`: all rejected (adjusted p / instability) — the planted AR(1) memory has decayed by 3 hours. No near-tie cluster was found (the eligible groups' uplifts differ by more than 0.03), so the experiment stops at `AWAITING_HUMAN_FINAL_CONFIG_SELECTION`: the human may pick one config directly.
+* **IS report**: sections NT (configuration uncertainty) and WM (where it works / where it does not, by year, hour and full vs truncated horizon, descriptive only) are included.
+* **External verification**: `verify_experiment.py` at the pinned commit `624c8b7f…`, **strong** mode, all 4 primary targets × 3 models = **12 paths, every research family PASS**, label `RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE` (exit 2: no roll provenance in synthetic data). Never `VERIFIED`.
+  The truncated 180-minute targets verify cleanly. Local paths replaced by `WS` / `DATA` / `VERIFIER`.
+* Large intermediates (CV panels, path-diagnostics file, staged verifier copy, data) are not included.
 
 Reproduce (the manifest pins the engine hash, so it only reproduces against the same engine code):
 

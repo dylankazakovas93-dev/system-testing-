@@ -40,7 +40,7 @@ Table-level synthetic data, real engine code; the human's files are written by t
 
 | scenario | planted structure | IS / near-tie | selection holdout | final config | CPCV | final status |
 |---|---|---|---|---|---|---|
-| A — clear winner | only `DIR_RETURN_30` carries the effect | 2 eligible configs, opposite sides, no near-tie | **skipped** (stays unread) | human picks the top IS config directly (`SELECTION_HOLDOUT_SKIPPED`) | automatic, DEVELOPMENT only, passes | `AWAITING_FINAL_LOCKBOX_APPROVAL` |
+| A — clear winner | only `DIR_RETURN_180` carries the effect | 2 eligible configs, opposite sides, no near-tie | **skipped** (stays unread) | human picks the top IS config directly (`SELECTION_HOLDOUT_SKIPPED`) | automatic, DEVELOPMENT only, passes | `AWAITING_FINAL_LOCKBOX_APPROVAL` |
 | B — genuine near tie | `DIR_RETURN_15` and `DIR_RETURN_60` carry the same effect; 60 loses half of it in the holdout year | near-tie cluster per side (|Δ| ≤ 0.03, paired CI ∋ 0) | both configs frozen together, one opening, family of 6 | `HOLDOUT_PREFERRED_CONFIG` = 15 (the IS rank-1 config 60 is not preferred); the human selects it | automatic, DEVELOPMENT + holdout, passes | `AWAITING_FINAL_LOCKBOX_APPROVAL` |
 | C — unresolved | as B but 15 loses 45% in the holdout year | near-tie | both evaluated | `HOLDOUT_UNRESOLVED` (|Δ| ≤ 0.03, CI ∋ 0): no winner is fabricated; the human may choose one or decline | — | `FINAL_CONFIG_FROZEN` (human choice) or `HUMAN_DECLINED` |
 | D — CPCV failure | slope +1.0 in every year except 2019 (−1.6) | near-tie | both pass the informational evidence gates | the human selects A | A fails (10/15 splits < 12) → **no fallback to B** | `CPCV_REJECTED` (lineage ends) |

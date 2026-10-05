@@ -43,7 +43,7 @@ class PanelOutput:
     importances: dict                # mean |importance| per feature (diagnostic only)
     coefficients: list               # per-fold signed Ridge coefficients (diagnostic only)
     deciles: dict
-    cv: pd.DataFrame                 # event_id, event_time, fold, year, score, threshold, state, y  (DEVELOPMENT_CV validation)
+    cv: pd.DataFrame                 # event_id, event_time, fold, year, score, threshold, state, y, truncated  (DEVELOPMENT_CV validation)
     cv_years: list = field(default_factory=list)
 
 
@@ -122,7 +122,9 @@ def run_panels(events: pd.DataFrame, features: pd.DataFrame, targets: dict[str, 
             imp = pd.DataFrame(res.importances).mean().sort_values(ascending=False).to_dict() if res.importances else {}
             panel = pd.DataFrame({"event_id": np.asarray(ids)[pos], "event_time": etime[pos], "fold": v["fold"].to_numpy(),
                                   "year": v["year"].to_numpy(), "score": v["score"].to_numpy(),
-                                  "threshold": v["threshold"].to_numpy(), "state": v["state"].to_numpy(), "y": y[pos]})
+                                  "threshold": v["threshold"].to_numpy(), "state": v["state"].to_numpy(), "y": y[pos],
+                                  "truncated": (tdf.loc[ids, "truncated"].to_numpy(dtype=bool)[pos] if "truncated" in tdf.columns
+                                                else np.zeros(len(pos), dtype=bool))})
             out[(tname, mname)] = PanelOutput(tname, mname, stats, res.folds, imp, res.coefficients, deciles, panel,
                                               sorted(int(x) for x in v["year"].unique()) if len(v) else [])
     return out

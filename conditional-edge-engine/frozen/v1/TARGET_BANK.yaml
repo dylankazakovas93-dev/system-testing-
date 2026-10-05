@@ -8,15 +8,16 @@
 version: v1
 forward_bar_rule: first_bars_with_open_ge_event_time
 reference_price: open_of_first_forward_bar
-# SAME-SESSION RULE (v1): every primary target window must resolve inside the event's own RTH session.
-# An event whose max-horizon window would end after the RTH close (event_time + max_horizon_bars*interval > close)
-# is TARGET_TIMESTAMP_INELIGIBLE and is not an event of the experiment (decided from timestamps/session rules only,
-# never from outcomes). No primary window may cross the RTH close, the ETH maintenance halt or a session boundary.
-session_rule: primary_targets_must_resolve_inside_event_rth_session
+# SAME-SESSION RULE (v2): every primary target window resolves inside the event's own RTH session. An event whose
+# N-bar window would end after the RTH close is NOT dropped: its window is TRUNCATED at the session close (effective
+# horizon = bars remaining before the close, decided from timestamps/session rules only, never from outcomes) and the
+# row is flagged truncated=True. Only an event with no complete forward bar before the close (event_time + 1 bar > close)
+# is TARGET_TIMESTAMP_INELIGIBLE. No window may cross the RTH close, the ETH maintenance halt or a session boundary.
+session_rule: primary_targets_truncate_at_event_rth_session_close
 primary_targets:
   - {name: DIR_RETURN_15,     kind: directional_return, horizon_bars: 15}
-  - {name: DIR_RETURN_30,     kind: directional_return, horizon_bars: 30}
   - {name: DIR_RETURN_60,     kind: directional_return, horizon_bars: 60}
+  - {name: DIR_RETURN_180,    kind: directional_return, horizon_bars: 180}
   - {name: DIR_PATH_SKEW_60,  kind: path_skew,          horizon_bars: 60}
 # Diagnostic targets: report only. They can NEVER promote a candidate.
 diagnostic_targets:

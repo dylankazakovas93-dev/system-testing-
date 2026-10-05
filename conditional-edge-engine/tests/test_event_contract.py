@@ -279,8 +279,9 @@ def test_mixed_direction_events_hard_fail_the_event_contract(tmp_path):
     assert set(ok["direction"]) == {-1}
 
 
-def test_target_timestamp_ineligible_events_are_removed_by_timestamp_rule_only(tmp_path):
-    """60-bar window must end inside the RTH session: event at 14:59 NY is eligible, 15:01 is TARGET_TIMESTAMP_INELIGIBLE."""
+def test_events_near_the_close_are_kept_and_only_an_event_without_one_complete_forward_bar_is_ineligible(tmp_path):
+    """v2: longer horizons are TRUNCATED at the RTH close, not dropped. Events at 14:59, 15:00 and 15:59 NY all survive; only an event with
+    no complete forward bar before the close (event_time + 1 bar > 16:00) is TARGET_TIMESTAMP_INELIGIBLE - decided from the clock only."""
     mod = module_from(tmp_path, '''
         import numpy as np, pandas as pd
         def detect_events(bars, params):
@@ -291,13 +292,15 @@ def test_target_timestamp_ineligible_events_are_removed_by_timestamp_rule_only(t
             return pd.DataFrame({"event_time": bars.index[keep] + interval, "direction": np.ones(int(keep.sum()), dtype=int)})
     ''')
     bars = make_bars(n_days=2, seed=2)
-    s = spec(base_parameters={"m1": 14 * 60 + 58, "m2": 14 * 60 + 59, "m3": 15 * 60 + 1}, eligible_session={"start": "09:31", "end": "16:00"})
+    s = spec(base_parameters={"m1": 14 * 60 + 58, "m2": 14 * 60 + 59, "m3": 15 * 60 + 58}, eligible_session={"start": "09:31", "end": "16:00"})
     ev, _ = generate_events(mod, bars, s, F)
     local = ev["event_time"].dt.tz_convert("America/New_York")
     got = sorted(set((local.dt.hour * 60 + local.dt.minute).tolist()))
-    assert got == [14 * 60 + 59, 15 * 60]                         # signal 14:58 -> event 14:59 ; signal 14:59 -> event 15:00 (window ends 16:00)
-    assert ev.attrs["target_timestamp_ineligible"] == 2           # the 15:01 signal (event 15:02) on both days
-    assert len(ev.attrs["target_ineligible_ids"] if "target_ineligible_ids" in ev.attrs else ev.attrs["target_timestamp_ineligible_ids"]) == 2
+    assert got == [14 * 60 + 59, 15 * 60, 15 * 60 + 59]            # nothing is dropped, including the 15:59 event (one forward bar left)
+    assert ev.attrs["target_timestamp_ineligible"] == 0
+    from engine.target_engine import target_timestamp_ineligible
+    t = pd.DatetimeIndex(pd.to_datetime(["2020-01-07 20:58:00+00:00", "2020-01-07 20:59:00+00:00", "2020-01-07 20:59:30+00:00", "2020-01-07 21:00:00+00:00"]))   # 15:58, 15:59, 15:59:30, 16:00 NY
+    assert target_timestamp_ineligible(t, F).tolist() == [False, False, True, True]
 
 
 # ================================= frozen filter ladder =================================================

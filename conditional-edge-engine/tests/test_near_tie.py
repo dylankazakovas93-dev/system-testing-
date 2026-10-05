@@ -15,7 +15,9 @@ from tests.scenario_helpers import CLEAR_WINNER, NEAR_TIE_PAIR, human_approval, 
 
 F = load_frozen()
 NT = F.selection_process["near_tie"]
-DEFAULT_LINEAR = dict(signal="linear", slope=0.35)                     # every target carries the planted relation -> a 3-member UPPER cluster
+DEFAULT_LINEAR = dict(signal="linear", slope=0.35, target_scale={"DIR_PATH_SKEW_60": 0.0},                      # 15, 60 and 180 carry the same relation AND noise -> a 3-member cluster per side
+                      tie={"DIR_RETURN_60": "DIR_RETURN_15", "DIR_RETURN_180": "DIR_RETURN_15"})
+FAR = dict(signal="linear", slope=0.35, target_scale={"DIR_RETURN_180": 0.5, "DIR_PATH_SKEW_60": 0.0}, tie={"DIR_RETURN_60": "DIR_RETURN_15"})   # 180 carries half the effect: clearly separated
 
 
 @pytest.fixture(scope="module")
@@ -26,6 +28,11 @@ def near(tmp_path_factory):
 @pytest.fixture(scope="module")
 def default3(tmp_path_factory):
     return lifecycle_workspace(tmp_path_factory.mktemp("default3"), **DEFAULT_LINEAR)
+
+
+@pytest.fixture(scope="module")
+def far(tmp_path_factory):
+    return lifecycle_workspace(tmp_path_factory.mktemp("far"), **FAR)
 
 
 @pytest.fixture(scope="module")
@@ -59,8 +66,8 @@ def test_near_tie_detected_when_difference_small_and_paired_ci_contains_zero(nea
 
 
 # 2. no near tie if the difference is larger than 0.03 (no bootstrap is even needed)
-def test_no_near_tie_if_the_difference_exceeds_0_03(default3):
-    ws, exp, _ = default3
+def test_no_near_tie_if_the_difference_exceeds_0_03(far):
+    ws, exp, _ = far
     det = nt.detect(ws, exp)
     far = [p for p in det["pairs"] if p["abs_diff"] > 0.03]
     assert far and not any(p["near_tie"] for p in far)
@@ -110,7 +117,7 @@ def test_rejected_is_configs_never_enter_a_near_tie_cluster(near):
     det = nt.detect(ws, exp)
     eligible = {g["config_id"] for g in det["eligible_groups"]}
     members = {m for c in det["clusters"] for m in c["members"]}
-    assert members <= eligible and not any("DIR_RETURN_30" in m or "DIR_PATH_SKEW_60" in m for m in members)     # those targets carry no effect
+    assert members <= eligible and not any("DIR_RETURN_180" in m or "DIR_PATH_SKEW_60" in m for m in members)     # those targets carry no effect
 
 
 def test_losing_eligibility_removes_a_config_from_its_cluster(near, tmp_path):
@@ -150,7 +157,7 @@ def test_cluster_construction_is_deterministic_and_ranked_by_the_frozen_is_ranki
         assert ranks == sorted(ranks)                                                                    # members listed in the existing frozen IS rank order
     firsts = [min(c["is_ranks"].values()) for c in a["clusters"]]
     assert firsts == sorted(firsts) and [c["cluster_id"] for c in a["clusters"]] == [f"NEAR_TIE_CLUSTER_{k:02d}" for k in range(1, len(a["clusters"]) + 1)]
-    # the cluster is a CONNECTED COMPONENT: members need not all be pairwise tied (here 15|U~60|U~SKEW|U via chained edges)
+    # the cluster is a CONNECTED COMPONENT (here the three identical-label configs are joined by >= 2 near-tie edges)
     edges = {(p["a"], p["b"]) for p in a["pairs"] if p["near_tie"]}
     big = max(a["clusters"], key=lambda c: len(c["members"]))
     assert len(big["members"]) == 3 and len(edges) >= 2
@@ -205,6 +212,6 @@ def test_near_tie_diagnostics_create_no_selection_trials_and_cannot_promote(near
     assert len(before) == len(after) == 24 and before.equals(after)
     assert reg.integrity_check(ws)["selection_trials"] == 24
     t = reg.experiment_trials(ws, exp)
-    rej = t[t["target"].isin(["DIR_RETURN_30", "DIR_PATH_SKEW_60"])]
+    rej = t[t["target"].isin(["DIR_RETURN_180", "DIR_PATH_SKEW_60"])]
     assert len(rej) == 12 and not rej["decision"].eq("IS_SHORTLIST_ELIGIBLE").any()                 # never promoted by being "close" to an eligible config
     assert proposable(ws, exp, 0) and len(proposable(ws, exp, 0)) == 2

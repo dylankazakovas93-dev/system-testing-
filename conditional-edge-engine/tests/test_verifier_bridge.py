@@ -153,21 +153,21 @@ def test_promotion_capable_targets_are_exactly_the_primary_targets():
     verification_targets = promotion_capable_targets(F)
     trial_targets = {s["target"] for s in reg.trial_specs(F)}                                  # targets that can reach IS_SHORTLIST_ELIGIBLE / SELECTION HOLDOUT
     assert set(verification_targets) == set(primary_target_names(F)) == trial_targets
-    assert verification_targets == ["DIR_RETURN_15", "DIR_RETURN_30", "DIR_RETURN_60", "DIR_PATH_SKEW_60"]
+    assert verification_targets == ["DIR_RETURN_15", "DIR_RETURN_60", "DIR_RETURN_180", "DIR_PATH_SKEW_60"]
     assert len(verification_targets) * len(MODELS) == 12
 
 
 def test_bridge_verifies_all_twelve_strong_paths_even_when_most_targets_are_rejected_at_is(tmp_path, monkeypatch):
-    """Only DIR_RETURN_30 has candidate trials here, yet all 4 targets x 3 models are verified in STRONG mode: a rejected target must never
+    """Only DIR_RETURN_180 has candidate trials here, yet all 4 targets x 3 models are verified in STRONG mode: a rejected target must never
     become an unverified path later. The verifier only receives development rows."""
     from engine.common import primary_target_names
     from engine.synthetic import make_bars
     ws = reg.Workspace(tmp_path / "w").init()
     exp = new_frozen_experiment(ws, partitions={"development_end": "2017-01-01", "selection_holdout_end": "2018-01-01", "lockbox_start": "2018-01-01"})
-    reg.reveal_experiment(ws, exp, fake_results(ws, exp, {("DIR_RETURN_30", m): 0.0009 for m in MODELS}),
+    reg.reveal_experiment(ws, exp, fake_results(ws, exp, {("DIR_RETURN_180", m): 0.0009 for m in MODELS}),
                           train_period="a", validation_period="b", frozen=F)
     t = reg.experiment_trials(ws, exp)
-    assert set(t[t["decision"].isin(["IS_PROVISIONAL_CANDIDATE", "IS_SHORTLIST_ELIGIBLE"])]["target"]) == {"DIR_RETURN_30"}
+    assert set(t[t["decision"].isin(["IS_PROVISIONAL_CANDIDATE", "IS_SHORTLIST_ELIGIBLE"])]["target"]) == {"DIR_RETURN_180"}
     bars = make_bars(n_days=600, seed=2)
     data = tmp_path / "bars.parquet"
     bars.reset_index().rename(columns={"index": "timestamp"}).to_parquet(data)
@@ -220,7 +220,7 @@ def test_a_research_family_failure_rejects_that_model_path(tmp_path, monkeypatch
     from engine.synthetic import make_bars
     ws = reg.Workspace(tmp_path / "w").init()
     exp = new_frozen_experiment(ws, partitions={"development_end": "2017-01-01", "selection_holdout_end": "2018-01-01", "lockbox_start": "2018-01-01"})
-    reg.reveal_experiment(ws, exp, fake_results(ws, exp, {("DIR_RETURN_30", m): 0.0009 for m in MODELS}),
+    reg.reveal_experiment(ws, exp, fake_results(ws, exp, {("DIR_RETURN_180", m): 0.0009 for m in MODELS}),
                           train_period="a", validation_period="b", frozen=F)
     data = tmp_path / "bars.parquet"
     make_bars(n_days=400, seed=2).reset_index().rename(columns={"index": "timestamp"}).to_parquet(data)
@@ -236,7 +236,7 @@ def test_a_research_family_failure_rejects_that_model_path(tmp_path, monkeypatch
     s = run_verification(ws, exp, repo, str(data), verbose=False)
     assert s["overall"] == "FAILED"
     t = reg.experiment_trials(ws, exp)
-    up = t[(t["target"] == "DIR_RETURN_30") & (t["state"] == "UPPER_HALF")].set_index("model")
+    up = t[(t["target"] == "DIR_RETURN_180") & (t["state"] == "UPPER_HALF")].set_index("model")
     assert up.at["XGB", "decision"] == "REJECTED_VERIFICATION"                                   # that model path is rejected
     assert up.at["RIDGE", "decision"] in ("IS_PROVISIONAL_CANDIDATE", "IS_SHORTLIST_ELIGIBLE")    # the other two keep their standing
 

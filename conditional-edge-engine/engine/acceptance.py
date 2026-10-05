@@ -1,7 +1,7 @@
 """Frozen acceptance logic for the IS (development) stage.
 
 One model trial is IS-shortlist-eligible only if ALL hold (ACCEPTANCE_RULES.yaml):
-  selected frequency >= 1.0/week; standardized uplift >= 0.10; ABSOLUTE selected effect > 0 (candidate action direction);
+  selected frequency >= 1.0/week; standardized uplift >= 0.01 (v2; the null-based gates carry the burden); ABSOLUTE selected effect > 0 (candidate action direction);
   bootstrap CI lower bound > 0; experiment BH q, campaign BH q, experiment Bonferroni p, campaign Bonferroni p all <= 0.05;
   >= 70% of eligible years (>= 20 selected events) with selected effect > 0 AND >= 70% with uplift > 0;
   all 5 DEVELOPMENT_CV folds evaluated, >= 4/5 with uplift > 0 and >= 4/5 with selected effect > 0.
