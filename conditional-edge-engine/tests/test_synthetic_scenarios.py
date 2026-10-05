@@ -128,8 +128,8 @@ class TestLowFrequencyNonPromotable:
         assert (t["selected_frequency"] < 1.0).all() and (t["parent_frequency"] < 2.0).all()
         assert (t["standardized_uplift"] > 0.15).all() and (t["experiment_q"] < 0.05).all()   # the effect is real but unusable
         assert t["rejection_reason"].str.contains("selected frequency").all()
-        assert (t["folds_evaluated"] < 5).all()                                                # 969 events: early folds lack 300 training events
-        assert t["rejection_reason"].str.contains("INSUFFICIENT_DEVELOPMENT_FOLD_EVIDENCE").all()
+        assert (t["folds_evaluated"] < 5).all()                                                # 969 events: early folds lack 300 training events (reported, no longer a gate)
+        assert not t["rejection_reason"].str.contains("FOLD_EVIDENCE").any()                    # v2.1: the fold gate is gone; the frequency floor alone rejects these
 
     def test_low_frequency_leads_are_preserved_as_observations(self, res):
         ws, *_ = res

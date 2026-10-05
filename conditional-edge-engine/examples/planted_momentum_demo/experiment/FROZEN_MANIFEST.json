@@ -1,23 +1,23 @@
 {
   "campaign_id": "C001",
-  "engine_version": "v2.0.0",
+  "engine_version": "v2.1.0",
   "event_hash": "33075c486274c70b10d1ed5b04172844c3d6c631d92aec62a9fd87eaac5fc0c9",
   "experiment_id": "EXP_0001",
-  "frozen_at": "2026-10-05T11:30:19Z",
+  "frozen_at": "2026-10-05T19:58:41Z",
   "frozen_spec_hashes": {
-    "acceptance_rules_hash": "5dfce77bd6a5603d6cc4eabcd38dd10f4e105e018aedf9e3b9346a61deacfec5",
+    "acceptance_rules_hash": "7a8ce12c944adad16b645b8e424dd17be51d36c10c76c8c22bb7c6b9cd3851d3",
     "feature_bank_hash": "300ce5991f52cad544bbf6b84652d739db8d92e12ab32bc1583ee9ac5282fc6a",
     "model_bank_hash": "2c578364b2b07ac5eb1454911a3391a2796b03c097e5d9f8f28e8863ad17e569",
     "target_bank_hash": "81d8415abb937ad35484212d9897153fc227a7c981436ce2c1d0bdec5fe59e08",
     "trial_policy_hash": "19b31dc49d28785ad046fc4eb4940a33430930ed619ddb866e2f5a352fa9d425"
   },
   "hashes": {
-    "engine_code_hash": "6273560f300ea953e44285d0b694bf5b4fc480b51bb48a80c464634e85102def",
+    "engine_code_hash": "78c9ca9eef6b94b4eff529826363fbf381db54240ae5b23ad32be662d4a990b8",
     "event_py": "47e3f563c012e50b1a7f8a30d8bf81e106793a1d594ffd5bb2d922660ad10585",
     "event_spec": "7bf96905a5ea2dc0858450aaeca0a92da9c1bf43bde56ffecf5e1fa6de774d55",
-    "frozen_bundle_hash": "98b1d47b695d7d4ccd91b773d1a53e7da43be87f7af915df2d4b22ea4cc5af67",
+    "frozen_bundle_hash": "6a709c31454505a4d77740258eb88c53116e23329ee05eccbfc35c64d63d4bae",
     "frozen_files": {
-      "frozen/v1/ACCEPTANCE_RULES.yaml": "5dfce77bd6a5603d6cc4eabcd38dd10f4e105e018aedf9e3b9346a61deacfec5",
+      "frozen/v1/ACCEPTANCE_RULES.yaml": "7a8ce12c944adad16b645b8e424dd17be51d36c10c76c8c22bb7c6b9cd3851d3",
       "frozen/v1/FEATURE_BANK.yaml": "300ce5991f52cad544bbf6b84652d739db8d92e12ab32bc1583ee9ac5282fc6a",
       "frozen/v1/MODEL_BANK.yaml": "2c578364b2b07ac5eb1454911a3391a2796b03c097e5d9f8f28e8863ad17e569",
       "frozen/v1/PATH_DIAGNOSTICS.yaml": "d3c37882df15175fdf029e731d5a94c50f40441b601c50837c26569071f05114",
@@ -32,7 +32,7 @@
     "HYPOTHESIS.md": "bc254e46b0a767ef6cfd9b5ffc5cda99d329ad916dc9c0e6027f3dfdfe7822d0",
     "reference.pine": "08245a3ca8dc625b1a2513f5a3121cd7030ed464bf924ca1c8590765e56400f2"
   },
-  "manifest_hash": "3a4dc07e3e7bd5e3daa6035ce341b668af70ca071a7b41e15f00099bf41b10e1",
+  "manifest_hash": "8cbf5db2fcc78e919dc3091ce862db2b3925b8d78b1fea8376fc5f8f9029fff7",
   "partitions": {
     "development_end": "2019-01-01",
     "lockbox_start": "2020-01-01",

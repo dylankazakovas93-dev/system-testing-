@@ -387,7 +387,8 @@ def build_is_report(ws: reg.Workspace, experiment_id: str, bundle: dict, trials:
                  f"(standardized {med('standardized_uplift'):+.3f}) — medians over the {len(pas)} eligible models.")
         for r in pas:
             L.append(f"- {r['model']}: positive uplift in {int(r['positive_uplift_years'])}/{int(r['eligible_years'])} eligible years; positive selected effect in "
-                     f"{int(r['positive_years'])}/{int(r['eligible_years'])} years; positive uplift in {int(r['positive_uplift_folds'])}/{int(r['folds_evaluated'])} DEVELOPMENT_CV folds; "
+                     f"{int(r['positive_years'])}/{int(r['eligible_years'])} years; best single batch of 10 carries {_n(r['batch_best_share'], '{:.0%}')} of the uplift (gate <= 35%), best year {_n(r['year_best_share'], '{:.0%}')}; "
+                     f"{int(r['positive_uplift_folds'])}/{int(r['folds_evaluated'])} DEVELOPMENT_CV folds positive (reported only); "
                      f"bootstrap CI lower bound {r['bootstrap_ci_low']:+.5f}.")
         L.append(f"- Bonferroni adjusted p (experiment): {med('experiment_bonferroni_p'):.4g}; campaign Bonferroni adjusted p: {med('campaign_bonferroni_p'):.4g}; "
                  f"BH q experiment {med('experiment_q'):.4g}, campaign {med('campaign_q'):.4g}.")

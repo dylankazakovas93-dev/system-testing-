@@ -117,7 +117,8 @@ def run_panels(events: pd.DataFrame, features: pd.DataFrame, targets: dict[str, 
                 wk["total"], bootstrap_reps=boot, permutation_reps=perm, seed=pol["seed"], ci_level=pol["ci_level"],
                 min_events_year=frozen.acceptance["year_consistency"]["min_selected_events_for_eligible_year"],
                 fold=v["fold"].to_numpy() if len(v) else None, weeks_by_year=wk["by_year"], weeks_by_fold=weeks_by_fold,
-                concentration_share=frozen.acceptance["year_consistency"]["concentration_warning_share"])
+                concentration_share=frozen.acceptance["year_consistency"]["concentration_warning_share"],
+                n_batches=frozen.acceptance["concentration"]["n_batches"])
             deciles = decile_diagnostics(v["score"].to_numpy(), y[pos], v["year"].to_numpy(), wk["total"]) if len(pos) else {}
             imp = pd.DataFrame(res.importances).mean().sort_values(ascending=False).to_dict() if res.importances else {}
             panel = pd.DataFrame({"event_id": np.asarray(ids)[pos], "event_time": etime[pos], "fold": v["fold"].to_numpy(),

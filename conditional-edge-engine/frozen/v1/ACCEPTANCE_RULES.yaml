@@ -1,6 +1,6 @@
 # FROZEN ACCEPTANCE RULES v1.
 # IS shortlist eligibility of ONE model trial = ALL of the following. v2.0.0 change: the standardized-uplift floor is 0.01 (was 0.10);
-# the null-based gates (adjusted p, CI > 0, year/fold consistency) carry the burden of proof; all other constants are unchanged.
+# the null-based gates (adjusted p, CI > 0, year/batch/model consistency) carry the burden of proof. v2.1.0: the fold gate became a batch/year concentration gate.
 version: v1
 min_selected_frequency_per_week: 1.0
 min_standardized_uplift: 0.01
@@ -16,10 +16,12 @@ year_consistency:
   min_positive_effect_year_fraction: 0.70      # MIN_POSITIVE_EFFECT_YEAR_FRACTION
   min_positive_uplift_year_fraction: 0.70      # MIN_POSITIVE_UPLIFT_YEAR_FRACTION
   concentration_warning_share: 0.35            # warning only (v1 does not reject on it)
-fold_consistency:
-  required_folds: 5                            # fewer -> INSUFFICIENT_DEVELOPMENT_FOLD_EVIDENCE (never relaxed)
-  min_folds_positive_uplift: 4
-  min_folds_positive_effect: 4
+# v2.1.0: the 4-of-5-folds gate and the "all 5 folds evaluated" requirement are REMOVED (they were a sample-size wall for low-frequency
+# setups). The out-of-fold DEVELOPMENT_CV predictions are unchanged; folds are now reported only. Robustness = no small set carries the result:
+concentration:
+  n_batches: 10                                # out-of-fold selected trades, time-ordered, cut into this many equal-count batches
+  max_best_batch_share: 0.35                   # the single best batch may carry at most 35% of the total uplift mass
+  drop_best_year_must_stay_positive: true      # with >= 2 eligible years, the uplift mass without the best year must stay > 0
 model_agreement:
   min_models_passing: 2
 verification:

@@ -162,7 +162,7 @@ def good_row(**kw):
     row = dict(target="DIR_RETURN_180", model="RIDGE", state=UPPER, trial_id="T", n_selected_events=500, selected_frequency=2.0,
                retention_ratio=0.5, standardized_uplift=0.2, selected_effect=0.2, bootstrap_ci_low=0.01, experiment_q=0.01,
                campaign_q=0.01, experiment_bonferroni_p=0.01, campaign_bonferroni_p=0.01, positive_years=4, positive_uplift_years=4,
-               eligible_years=5, folds_evaluated=5, positive_effect_folds=5, positive_uplift_folds=5)
+               eligible_years=5, folds_evaluated=5, positive_effect_folds=5, positive_uplift_folds=5, batch_best_share=0.2, year_best_share=0.4)
     row.update(kw)
     return row
 
@@ -205,12 +205,41 @@ def test_year_consistency_needs_both_positive_effect_and_positive_uplift_fractio
     assert dec == INSTAB and "positive selected-effect years 3/5" in why and "positive-uplift years 3/5" in why
 
 
-def test_five_fold_consistency_gate_never_relaxed():
-    assert not classify_trial(good_row(positive_uplift_folds=3), ACC)[0]
-    assert not classify_trial(good_row(positive_effect_folds=3), ACC)[0]
-    assert classify_trial(good_row(positive_uplift_folds=4, positive_effect_folds=4), ACC)[0]
-    ok, dec, why = classify_trial(good_row(folds_evaluated=4, positive_uplift_folds=4, positive_effect_folds=4), ACC)
-    assert not ok and dec == INSTAB and "INSUFFICIENT_DEVELOPMENT_FOLD_EVIDENCE" in why     # 4 of 4 is NOT relaxed to 3/4
+def test_the_fold_gate_is_gone_and_a_small_set_carrying_the_result_is_rejected():
+    # v2.1.0: fewer / negative folds no longer reject by themselves ...
+    assert classify_trial(good_row(folds_evaluated=1, positive_uplift_folds=0, positive_effect_folds=0), ACC)[0]
+    assert "fold_consistency" not in ACC and ACC["concentration"] == {"n_batches": 10, "max_best_batch_share": 0.35, "drop_best_year_must_stay_positive": True}
+    # ... but one batch of 10 carrying more than 35% of the uplift does
+    assert classify_trial(good_row(batch_best_share=0.35), ACC)[0]
+    ok, dec, why = classify_trial(good_row(batch_best_share=0.36), ACC)
+    assert not ok and dec == INSTAB and "small set of trades carries the result" in why and "36%" in why
+    ok, dec, why = classify_trial(good_row(batch_best_share=float("nan")), ACC)
+    assert not ok and dec == INSTAB and "undefined" in why
+    # one year carrying everything (the rest of the years net <= 0) is rejected; fewer than 2 eligible years is not judged by this check
+    ok, dec, why = classify_trial(good_row(year_best_share=1.0), ACC)
+    assert not ok and dec == INSTAB and "one year carries the whole result" in why
+    assert classify_trial(good_row(year_best_share=0.99), ACC)[0]
+    assert classify_trial(good_row(year_best_share=float("nan"), eligible_years=1, positive_years=1, positive_uplift_years=1), ACC)[0]
+
+
+def test_batch_and_year_shares_come_from_the_uplift_mass():
+    from engine.statistics import evaluate_panel
+    rng = np.random.default_rng(3)
+    n = 4000
+    ev = np.arange(n, dtype="int64") * 86_400_000_000_000 // 6 + 1_500_000_000_000_000_000
+    year = pd.DatetimeIndex(ev).year.to_numpy()
+    week = np.array([f"{y}-{(i // 30) % 52:02d}" for i, y in enumerate(year)])
+    state = np.where(rng.random(n) < 0.5, UPPER, LOWER)
+
+    def run(y):
+        return evaluate_panel(y, state, year, week, ev, 400.0, bootstrap_reps=50, permutation_reps=50, seed=1, ci_level=0.95, min_events_year=20)[UPPER]
+    spread = run(rng.normal(size=n) + 0.5 * (state == UPPER))                                      # a uniform edge: no batch dominates
+    assert spread["batch_best_share"] < 0.35 and spread["year_best_share"] < 0.9
+    one = np.zeros(n)
+    y = rng.normal(size=n)
+    y[(np.arange(n) >= 100) & (np.arange(n) < 500) & (state == UPPER)] += 3.0                       # one burst of 400 events carries the whole edge
+    burst = run(y)
+    assert burst["batch_best_share"] > 0.35 and burst["batch_best_share"] > spread["batch_best_share"] * 2
 
 
 def test_frequency_destruction_is_labelled_not_hidden():

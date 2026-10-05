@@ -1,7 +1,7 @@
 # AGENTS.md
 
-Read **GUIDE.md** first: it explains the pipeline, what you are encouraged to do (propose events and filters, consult the literature, interpret reports critically,
-suggest follow-ups) and the short list of non-negotiables. `RESEARCH_RULES.md` has the exact rules.
+Read **conditional-edge-engine/GUIDE.md** first: it explains the pipeline, what you are encouraged to do (propose events and filters, consult the literature, interpret reports critically,
+suggest follow-ups) and the short list of non-negotiables. `conditional-edge-engine/RESEARCH_RULES.md` has the exact rules.
 
 Non-negotiables in one place (details in GUIDE.md):
 1. Never write anything in `approvals/`; never open the final lockbox.

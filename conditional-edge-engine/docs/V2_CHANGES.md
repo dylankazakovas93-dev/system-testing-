@@ -11,3 +11,10 @@ Changes on top of the frozen v1.2.1 snapshot (the lifecycle, near-tie rule, hold
 
 Interpretation notes: the planted-momentum example now shows 15-minute and path-skew candidates, 60-minute candidates that the old 0.10 floor rejected, and 180-minute rejected by the null tests.
 `frozen/v1/` keeps its directory name although the content is the v2 specification.
+
+## v2.1.0 — fold gate replaced by batch/year concentration
+
+* **Removed:** "≥ 4 of 5 DEVELOPMENT_CV folds positive" and "all 5 folds evaluated" (`INSUFFICIENT_DEVELOPMENT_FOLD_EVIDENCE`). Folds are still computed (they produce the out-of-fold predictions) and reported, but gate nothing.
+* **Added:** the out-of-fold selected trades, in time order, are cut into 10 equal-count batches. The best batch may carry at most 35% of the total uplift mass (`batch_best_share`), and with ≥ 2 eligible years the uplift mass without the best year must stay positive (`year_best_share` < 1). Two new trial columns record both shares.
+* **Unchanged:** the 0.01 uplift floor, 1/week frequency floor, null tests, BH/Bonferroni, ≥ 70% positive years, 2-of-3 models, verification, sensitivity, near-tie rule, holdout viability floor, CPCV (still the expensive, 6-group robustness veto), lockbox.
+* **Guidance:** `GUIDE.md` replaces the old rigid `AGENTS.md` rule list: LLMs are encouraged to propose events/filters (consulting the literature), interpret reports and challenge the engine; only a short list of integrity rules is non-negotiable. `AGENTS.md` / `CLAUDE.md` point to it.

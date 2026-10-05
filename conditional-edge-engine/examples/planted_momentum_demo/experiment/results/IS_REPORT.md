@@ -986,9 +986,9 @@ How this configuration emerged
 - LOWER_HALF was predeclared before results (frozen score-state definition: train-only median).
 - Selected frequency: 17.67/week (retention 0.49).
 - Parent effect: -0.000031; selected effect: +0.001447; uplift: +0.001478 (standardized +0.224) — medians over the 3 eligible models.
-- RIDGE: positive uplift in 3/3 eligible years; positive selected effect in 3/3 years; positive uplift in 5/5 DEVELOPMENT_CV folds; bootstrap CI lower bound +0.00116.
-- SPLINE: positive uplift in 3/3 eligible years; positive selected effect in 3/3 years; positive uplift in 5/5 DEVELOPMENT_CV folds; bootstrap CI lower bound +0.00126.
-- XGB: positive uplift in 3/3 eligible years; positive selected effect in 3/3 years; positive uplift in 5/5 DEVELOPMENT_CV folds; bootstrap CI lower bound +0.00137.
+- RIDGE: positive uplift in 3/3 eligible years; positive selected effect in 3/3 years; best single batch of 10 carries 13% of the uplift (gate <= 35%), best year 43%; 5/5 DEVELOPMENT_CV folds positive (reported only); bootstrap CI lower bound +0.00116.
+- SPLINE: positive uplift in 3/3 eligible years; positive selected effect in 3/3 years; best single batch of 10 carries 15% of the uplift (gate <= 35%), best year 46%; 5/5 DEVELOPMENT_CV folds positive (reported only); bootstrap CI lower bound +0.00126.
+- XGB: positive uplift in 3/3 eligible years; positive selected effect in 3/3 years; best single batch of 10 carries 12% of the uplift (gate <= 35%), best year 44%; 5/5 DEVELOPMENT_CV folds positive (reported only); bootstrap CI lower bound +0.00137.
 - Bonferroni adjusted p (experiment): 0.01199; campaign Bonferroni adjusted p: 0.01199; BH q experiment 0.0006663, campaign 0.0006663.
 - Model agreement: 3/3.
 - Selection trial count when observed: 24.
@@ -1004,9 +1004,9 @@ How this configuration emerged
 - UPPER_HALF was predeclared before results (frozen score-state definition: train-only median).
 - Selected frequency: 18.72/week (retention 0.51).
 - Parent effect: +0.000031; selected effect: +0.001429; uplift: +0.001398 (standardized +0.212) — medians over the 3 eligible models.
-- RIDGE: positive uplift in 3/3 eligible years; positive selected effect in 3/3 years; positive uplift in 5/5 DEVELOPMENT_CV folds; bootstrap CI lower bound +0.00119.
-- SPLINE: positive uplift in 3/3 eligible years; positive selected effect in 3/3 years; positive uplift in 5/5 DEVELOPMENT_CV folds; bootstrap CI lower bound +0.00121.
-- XGB: positive uplift in 3/3 eligible years; positive selected effect in 3/3 years; positive uplift in 5/5 DEVELOPMENT_CV folds; bootstrap CI lower bound +0.00121.
+- RIDGE: positive uplift in 3/3 eligible years; positive selected effect in 3/3 years; best single batch of 10 carries 13% of the uplift (gate <= 35%), best year 43%; 5/5 DEVELOPMENT_CV folds positive (reported only); bootstrap CI lower bound +0.00119.
+- SPLINE: positive uplift in 3/3 eligible years; positive selected effect in 3/3 years; best single batch of 10 carries 15% of the uplift (gate <= 35%), best year 46%; 5/5 DEVELOPMENT_CV folds positive (reported only); bootstrap CI lower bound +0.00121.
+- XGB: positive uplift in 3/3 eligible years; positive selected effect in 3/3 years; best single batch of 10 carries 12% of the uplift (gate <= 35%), best year 44%; 5/5 DEVELOPMENT_CV folds positive (reported only); bootstrap CI lower bound +0.00121.
 - Bonferroni adjusted p (experiment): 0.01199; campaign Bonferroni adjusted p: 0.01199; BH q experiment 0.0006663, campaign 0.0006663.
 - Model agreement: 3/3.
 - Selection trial count when observed: 24.
@@ -1022,9 +1022,9 @@ How this configuration emerged
 - UPPER_HALF was predeclared before results (frozen score-state definition: train-only median).
 - Selected frequency: 17.51/week (retention 0.48).
 - Parent effect: +0.000125; selected effect: +0.002153; uplift: +0.002029 (standardized +0.125) — medians over the 3 eligible models.
-- RIDGE: positive uplift in 3/3 eligible years; positive selected effect in 3/3 years; positive uplift in 5/5 DEVELOPMENT_CV folds; bootstrap CI lower bound +0.00192.
-- SPLINE: positive uplift in 3/3 eligible years; positive selected effect in 3/3 years; positive uplift in 5/5 DEVELOPMENT_CV folds; bootstrap CI lower bound +0.00157.
-- XGB: positive uplift in 3/3 eligible years; positive selected effect in 3/3 years; positive uplift in 5/5 DEVELOPMENT_CV folds; bootstrap CI lower bound +0.00148.
+- RIDGE: positive uplift in 3/3 eligible years; positive selected effect in 3/3 years; best single batch of 10 carries 16% of the uplift (gate <= 35%), best year 48%; 5/5 DEVELOPMENT_CV folds positive (reported only); bootstrap CI lower bound +0.00192.
+- SPLINE: positive uplift in 3/3 eligible years; positive selected effect in 3/3 years; best single batch of 10 carries 17% of the uplift (gate <= 35%), best year 50%; 5/5 DEVELOPMENT_CV folds positive (reported only); bootstrap CI lower bound +0.00157.
+- XGB: positive uplift in 3/3 eligible years; positive selected effect in 3/3 years; best single batch of 10 carries 16% of the uplift (gate <= 35%), best year 49%; 5/5 DEVELOPMENT_CV folds positive (reported only); bootstrap CI lower bound +0.00148.
 - Bonferroni adjusted p (experiment): 0.01199; campaign Bonferroni adjusted p: 0.01199; BH q experiment 0.0006663, campaign 0.0006663.
 - Model agreement: 3/3.
 - Selection trial count when observed: 24.
@@ -1040,8 +1040,8 @@ How this configuration emerged
 - LOWER_HALF was predeclared before results (frozen score-state definition: train-only median).
 - Selected frequency: 19.36/week (retention 0.53).
 - Parent effect: -0.000125; selected effect: +0.001834; uplift: +0.001959 (standardized +0.121) — medians over the 2 eligible models.
-- RIDGE: positive uplift in 3/3 eligible years; positive selected effect in 3/3 years; positive uplift in 5/5 DEVELOPMENT_CV folds; bootstrap CI lower bound +0.00159.
-- SPLINE: positive uplift in 3/3 eligible years; positive selected effect in 3/3 years; positive uplift in 5/5 DEVELOPMENT_CV folds; bootstrap CI lower bound +0.00142.
+- RIDGE: positive uplift in 3/3 eligible years; positive selected effect in 3/3 years; best single batch of 10 carries 16% of the uplift (gate <= 35%), best year 48%; 5/5 DEVELOPMENT_CV folds positive (reported only); bootstrap CI lower bound +0.00159.
+- SPLINE: positive uplift in 3/3 eligible years; positive selected effect in 3/3 years; best single batch of 10 carries 17% of the uplift (gate <= 35%), best year 50%; 5/5 DEVELOPMENT_CV folds positive (reported only); bootstrap CI lower bound +0.00142.
 - Bonferroni adjusted p (experiment): 0.01199; campaign Bonferroni adjusted p: 0.01199; BH q experiment 0.0006663, campaign 0.0006663.
 - Model agreement: 2/3.
 - Selection trial count when observed: 24.
@@ -1057,10 +1057,10 @@ How this configuration emerged
 | EXP_0001_T10 | DIR_RETURN_60/SPLINE/LOWER_HALF | REJECTED_INSTABILITY | [REJECTED_INSTABILITY] positive selected-effect years 2/3 < 70%, positive-uplift years 2/3 < 70% |
 | EXP_0001_T11 | DIR_RETURN_60/XGB/UPPER_HALF | REJECTED_INSTABILITY | [REJECTED_INSTABILITY] positive selected-effect years 2/3 < 70%, positive-uplift years 2/3 < 70% |
 | EXP_0001_T12 | DIR_RETURN_60/XGB/LOWER_HALF | REJECTED_INSTABILITY | [REJECTED_INSTABILITY] positive selected-effect years 2/3 < 70%, positive-uplift years 2/3 < 70% |
-| EXP_0001_T13 | DIR_RETURN_180/RIDGE/UPPER_HALF | REJECTED_STATISTICAL | [REJECTED_STATISTICAL] bootstrap CI lower bound -1.86e-05 <= 0, experiment_bonferroni_p 0.4078 > 0.05, campaign_bonferroni_p 0.4078 > 0.05; [REJECTED_INSTABILITY] positive selected-effect years 2/3 < 70%, positive-uplift years 2/3 < 70%, positive selected-effect DEVELOPMENT_CV folds 3/5 < 4 |
-| EXP_0001_T14 | DIR_RETURN_180/RIDGE/LOWER_HALF | REJECTED_STATISTICAL | [REJECTED_STATISTICAL] bootstrap CI lower bound -1.357e-05 <= 0, experiment_bonferroni_p 0.4078 > 0.05, campaign_bonferroni_p 0.4078 > 0.05; [REJECTED_INSTABILITY] positive selected-effect years 1/3 < 70%, positive-uplift years 2/3 < 70%, positive selected-effect DEVELOPMENT_CV folds 3/5 < 4 |
-| EXP_0001_T15 | DIR_RETURN_180/SPLINE/UPPER_HALF | REJECTED_STATISTICAL | [REJECTED_STATISTICAL] bootstrap CI lower bound -0.0001047 <= 0, experiment_bonferroni_p 0.5277 > 0.05, campaign_bonferroni_p 0.5277 > 0.05; [REJECTED_INSTABILITY] positive selected-effect years 2/3 < 70%, positive-uplift years 2/3 < 70% |
-| EXP_0001_T16 | DIR_RETURN_180/SPLINE/LOWER_HALF | REJECTED_STATISTICAL | [REJECTED_STATISTICAL] bootstrap CI lower bound -9.04e-05 <= 0, experiment_bonferroni_p 0.5277 > 0.05, campaign_bonferroni_p 0.5277 > 0.05; [REJECTED_INSTABILITY] positive selected-effect years 1/3 < 70%, positive-uplift years 2/3 < 70%, positive selected-effect DEVELOPMENT_CV folds 3/5 < 4 |
+| EXP_0001_T13 | DIR_RETURN_180/RIDGE/UPPER_HALF | REJECTED_STATISTICAL | [REJECTED_STATISTICAL] bootstrap CI lower bound -1.86e-05 <= 0, experiment_bonferroni_p 0.4078 > 0.05, campaign_bonferroni_p 0.4078 > 0.05; [REJECTED_INSTABILITY] positive selected-effect years 2/3 < 70%, positive-uplift years 2/3 < 70%, a small set of trades carries the result: the single best of 10 time-ordered batches carries 38% of the uplift (> 35%) |
+| EXP_0001_T14 | DIR_RETURN_180/RIDGE/LOWER_HALF | REJECTED_STATISTICAL | [REJECTED_STATISTICAL] bootstrap CI lower bound -1.357e-05 <= 0, experiment_bonferroni_p 0.4078 > 0.05, campaign_bonferroni_p 0.4078 > 0.05; [REJECTED_INSTABILITY] positive selected-effect years 1/3 < 70%, positive-uplift years 2/3 < 70%, a small set of trades carries the result: the single best of 10 time-ordered batches carries 38% of the uplift (> 35%) |
+| EXP_0001_T15 | DIR_RETURN_180/SPLINE/UPPER_HALF | REJECTED_STATISTICAL | [REJECTED_STATISTICAL] bootstrap CI lower bound -0.0001047 <= 0, experiment_bonferroni_p 0.5277 > 0.05, campaign_bonferroni_p 0.5277 > 0.05; [REJECTED_INSTABILITY] positive selected-effect years 2/3 < 70%, positive-uplift years 2/3 < 70%, a small set of trades carries the result: the single best of 10 time-ordered batches carries 45% of the uplift (> 35%) |
+| EXP_0001_T16 | DIR_RETURN_180/SPLINE/LOWER_HALF | REJECTED_STATISTICAL | [REJECTED_STATISTICAL] bootstrap CI lower bound -9.04e-05 <= 0, experiment_bonferroni_p 0.5277 > 0.05, campaign_bonferroni_p 0.5277 > 0.05; [REJECTED_INSTABILITY] positive selected-effect years 1/3 < 70%, positive-uplift years 2/3 < 70%, a small set of trades carries the result: the single best of 10 time-ordered batches carries 45% of the uplift (> 35%) |
 | EXP_0001_T17 | DIR_RETURN_180/XGB/UPPER_HALF | REJECTED_INSTABILITY | [REJECTED_INSTABILITY] positive selected-effect years 2/3 < 70%, positive-uplift years 2/3 < 70% |
 | EXP_0001_T18 | DIR_RETURN_180/XGB/LOWER_HALF | REJECTED_INSTABILITY | [REJECTED_INSTABILITY] positive selected-effect years 2/3 < 70%, positive-uplift years 2/3 < 70% |
 | EXP_0001_T24 | DIR_PATH_SKEW_60/XGB/LOWER_HALF | REJECTED_INSTABILITY | [REJECTED_INSTABILITY] positive selected-effect years 2/3 < 70% |
@@ -1546,18 +1546,18 @@ _no filter_ladder declared_
 
 | item | sha256 |
 |---|---|
-| manifest_sha256 | 391c85da00931a735bad6d9e62ff59c1609baf8ce4320ea2c032408eabf4ea2b |
-| manifest_hash | 3a4dc07e3e7bd5e3daa6035ce341b668af70ca071a7b41e15f00099bf41b10e1 |
+| manifest_sha256 | a181a567253a343d15c2f29e29b90ef9bc43cf8b5994ffd8e09c1a582ed045c2 |
+| manifest_hash | 8cbf5db2fcc78e919dc3091ce862db2b3925b8d78b1fea8376fc5f8f9029fff7 |
 | event_hash | 33075c486274c70b10d1ed5b04172844c3d6c631d92aec62a9fd87eaac5fc0c9 |
 | event_py | 47e3f563c012e50b1a7f8a30d8bf81e106793a1d594ffd5bb2d922660ad10585 |
 | event_spec | 7bf96905a5ea2dc0858450aaeca0a92da9c1bf43bde56ffecf5e1fa6de774d55 |
 | partitions_hash | 057e193f2d09a4751b8983471186cc6a4b3c1831ffbd0cfbd6f814c0c190235e |
-| frozen_bundle_hash | 98b1d47b695d7d4ccd91b773d1a53e7da43be87f7af915df2d4b22ea4cc5af67 |
-| engine_code_hash | 6273560f300ea953e44285d0b694bf5b4fc480b51bb48a80c464634e85102def |
-| engine_version | v2.0.0 |
-| trial_ledger_hash | 9ec7b5261f281cdd9210df35398e96ccb925a4cffe8bf72dd2d545ae8bb942b5 |
+| frozen_bundle_hash | 6a709c31454505a4d77740258eb88c53116e23329ee05eccbfc35c64d63d4bae |
+| engine_code_hash | 78c9ca9eef6b94b4eff529826363fbf381db54240ae5b23ad32be662d4a990b8 |
+| engine_version | v2.1.0 |
+| trial_ledger_hash | 79f42c498d1809c3704ba019481d9b28d61075c6384ddefbf837d9c4fddeb495 |
 | is_data_fingerprint | 99deba244cd2790651042661941d558e73e3f0c42b3f508c0acf26dee9be2371 |
-| results_sha256 | d07640a79a6d8b7152d22a4bc5e300114fcaee10cbfad7ca85cbe9370b2fa290 |
+| results_sha256 | f6b8ab9345fcc7ba26cf4802addf02eff1af14ef83652ca2afe7afb8fa91e945 |
 | path_diagnostics_sha256 | 9e127480bdfc5561c69a9c5b62cbdaa2d34a7b24d407e6a5ad0cd62a2e1bf6fc |
 | verifier_pin | 624c8b7f0502abf6c5d453d501e96e3172367035 |
 

@@ -56,7 +56,7 @@ def permute_week_blocks(blocks: list[np.ndarray], rng: np.random.Generator) -> n
 def evaluate_panel(y, state, year, week, event_ns, n_eligible_weeks: float, *, bootstrap_reps: int,
                    permutation_reps: int, seed: int, ci_level: float, min_events_year: int,
                    fold=None, weeks_by_year: dict | None = None, weeks_by_fold: dict | None = None,
-                   concentration_share: float = 0.35) -> dict[str, dict]:
+                   concentration_share: float = 0.35, n_batches: int = 10) -> dict[str, dict]:
     """Full statistics for both states of one (target, model) panel. Returns {state: stats}.
 
     ``fold`` (DEVELOPMENT_CV fold id per event) enables the per-fold table; ``weeks_by_year`` / ``weeks_by_fold`` give
@@ -139,7 +139,19 @@ def evaluate_panel(y, state, year, week, event_ns, n_eligible_weeks: float, *, b
         tot = float(sum(contrib))
         rec["year_concentration_share"] = float(max(contrib) / tot) if elig and tot > 0 else float("nan")
         rec["year_concentration_warning"] = bool(elig and tot > 0 and max(contrib) / tot > concentration_share)
-        # ---- per DEVELOPMENT_CV fold
+        # ---- concentration: does a small set of batches / one year carry the result? (share of the total uplift mass)
+        bid = (np.arange(n) * n_batches) // n
+        bmass = []
+        for b in range(n_batches):
+            mb = bid == b
+            mbs = mb & sel
+            bmass.append(float(mbs.sum() * (sv[mbs].mean() - sv[mb].mean())) if mbs.any() else 0.0)
+        btot = float(sum(bmass))
+        rec["batch_best_share"] = float(max(bmass) / btot) if btot > 0 else float("nan")
+        ymass = [r["n_selected"] * r["uplift"] for r in elig]
+        ytot = float(sum(ymass))
+        rec["year_best_share"] = float(max(ymass) / ytot) if len(elig) >= 2 and ytot > 0 else float("nan")
+        # ---- per DEVELOPMENT_CV fold (reported only since v2.1.0)
         folds = []
         for fd in sorted(np.unique(fold)):
             mf = fold == fd
@@ -166,7 +178,7 @@ def _empty(state: str) -> dict:
                 standardized_uplift=nan, bootstrap_ci_low=nan, bootstrap_ci_high=nan, raw_p=1.0,
                 n_cv_weeks=nan, yearly=[], folds=[], eligible_years=0, positive_years=0, positive_uplift_years=0,
                 folds_evaluated=0, positive_effect_folds=0, positive_uplift_folds=0,
-                year_concentration_share=nan, year_concentration_warning=False)
+                year_concentration_share=nan, year_concentration_warning=False, batch_best_share=nan, year_best_share=nan)
 
 
 def decile_diagnostics(score, y, year, n_eligible_weeks: float) -> dict:

@@ -1,4 +1,4 @@
-# RESEARCH RULES — conditional-edge-engine v2.0.0 (frozen research rules in `frozen/v1/`; v2 targets and uplift floor; v1.2 lifecycle)
+# RESEARCH RULES — conditional-edge-engine v2.1.0 (frozen research rules in `frozen/v1/`; v2 targets and uplift floor; v2.1 batch concentration instead of the fold gate; v1.2 lifecycle)
 
 > The engine may search only inside the predefined development (IS) research space. It stops and presents the human with the
 > entire in-sample selection history **and the configuration uncertainty (near-ties)** before it is technically permitted to touch the SELECTION HOLDOUT.
@@ -13,7 +13,7 @@ which problems I found. Nothing below has been run on real NQ data.
 ## 0. Gates that must never be weakened to make a test pass
 
 1 trade/week floor, 0.01 standardized-uplift floor (v2), exactly 24 selection trials per experiment, 20 experiments per campaign,
-2-of-3 model agreement, 70% year consistency, 4/5 fold consistency, the Bonferroni **and** BH universes, single-direction events,
+2-of-3 model agreement, 70% year consistency, the batch/year concentration gate, the Bonferroni **and** BH universes, single-direction events,
 the same-session target rule, the human SELECTION HOLDOUT gate, and the CPCV 6-choose-2 specification. If a synthetic scenario fails one of
 them the **planted effect** is changed, never the rule. `tests/test_policy_invariants.py` pins the frozen constants.
 
@@ -80,11 +80,11 @@ revealed is a **new lineage** (`new_experiment.py --lineage-of EXP_xxxx`) that c
   (candidates can be downgraded to `IS_NO_CANDIDATE`; tested).
 * **IS shortlist eligibility of one model trial** (`ACCEPTANCE_RULES.yaml`) = all of: selected frequency ≥ 1.0/week (events ÷ eligible weeks **from bars**); standardized uplift ≥ 0.01 (v2: uplift must beat the null by 0.01 sd; the null-based gates — adjusted p, CI > 0, year/fold/model consistency — carry the burden of proof);
   **absolute selected effect > 0** (a trial with positive uplift but non-positive selected effect is `DIAGNOSTIC_CONDITIONAL_IMPROVEMENT`, never eligible); bootstrap CI lower bound > 0;
-  `experiment_q`, `campaign_q`, `experiment_bonferroni_p`, `campaign_bonferroni_p` all ≤ 0.05; year consistency; fold consistency. A TARGET|SIDE group needs ≥ 2 of 3 eligible models.
+  `experiment_q`, `campaign_q`, `experiment_bonferroni_p`, `campaign_bonferroni_p` all ≤ 0.05; year consistency; batch/year concentration (v2.1). A TARGET|SIDE group needs ≥ 2 of 3 eligible models.
   The statuses are `IS_REJECTED`, `IS_PROVISIONAL_CANDIDATE` (gates pass but verification/sensitivity not yet complete), `IS_SHORTLIST_ELIGIBLE`.
 * **Year consistency**: among UTC calendar years of the DEVELOPMENT_CV validation events with ≥ 20 selected events, ≥ 70% need positive selected effect **and** ≥ 70% need positive uplift.
   A year whose |selected events × uplift| exceeds 35% of the total raises `YEAR_CONCENTRATION_WARNING` (reported, **not** a rejection).
-* **Fold consistency**: ≥ 4 of 5 folds with positive uplift **and** ≥ 4 of 5 with positive selected effect. Fewer than 5 evaluated folds ⇒ `INSUFFICIENT_DEVELOPMENT_FOLD_EVIDENCE` (not eligible).
+* **Concentration (v2.1.0, replaces the fold gate)**: the out-of-fold selected trades are cut, in time order, into 10 equal-count batches; the single best batch may carry at most 35% of the total uplift mass, and with ≥ 2 eligible years the uplift mass without the best year must stay positive. This asks "does a small set carry the result?" and needs no minimum number of folds. The 4-of-5-folds gate and the "all 5 folds evaluated" requirement were removed because they acted as a sample-size wall for low-frequency setups; the 5 walk-forward folds still produce the out-of-fold predictions and are reported (informational only).
 * **Filter ladder** (optional, frozen order, development only, never alters a trial): `filter_ladder` in the spec + `detect_events_ladder()`; each step reports events, frequency, retention,
   effect / uplift versus the parent and the previous step per target, yearly tables and the flags `NO_CONSISTENT_IMPROVEMENT` / `FREQUENCY_DESTRUCTION`; steps identical to the previous step are unflagged.
   Every row is logged in `observations.csv`.

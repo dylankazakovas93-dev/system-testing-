@@ -23,7 +23,7 @@ def test_the_uplift_floor_is_001_and_nothing_larger_remains():
     assert not ok and dec == LOW_UPLIFT and "< 0.01" in why
     # the other gates are untouched
     assert ACC["min_selected_frequency_per_week"] == 1.0 and ACC["bootstrap_ci_lower_bound_must_exceed"] == 0.0 and ACC["max_experiment_q"] == 0.05
-    assert ACC["year_consistency"]["min_positive_effect_year_fraction"] == 0.70 and ACC["fold_consistency"]["min_folds_positive_uplift"] == 4
+    assert ACC["year_consistency"]["min_positive_effect_year_fraction"] == 0.70 and "fold_consistency" not in ACC
     row = dict(group_id="G|U", model="RIDGE", n_selected=300, selected_frequency=2.0, standardized_uplift=0.012, selected_effect=0.1, bootstrap_ci_low=0.01, raw_p=0.001)
     assert selection_holdout_evaluations([row], ACC["selection_holdout_evidence"])[0]["gates_pass"] is True
 

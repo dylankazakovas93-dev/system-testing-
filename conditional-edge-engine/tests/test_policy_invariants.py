@@ -58,7 +58,7 @@ def test_frozen_targets_models_policy_acceptance_values():
     assert a["bonferroni"] == {"max_experiment_p": 0.05, "max_campaign_p": 0.05}
     assert a["year_consistency"] == {"min_selected_events_for_eligible_year": 20, "min_positive_effect_year_fraction": 0.70,
                                      "min_positive_uplift_year_fraction": 0.70, "concentration_warning_share": 0.35}
-    assert a["fold_consistency"] == {"required_folds": 5, "min_folds_positive_uplift": 4, "min_folds_positive_effect": 4}
+    assert "fold_consistency" not in a and a["concentration"] == {"n_batches": 10, "max_best_batch_share": 0.35, "drop_best_year_must_stay_positive": True}
     assert a["model_agreement"]["min_models_passing"] == 2
     assert a["selection_holdout_evidence"]["min_models_passing"] == 2 and a["selection_holdout_evidence"]["max_selection_holdout_bonferroni_p"] == 0.05
     assert (a["cpcv"]["n_splits"], a["cpcv"]["min_splits_positive_effect"], a["cpcv"]["min_splits_positive_uplift"]) == (15, 12, 12)
@@ -188,7 +188,7 @@ def test_seeds_are_fixed_everywhere_no_unseeded_randomness():
 
 
 def test_frozen_v1_release_version_and_verifier_pin_are_exact():
-    assert (CODE_ROOT / "ENGINE_VERSION").read_text().strip() == "v2.0.0"
+    assert (CODE_ROOT / "ENGINE_VERSION").read_text().strip() == "v2.1.0"
     pin = F.__class__ and __import__("engine.verifier_bridge", fromlist=["x"]).verifier_pin()
     assert pin["commit"] == "624c8b7f0502abf6c5d453d501e96e3172367035" and pin["required_mode"] == "strong"
     assert pin["required_models"] == ["RIDGE", "SPLINE", "XGB"]

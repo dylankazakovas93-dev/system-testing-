@@ -97,7 +97,7 @@ def fake_results(ws, exp, p_by_pair=None, default_p=0.9, good=True, **over):
                    parent_effect=0.0, selected_effect=0.2, uplift=0.2, target_sd=1.0, standardized_uplift=0.2 if good else 0.0,
                    bootstrap_ci_low=0.05, bootstrap_ci_high=0.3, raw_p=p, positive_years=5, positive_uplift_years=5,
                    eligible_years=5, folds_evaluated=5, positive_effect_folds=5, positive_uplift_folds=5,
-                   year_concentration_share=0.25, year_concentration_warning=False, n_cv_weeks=500.0)
+                   year_concentration_share=0.25, year_concentration_warning=False, batch_best_share=0.2, year_best_share=0.4, n_cv_weeks=500.0)
         row.update(over)
         out[r["trial_id"]] = row
     return out

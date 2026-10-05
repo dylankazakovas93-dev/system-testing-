@@ -34,7 +34,6 @@ SENS = "REJECTED_SENSITIVITY"
 VERIF = "REJECTED_VERIFICATION"
 DIAG = "DIAGNOSTIC_ONLY"
 FREQ_LOSS_LABEL = "REJECTED_INSUFFICIENT_UPLIFT_FOR_FREQUENCY_LOSS"
-FOLD_LABEL = "INSUFFICIENT_DEVELOPMENT_FOLD_EVIDENCE"
 PASSING = (SHORTLIST, PROVISIONAL)
 
 
@@ -81,7 +80,7 @@ def classify_trial(row: dict, acc: dict, campaign: bool = True) -> tuple[bool, s
             fails[STAT].append(f"campaign_q {qc:.4f} > {acc['max_campaign_q']}")
         if bc > acc["bonferroni"]["max_campaign_p"]:
             fails[STAT].append(f"campaign_bonferroni_p {bc:.4f} > {acc['bonferroni']['max_campaign_p']}")
-    yc, fc = acc["year_consistency"], acc["fold_consistency"]
+    yc = acc["year_consistency"]
     elig = _f(row, "eligible_years")
     pe, pu = _f(row, "positive_years"), _f(row, "positive_uplift_years")
     if not (elig > 0):
@@ -91,14 +90,13 @@ def classify_trial(row: dict, acc: dict, campaign: bool = True) -> tuple[bool, s
             fails[INSTAB].append(f"positive selected-effect years {int(pe)}/{int(elig)} < {yc['min_positive_effect_year_fraction']:.0%}")
         if pu / elig < yc["min_positive_uplift_year_fraction"]:
             fails[INSTAB].append(f"positive-uplift years {int(pu)}/{int(elig)} < {yc['min_positive_uplift_year_fraction']:.0%}")
-    nf = _f(row, "folds_evaluated")
-    if not nf >= fc["required_folds"]:
-        fails[INSTAB].append(f"{FOLD_LABEL}: {0 if math.isnan(nf) else int(nf)} of {fc['required_folds']} DEVELOPMENT_CV folds evaluated")
-    else:
-        if _f(row, "positive_uplift_folds") < fc["min_folds_positive_uplift"]:
-            fails[INSTAB].append(f"positive-uplift DEVELOPMENT_CV folds {int(_f(row, 'positive_uplift_folds'))}/5 < {fc['min_folds_positive_uplift']}")
-        if _f(row, "positive_effect_folds") < fc["min_folds_positive_effect"]:
-            fails[INSTAB].append(f"positive selected-effect DEVELOPMENT_CV folds {int(_f(row, 'positive_effect_folds'))}/5 < {fc['min_folds_positive_effect']}")
+    cc = acc["concentration"]
+    bs, ys = _f(row, "batch_best_share"), _f(row, "year_best_share")
+    if math.isnan(bs) or bs > cc["max_best_batch_share"]:
+        fails[INSTAB].append("a small set of trades carries the result: " + ("batch concentration undefined (no positive uplift mass)" if math.isnan(bs)
+                             else f"the single best of {cc['n_batches']} time-ordered batches carries {bs:.0%} of the uplift (> {cc['max_best_batch_share']:.0%})"))
+    if cc["drop_best_year_must_stay_positive"] and elig >= 2 and (math.isnan(ys) or ys >= 1.0):
+        fails[INSTAB].append("one year carries the whole result: without the best year the uplift is not positive")
     if not fails:
         return True, SHORTLIST, ""
     primary = next(c for c in acc["decision_priority"] if c in fails)

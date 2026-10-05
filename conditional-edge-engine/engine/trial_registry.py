@@ -45,7 +45,7 @@ TRIAL_COLS = ["campaign_id", "experiment_id", "trial_id", "target", "model", "st
               "parent_effect", "selected_effect", "uplift", "standardized_uplift", "bootstrap_ci_low", "bootstrap_ci_high",
               "raw_p", "experiment_q", "experiment_bonferroni_p", "campaign_q", "campaign_bonferroni_p",
               "positive_years", "positive_uplift_years", "eligible_years", "folds_evaluated", "positive_effect_folds",
-              "positive_uplift_folds", "year_concentration_share", "year_concentration_warning",
+              "positive_uplift_folds", "year_concentration_share", "year_concentration_warning", "batch_best_share", "year_best_share",
               "decision", "rejection_reason", "status", "registered_at", "revealed_at", "target_sd", "n_cv_weeks"]
 OBS_COLS = ["observation_id", "campaign_id", "experiment_id", "created_at", "category", "description",
             "metric_name", "metric_value", "eligible_for_promotion", "diagnostic_label", "note"]
@@ -64,7 +64,7 @@ NUMERIC_TRIAL_COLS = ["selection_opportunity_number", "cumulative_campaign_selec
                       "selected_effect", "uplift", "standardized_uplift", "bootstrap_ci_low", "bootstrap_ci_high", "raw_p",
                       "experiment_q", "experiment_bonferroni_p", "campaign_q", "campaign_bonferroni_p", "positive_years",
                       "positive_uplift_years", "eligible_years", "folds_evaluated", "positive_effect_folds",
-                      "positive_uplift_folds", "year_concentration_share", "target_sd", "n_cv_weeks"]
+                      "positive_uplift_folds", "year_concentration_share", "batch_best_share", "year_best_share", "target_sd", "n_cv_weeks"]
 # fields sealed by trial_ledger_hash at reveal (campaign-adjusted values and decisions are retroactive by design)
 SEALED_TRIAL_FIELDS = ["campaign_id", "experiment_id", "trial_id", "target", "model", "state", "manifest_hash", "event_hash",
                        "feature_bank_hash", "target_bank_hash", "model_bank_hash", "trial_policy_hash", "is_data_hash",
@@ -74,7 +74,7 @@ SEALED_TRIAL_FIELDS = ["campaign_id", "experiment_id", "trial_id", "target", "mo
                        "standardized_uplift", "bootstrap_ci_low", "bootstrap_ci_high", "raw_p", "experiment_q",
                        "experiment_bonferroni_p", "positive_years", "positive_uplift_years", "eligible_years",
                        "folds_evaluated", "positive_effect_folds", "positive_uplift_folds", "year_concentration_share",
-                       "year_concentration_warning", "revealed_at", "target_sd", "n_cv_weeks"]
+                       "year_concentration_warning", "batch_best_share", "year_best_share", "revealed_at", "target_sd", "n_cv_weeks"]
 FINAL_CONFIG_COLS = ["campaign_id", "experiment_id", "event", "selected_config_id", "is_rank", "near_tie_cluster", "selection_holdout_used",
                      "selection_holdout_rank", "human_selection_file_hash", "manifest_hash", "frozen_at", "cpcv_status", "prev_row_hash", "row_hash"]
 # Experiment lifecycle (v1.2). Every status below is explicit; nothing is called "confirmed" unless it is the final untouched lockbox.
@@ -423,7 +423,7 @@ _RESULT_MAP = [("n_parent", "n_parent_events"), ("n_selected", "n_selected_event
                ("positive_uplift_years", "positive_uplift_years"), ("eligible_years", "eligible_years"),
                ("folds_evaluated", "folds_evaluated"), ("positive_effect_folds", "positive_effect_folds"),
                ("positive_uplift_folds", "positive_uplift_folds"), ("year_concentration_share", "year_concentration_share"),
-               ("target_sd", "target_sd"), ("n_cv_weeks", "n_cv_weeks")]
+               ("batch_best_share", "batch_best_share"), ("year_best_share", "year_best_share"), ("target_sd", "target_sd"), ("n_cv_weeks", "n_cv_weeks")]
 
 
 def _fmt(v) -> str:
