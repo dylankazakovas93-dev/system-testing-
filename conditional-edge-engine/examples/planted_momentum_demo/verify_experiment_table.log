@@ -12,5 +12,3 @@ DIR_PATH_SKEW_60   RIDGE   label=RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE      g
 DIR_PATH_SKEW_60   SPLINE  label=RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE      global=INCOMPLETE / UNVERIFIED exit=2 research_families={"research_contract": "PASS", "research_causality": "PASS", "walkforward": "PASS", "ml_leakage": "PASS", "lockbox": "PASS"}
 DIR_PATH_SKEW_60   XGB     label=RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE      global=INCOMPLETE / UNVERIFIED exit=2 research_families={"research_contract": "PASS", "research_causality": "PASS", "walkforward": "PASS", "ml_leakage": "PASS", "lockbox": "PASS"}
 OVERALL: RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE   (verifier commit 624c8b7f0502abf6c5d453d501e96e3172367035, mode strong)
-verify exit 2
-FINISHED

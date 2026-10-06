@@ -1,29 +1,29 @@
 {
   "campaign_id": "C001",
-  "engine_version": "v2.1.0",
+  "engine_version": "v2.2.0",
   "event_hash": "33075c486274c70b10d1ed5b04172844c3d6c631d92aec62a9fd87eaac5fc0c9",
   "experiment_id": "EXP_0001",
-  "frozen_at": "2026-10-05T19:58:41Z",
+  "frozen_at": "2026-10-06T19:14:11Z",
   "frozen_spec_hashes": {
-    "acceptance_rules_hash": "7a8ce12c944adad16b645b8e424dd17be51d36c10c76c8c22bb7c6b9cd3851d3",
+    "acceptance_rules_hash": "bc0c46bc2552b95cde443943435144e1fd01c30a3febd965697ba6c750a18583",
     "feature_bank_hash": "300ce5991f52cad544bbf6b84652d739db8d92e12ab32bc1583ee9ac5282fc6a",
     "model_bank_hash": "2c578364b2b07ac5eb1454911a3391a2796b03c097e5d9f8f28e8863ad17e569",
     "target_bank_hash": "81d8415abb937ad35484212d9897153fc227a7c981436ce2c1d0bdec5fe59e08",
-    "trial_policy_hash": "19b31dc49d28785ad046fc4eb4940a33430930ed619ddb866e2f5a352fa9d425"
+    "trial_policy_hash": "4598857a89cc4de8ab2b1d090c167793e1be6d648b944c729af392aa33f1c403"
   },
   "hashes": {
-    "engine_code_hash": "78c9ca9eef6b94b4eff529826363fbf381db54240ae5b23ad32be662d4a990b8",
+    "engine_code_hash": "2a52e8fe521f1caf371eeecbfa9a406be5922b8f426a0a2da1e2689acd004360",
     "event_py": "47e3f563c012e50b1a7f8a30d8bf81e106793a1d594ffd5bb2d922660ad10585",
     "event_spec": "7bf96905a5ea2dc0858450aaeca0a92da9c1bf43bde56ffecf5e1fa6de774d55",
-    "frozen_bundle_hash": "6a709c31454505a4d77740258eb88c53116e23329ee05eccbfc35c64d63d4bae",
+    "frozen_bundle_hash": "0ccc2fadeb4a33ecacadad733801b9f10da484eb4a4cc2f5fb20ca83910bb83f",
     "frozen_files": {
-      "frozen/v1/ACCEPTANCE_RULES.yaml": "7a8ce12c944adad16b645b8e424dd17be51d36c10c76c8c22bb7c6b9cd3851d3",
+      "frozen/v1/ACCEPTANCE_RULES.yaml": "bc0c46bc2552b95cde443943435144e1fd01c30a3febd965697ba6c750a18583",
       "frozen/v1/FEATURE_BANK.yaml": "300ce5991f52cad544bbf6b84652d739db8d92e12ab32bc1583ee9ac5282fc6a",
       "frozen/v1/MODEL_BANK.yaml": "2c578364b2b07ac5eb1454911a3391a2796b03c097e5d9f8f28e8863ad17e569",
       "frozen/v1/PATH_DIAGNOSTICS.yaml": "d3c37882df15175fdf029e731d5a94c50f40441b601c50837c26569071f05114",
       "frozen/v1/SELECTION_PROCESS.yaml": "89000508db5a6c89cdac9c00dab5e9d9fe5ca6846d1b2179b1bb707fb5821319",
       "frozen/v1/TARGET_BANK.yaml": "81d8415abb937ad35484212d9897153fc227a7c981436ce2c1d0bdec5fe59e08",
-      "frozen/v1/TRIAL_POLICY.yaml": "19b31dc49d28785ad046fc4eb4940a33430930ed619ddb866e2f5a352fa9d425",
+      "frozen/v1/TRIAL_POLICY.yaml": "4598857a89cc4de8ab2b1d090c167793e1be6d648b944c729af392aa33f1c403",
       "frozen/v1/VERIFIER_PIN.yaml": "7d65952eb728a5a042589cca4c1f81697a3b6ed33a087165ed3783f5b294d0f6",
       "frozen/v1/instruments/NQ_1m.yaml": "5765e0f9756532085a7a4f061c42b3f38a75bc007c7b1fdf6807b2046ee29fab"
     }
@@ -32,7 +32,7 @@
     "HYPOTHESIS.md": "bc254e46b0a767ef6cfd9b5ffc5cda99d329ad916dc9c0e6027f3dfdfe7822d0",
     "reference.pine": "08245a3ca8dc625b1a2513f5a3121cd7030ed464bf924ca1c8590765e56400f2"
   },
-  "manifest_hash": "8cbf5db2fcc78e919dc3091ce862db2b3925b8d78b1fea8376fc5f8f9029fff7",
+  "manifest_hash": "0c75725e6c0a58b54e245b54f5e2a9b70476a816885f4ce7a90fb8fb9aaa82c8",
   "partitions": {
     "development_end": "2019-01-01",
     "lockbox_start": "2020-01-01",
