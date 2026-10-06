@@ -13,7 +13,7 @@ which problems I found. Nothing below has been run on real NQ data.
 ## 0. Gates that must never be weakened to make a test pass
 
 1 trade/week floor, 0.01 standardized-uplift floor (v2), exactly 24 selection trials per experiment, 20 experiments per campaign,
-2-of-3 model agreement, 70% year consistency, the batch/year concentration gate, the Bonferroni **and** BH universes, single-direction events,
+2-of-3 model agreement, 70% year consistency, the batch/year concentration gate, the Bonferroni and BH universes (both reported; BH gates, and since v2.2 Bonferroni no longer gates), the raw-p t >= 3 hurdle, single-direction events,
 the same-session target rule, the human SELECTION HOLDOUT gate, and the CPCV 6-choose-2 specification. If a synthetic scenario fails one of
 them the **planted effect** is changed, never the rule. `tests/test_policy_invariants.py` pins the frozen constants.
 
@@ -73,14 +73,14 @@ revealed is a **new lineage** (`new_experiment.py --lineage-of EXP_xxxx`) that c
   `event_time < validation_start` **and** `effective_target_end < validation_start`, where `effective_target_end = max(candidate-claimed end, frozen declared resolution)`
   — a candidate cannot shorten its own label horizon. Minimums remain 300 outer / 5 inner blocks / 50 inner-train / 30 inner-OOF; a fold below any minimum is `SKIPPED_INSUFFICIENT_DATA`
   and reported. Each fold has its own nested inner OOF calibration, threshold and final model. Pooled validation predictions are what the statistics use.
-* **Inference** (all on DEVELOPMENT_CV predictions during IS): weekly-block bootstrap (2000) and whole-week-block permutation (2000), seed 1729;
-  **BH and Bonferroni** at the experiment level (`experiment_bonferroni_p = min(raw_p×24, 1)`, `experiment_q`) and the campaign level
+* **Inference** (all on DEVELOPMENT_CV predictions during IS): weekly-block bootstrap (2000) and whole-week-block permutation (**20000** since v2.2.0), seed 1729;
+  **BH and Bonferroni** (both reported; only BH gates, plus the fixed raw-p hurdle below) at the experiment level (`experiment_bonferroni_p = min(raw_p×24, 1)`, `experiment_q`) and the campaign level
   (`campaign_bonferroni_p = min(raw_p×24E, 1)`, `campaign_q`, universe = every revealed trial of the campaign including rejected experiments, models and sides).
   Campaign values are recomputed over all revealed trials after **every** new reveal, and earlier experiments' statuses are re-evaluated retroactively
   (candidates can be downgraded to `IS_NO_CANDIDATE`; tested).
 * **IS shortlist eligibility of one model trial** (`ACCEPTANCE_RULES.yaml`) = all of: selected frequency ≥ 1.0/week (events ÷ eligible weeks **from bars**); standardized uplift ≥ 0.01 (v2: uplift must beat the null by 0.01 sd; the null-based gates — adjusted p, CI > 0, year/fold/model consistency — carry the burden of proof);
   **absolute selected effect > 0** (a trial with positive uplift but non-positive selected effect is `DIAGNOSTIC_CONDITIONAL_IMPROVEMENT`, never eligible); bootstrap CI lower bound > 0;
-  `experiment_q`, `campaign_q`, `experiment_bonferroni_p`, `campaign_bonferroni_p` all ≤ 0.05; year consistency; batch/year concentration (v2.1). A TARGET|SIDE group needs ≥ 2 of 3 eligible models.
+  **raw permutation p ≤ 0.00135 (t ≥ 3, one-sided; v2.2.0; the same at every experiment and campaign size; replaces the Bonferroni gates)**; `experiment_q` and `campaign_q` ≤ 0.05; year consistency; batch/year concentration (v2.1). A TARGET|SIDE group needs ≥ 2 of 3 eligible models.
   The statuses are `IS_REJECTED`, `IS_PROVISIONAL_CANDIDATE` (gates pass but verification/sensitivity not yet complete), `IS_SHORTLIST_ELIGIBLE`.
 * **Year consistency**: among UTC calendar years of the DEVELOPMENT_CV validation events with ≥ 20 selected events, ≥ 70% need positive selected effect **and** ≥ 70% need positive uplift.
   A year whose |selected events × uplift| exceeds 35% of the total raises `YEAR_CONCENTRATION_WARNING` (reported, **not** a rejection).

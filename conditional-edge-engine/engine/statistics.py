@@ -2,7 +2,7 @@
 
 * weekly-block bootstrap: trading weeks are resampled with replacement (2000 reps, seed 1729);
 * blocked permutation: COMPLETE trading-week outcome blocks are permuted relative to the frozen
-  score/state assignments (2000 reps, seed 1729). No event-level IID resampling anywhere.
+  score/state assignments (20000 reps since v2.2.0, seed 1729). No event-level IID resampling anywhere.
 
 For a state with sign s (+1 UPPER_HALF, -1 LOWER_HALF) the evaluated outcome is s*y:
   parent effect   = mean(s*y over ALL pooled validation events)

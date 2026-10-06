@@ -15,8 +15,8 @@ propose better ones, and say plainly when something looks wrong. The rules below
 ## How the pipeline judges an idea (so you can reason about it)
 1. The event fires; 56 market-state features and the forward outcomes are recorded. Targets: 15-, 60-, 180-minute directional returns (a window that would pass the 16:00 close is cut at the close and flagged `truncated`) and a 60-bar path skew.
 2. Three models (Ridge, spline, XGBoost) are scored walk-forward (out-of-fold). The top and bottom half of scores are compared with all events: the **uplift**, standardised by the target's sd. 24 trials per experiment.
-3. Evidence: weekly-block bootstrap interval, permutation null, BH and Bonferroni across the experiment's 24 trials **and** every trial in the campaign.
-4. A trial passes when the null is beaten (adjusted p, interval above 0), the uplift is at least 0.01, at least 1 selected trade/week, the effect is positive, it holds across calendar years (>= 70% positive, and not carried by one year),
+3. Evidence: weekly-block bootstrap interval, permutation null, BH (and reported Bonferroni) across the experiment's 24 trials **and** every trial in the campaign, plus a fixed raw-p hurdle of t >= 3 (p <= 0.00135).
+4. A trial passes when the null is beaten (raw p <= 0.00135 i.e. t >= 3, BH q <= 0.05, interval above 0), the uplift is at least 0.01, at least 1 selected trade/week, the effect is positive, it holds across calendar years (>= 70% positive, and not carried by one year),
    **no small set of trades carries it** (the best of 10 time-ordered batches carries <= 35% of the uplift), and >= 2 of 3 models agree. Then external verification and the event-parameter sensitivity check.
 5. After IS the engine stops: the human picks a config directly, approves a near-tied pair for the selection holdout (selection data, not confirmation), or declines. The final config is exactly one; CPCV then runs automatically as a robustness veto; the lockbox stays sealed.
 
