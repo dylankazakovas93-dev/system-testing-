@@ -2,7 +2,7 @@
 
 One model trial is IS-shortlist-eligible only if ALL hold (ACCEPTANCE_RULES.yaml):
   selected frequency >= 1.0/week; standardized uplift >= 0.01 (v2; the null-based gates carry the burden); ABSOLUTE selected effect > 0 (candidate action direction);
-  bootstrap CI lower bound > 0; experiment BH q, campaign BH q, experiment Bonferroni p, campaign Bonferroni p all <= 0.05;
+  bootstrap CI lower bound > 0; raw permutation p <= 0.00135 (t >= 3 hurdle, v2.2.0, replaces the Bonferroni gates); experiment BH q and campaign BH q <= 0.05;
   >= 70% of eligible years (>= 20 selected events) with selected effect > 0 AND >= 70% with uplift > 0;
   all 5 DEVELOPMENT_CV folds evaluated, >= 4/5 with uplift > 0 and >= 4/5 with selected effect > 0.
 Promotion happens at TARGET x SIDE level: >= 2 of the 3 models must be eligible, and each of those model paths must have
@@ -53,9 +53,9 @@ def classify_trial(row: dict, acc: dict, campaign: bool = True) -> tuple[bool, s
     """(passes_own_gates, decision_class, reason). ``campaign=False`` skips the campaign-level adjusted p/q gates."""
     n_sel = _f(row, "n_selected_events")
     freq, su, se = _f(row, "selected_frequency"), _f(row, "standardized_uplift"), _f(row, "selected_effect")
-    ci_low, qe, be = _f(row, "bootstrap_ci_low"), _f(row, "experiment_q"), _f(row, "experiment_bonferroni_p")
-    qc, bc = _f(row, "campaign_q"), _f(row, "campaign_bonferroni_p")
-    if not (n_sel > 0) or _nan(freq, su, se, ci_low, qe, be) or (campaign and _nan(qc, bc)):
+    ci_low, qe, rp = _f(row, "bootstrap_ci_low"), _f(row, "experiment_q"), _f(row, "raw_p")
+    qc = _f(row, "campaign_q")
+    if not (n_sel > 0) or _nan(freq, su, se, ci_low, qe, rp) or (campaign and _nan(qc)):
         return False, DIAG, "NOT_EVALUABLE: no selected events or undefined statistics"
     fails: dict[str, list[str]] = defaultdict(list)
     if freq < acc["min_selected_frequency_per_week"]:
@@ -73,13 +73,10 @@ def classify_trial(row: dict, acc: dict, campaign: bool = True) -> tuple[bool, s
         fails[STAT].append(f"bootstrap CI lower bound {ci_low:.4g} <= 0")
     if qe > acc["max_experiment_q"]:
         fails[STAT].append(f"experiment_q {qe:.4f} > {acc['max_experiment_q']}")
-    if be > acc["bonferroni"]["max_experiment_p"]:
-        fails[STAT].append(f"experiment_bonferroni_p {be:.4f} > {acc['bonferroni']['max_experiment_p']}")
-    if campaign:
-        if qc > acc["max_campaign_q"]:
-            fails[STAT].append(f"campaign_q {qc:.4f} > {acc['max_campaign_q']}")
-        if bc > acc["bonferroni"]["max_campaign_p"]:
-            fails[STAT].append(f"campaign_bonferroni_p {bc:.4f} > {acc['bonferroni']['max_campaign_p']}")
+    if rp > acc["raw_p_hurdle"]["max_raw_p"]:
+        fails[STAT].append(f"raw_p {rp:.5f} > {acc['raw_p_hurdle']['max_raw_p']} (t >= {acc['raw_p_hurdle']['t_equivalent']:g} hurdle)")
+    if campaign and qc > acc["max_campaign_q"]:
+        fails[STAT].append(f"campaign_q {qc:.4f} > {acc['max_campaign_q']}")
     yc = acc["year_consistency"]
     elig = _f(row, "eligible_years")
     pe, pu = _f(row, "positive_years"), _f(row, "positive_uplift_years")

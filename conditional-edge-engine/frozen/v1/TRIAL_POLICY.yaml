@@ -15,7 +15,7 @@ max_experiments_per_campaign: 20
 max_selection_trials_per_campaign: 480
 seed: 1729
 bootstrap_repetitions: 2000
-permutation_repetitions: 2000
+permutation_repetitions: 20000        # v2.2.0 (was 2000): raw p resolution 1/20001, needed to resolve the t >= 3 hurdle (raw p <= 0.00135)
 ci_level: 0.95
 development_cv:
   label: DEVELOPMENT_CV

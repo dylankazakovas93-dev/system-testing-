@@ -8,9 +8,13 @@ selected_effect_must_exceed: 0.0           # ABSOLUTE selected effect in the can
 bootstrap_ci_lower_bound_must_exceed: 0.0
 max_experiment_q: 0.05                     # BH over the experiment's 24 trials
 max_campaign_q: 0.05                       # BH over every revealed trial of the campaign (retroactive)
-bonferroni:
-  max_experiment_p: 0.05                   # min(raw_p * 24, 1)
-  max_campaign_p: 0.05                     # min(raw_p * 24E, 1) over all revealed trials of E experiments (retroactive)
+# v2.2.0: the multiplier-scaled Bonferroni gates (raw_p*24 and raw_p*24E <= 0.05) are replaced by ONE fixed hurdle on the raw permutation p,
+# equivalent to t >= 3 (Harvey-Liu-Zhu 2016, "...and the Cross-Section of Expected Returns"): one-sided normal tail of t = 3 is 0.00135.
+# It applies identically to every experiment and every campaign size. At 2000 permutations the Bonferroni gate made a 20-experiment
+# campaign impossible to pass (smallest raw p 0.0005 * 480 = 0.24). The Bonferroni columns are still computed and reported; BH q gates stay.
+raw_p_hurdle:
+  t_equivalent: 3.0
+  max_raw_p: 0.00135
 year_consistency:
   min_selected_events_for_eligible_year: 20
   min_positive_effect_year_fraction: 0.70      # MIN_POSITIVE_EFFECT_YEAR_FRACTION
