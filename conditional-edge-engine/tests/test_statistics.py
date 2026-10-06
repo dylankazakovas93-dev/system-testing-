@@ -161,7 +161,7 @@ def test_decile_diagnostics_shapes_and_disclaimer_fields():
 def good_row(**kw):
     row = dict(target="DIR_RETURN_180", model="RIDGE", state=UPPER, trial_id="T", n_selected_events=500, selected_frequency=2.0,
                retention_ratio=0.5, standardized_uplift=0.2, selected_effect=0.2, bootstrap_ci_low=0.01, experiment_q=0.01,
-               campaign_q=0.01, experiment_bonferroni_p=0.01, campaign_bonferroni_p=0.01, positive_years=4, positive_uplift_years=4,
+               campaign_q=0.01, raw_p=0.0005, experiment_bonferroni_p=0.01, campaign_bonferroni_p=0.01, positive_years=4, positive_uplift_years=4,
                eligible_years=5, folds_evaluated=5, positive_effect_folds=5, positive_uplift_folds=5, batch_best_share=0.2, year_best_share=0.4)
     row.update(kw)
     return row
@@ -178,9 +178,15 @@ def test_each_gate_blocks_eligibility_independently():
     for decision, kw in cases.items():
         ok, dec, why = classify_trial(good_row(**kw), ACC)
         assert not ok and dec == decision and why
-    for k in ("experiment_q", "campaign_q", "experiment_bonferroni_p", "campaign_bonferroni_p"):
+    for k in ("experiment_q", "campaign_q"):
         ok, dec, why = classify_trial(good_row(**{k: 0.0501}), ACC)
         assert not ok and dec == STAT and k in why, k
+    # v2.2.0: one fixed t >= 3 hurdle on the raw permutation p (inclusive); the Bonferroni columns no longer gate
+    assert classify_trial(good_row(raw_p=0.00135), ACC)[0]
+    ok, dec, why = classify_trial(good_row(raw_p=0.00136), ACC)
+    assert not ok and dec == STAT and "raw_p" in why
+    assert classify_trial(good_row(experiment_bonferroni_p=0.9, campaign_bonferroni_p=0.9), ACC)[0]
+    assert classify_trial(good_row(raw_p=float("nan")), ACC)[1] == DIAG
     assert classify_trial(good_row(selected_frequency=1.0), ACC)[0]              # floors are inclusive
     assert classify_trial(good_row(standardized_uplift=0.01), ACC)[0]
     assert classify_trial(good_row(positive_years=7, positive_uplift_years=7, eligible_years=10), ACC)[0]   # 70% inclusive
@@ -272,7 +278,7 @@ def test_two_of_three_model_agreement_required():
 
 
 def test_campaign_level_gates_make_a_group_provisional_not_eligible():
-    rows = mk_rows({("DIR_RETURN_180", UPPER, m) for m in ("RIDGE", "SPLINE", "XGB")}, campaign_bonferroni_p=0.2)
+    rows = mk_rows({("DIR_RETURN_180", UPPER, m) for m in ("RIDGE", "SPLINE", "XGB")}, campaign_q=0.2)
     out = decide_experiment(rows, ACC, {"DIR_RETURN_180|UPPER_HALF": "PASSED"}, VER_ALL)
     up = [r for r in out if r["state"] == UPPER]
     assert {r["decision"] for r in up} == {PROVISIONAL} and "campaign-level gates" in up[0]["rejection_reason"]

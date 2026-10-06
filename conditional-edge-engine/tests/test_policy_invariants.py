@@ -43,7 +43,7 @@ def test_frozen_targets_models_policy_acceptance_values():
                                   "min_child_weight": 20, "subsample": 0.80, "colsample_bytree": 0.80, "reg_lambda": 20.0,
                                   "reg_alpha": 1.0, "random_state": 1729, "tree_method": "hist"}
     p = F.trial_policy
-    assert (p["seed"], p["bootstrap_repetitions"], p["permutation_repetitions"]) == (1729, 2000, 2000)
+    assert (p["seed"], p["bootstrap_repetitions"], p["permutation_repetitions"]) == (1729, 2000, 20000)
     assert (p["max_experiments_per_campaign"], p["max_selection_trials_per_campaign"], p["expected_trials_per_experiment"]) == (20, 480, 24)
     assert p["states"] == ["UPPER_HALF", "LOWER_HALF"] and p["base_event_frequency_floor_per_week"] == 2.0
     cv = p["development_cv"]
@@ -55,7 +55,7 @@ def test_frozen_targets_models_policy_acceptance_values():
     a = F.acceptance
     assert a["min_selected_frequency_per_week"] == 1.0 and a["min_standardized_uplift"] == 0.01 and a["selected_effect_must_exceed"] == 0.0
     assert (a["max_experiment_q"], a["max_campaign_q"]) == (0.05, 0.05) and p["ci_level"] == 0.95
-    assert a["bonferroni"] == {"max_experiment_p": 0.05, "max_campaign_p": 0.05}
+    assert a["raw_p_hurdle"] == {"t_equivalent": 3.0, "max_raw_p": 0.00135} and "bonferroni" not in a   # v2.2.0: t >= 3 replaces the Bonferroni gates
     assert a["year_consistency"] == {"min_selected_events_for_eligible_year": 20, "min_positive_effect_year_fraction": 0.70,
                                      "min_positive_uplift_year_fraction": 0.70, "concentration_warning_share": 0.35}
     assert "fold_consistency" not in a and a["concentration"] == {"n_batches": 10, "max_best_batch_share": 0.35, "drop_best_year_must_stay_positive": True}
@@ -188,7 +188,7 @@ def test_seeds_are_fixed_everywhere_no_unseeded_randomness():
 
 
 def test_frozen_v1_release_version_and_verifier_pin_are_exact():
-    assert (CODE_ROOT / "ENGINE_VERSION").read_text().strip() == "v2.1.0"
+    assert (CODE_ROOT / "ENGINE_VERSION").read_text().strip() == "v2.2.0"
     pin = F.__class__ and __import__("engine.verifier_bridge", fromlist=["x"]).verifier_pin()
     assert pin["commit"] == "624c8b7f0502abf6c5d453d501e96e3172367035" and pin["required_mode"] == "strong"
     assert pin["required_models"] == ["RIDGE", "SPLINE", "XGB"]

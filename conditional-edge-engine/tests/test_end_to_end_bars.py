@@ -241,7 +241,8 @@ def test_planted_momentum_yields_provisional_candidates_that_pass_every_floor(pl
         cand = cand.assign(**{c: pd.to_numeric(cand[c])})
     assert (cand["standardized_uplift"] >= 0.01).all() and (cand["selected_frequency"] >= 1.0).all()                       # v2: the 0.01 uplift floor
     assert (cand["selected_effect"] > 0).all() and (cand["bootstrap_ci_low"] > 0).all()
-    assert (cand[["experiment_q", "campaign_q", "experiment_bonferroni_p", "campaign_bonferroni_p"]] <= 0.05).all().all()
+    assert (cand[["experiment_q", "campaign_q"]] <= 0.05).all().all()
+    assert (pd.to_numeric(cand["raw_p"]) <= 0.00135).all()                                                                 # v2.2.0: t >= 3 hurdle
     rejected = t[~t["decision"].isin(["IS_PROVISIONAL_CANDIDATE", "IS_SHORTLIST_ELIGIBLE"])]
     assert len(rejected) > 0 and (rejected["decision"] != "PENDING").all()                    # rejected trials remain visible
 

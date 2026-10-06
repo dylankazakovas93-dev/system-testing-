@@ -288,22 +288,23 @@ def test_bonferroni_uses_all_24_and_campaign_bonferroni_uses_24E_and_is_retroact
 
 
 def test_retroactive_campaign_adjustment_can_remove_eligibility_of_an_earlier_candidate(ws):
+    # v2.2.0: eligibility needs raw p <= 0.00135 (t >= 3) AND campaign BH q <= 0.05; the BH universe grows with every revealed experiment
     from engine.acceptance import PROVISIONAL, SHORTLIST
     from tests.scenario_helpers import pass_all_paths, pass_sensitivity
     e1 = new_frozen_experiment(ws)
-    pairs = {("DIR_RETURN_180", m): 0.0009 for m in ("RIDGE", "SPLINE", "XGB")}
+    pairs = {("DIR_RETURN_180", m): 0.0013 for m in ("RIDGE", "SPLINE", "XGB")}
     reg.reveal_experiment(ws, e1, fake_results(ws, e1, pairs), train_period="a", validation_period="b", frozen=F)
     pass_all_paths(ws, e1); pass_sensitivity(ws, e1)
     t = reg.experiment_trials(ws, e1)
     up = t[(t["target"] == "DIR_RETURN_180") & (t["state"] == "UPPER_HALF")]
-    assert (up["decision"] == SHORTLIST).all()                                    # 0.0009 * 24 = 0.0216 <= 0.05
+    assert (up["decision"] == SHORTLIST).all()                                    # raw p 0.0013 <= 0.00135 and campaign q = 0.0013 * 24 / 6 = 0.0052
     assert reg.experiment_row(ws, e1)["is_status"] == SHORTLIST and reg.experiment_row(ws, e1)["status"] == "AWAITING_HUMAN_FINAL_CONFIG_SELECTION"
-    for _ in range(2):                                                            # 2 more experiments with nothing significant
+    for _ in range(9):                                                            # 9 more experiments with nothing significant -> universe 240 trials
         e = new_frozen_experiment(ws)
         reg.reveal_experiment(ws, e, fake_results(ws, e, {}, default_p=0.5, good=False), train_period="a", validation_period="b", frozen=F)
     t = reg.experiment_trials(ws, e1)
     up = t[(t["target"] == "DIR_RETURN_180") & (t["state"] == "UPPER_HALF")]
-    assert np.allclose(up["campaign_bonferroni_p"], 0.0009 * 72)                  # 0.0648 > 0.05 -> lost eligibility
+    assert np.allclose(up["campaign_q"].astype(float), 0.0013 * 240 / 6)          # 0.052 > 0.05 -> lost eligibility; raw p still passes the hurdle
     assert (up["decision"] == PROVISIONAL).all() and "campaign-level gates" in up["rejection_reason"].iloc[0]
     assert reg.experiment_row(ws, e1)["is_status"] == PROVISIONAL
     assert reg.experiment_row(ws, e1)["status"] == "IS_PROVISIONAL_CANDIDATE"      # no longer awaiting SELECTION HOLDOUT approval

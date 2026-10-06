@@ -1,4 +1,4 @@
-# RESEARCH RULES — conditional-edge-engine v2.1.0 (frozen research rules in `frozen/v1/`; v2 targets and uplift floor; v2.1 batch concentration instead of the fold gate; v1.2 lifecycle)
+# RESEARCH RULES — conditional-edge-engine v2.2.0 (frozen research rules in `frozen/v1/`; v2 targets and uplift floor; v2.1 batch concentration instead of the fold gate; v2.2 t >= 3 raw-p hurdle replaces the Bonferroni gates, 20000 permutations; v1.2 lifecycle)
 
 > The engine may search only inside the predefined development (IS) research space. It stops and presents the human with the
 > entire in-sample selection history **and the configuration uncertainty (near-ties)** before it is technically permitted to touch the SELECTION HOLDOUT.
