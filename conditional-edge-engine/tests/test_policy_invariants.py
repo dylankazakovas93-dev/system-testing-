@@ -188,7 +188,7 @@ def test_seeds_are_fixed_everywhere_no_unseeded_randomness():
 
 
 def test_frozen_v1_release_version_and_verifier_pin_are_exact():
-    assert (CODE_ROOT / "ENGINE_VERSION").read_text().strip() == "v2.2.0"
+    assert (CODE_ROOT / "ENGINE_VERSION").read_text().strip() == "v2.3.0"
     pin = F.__class__ and __import__("engine.verifier_bridge", fromlist=["x"]).verifier_pin()
     assert pin["commit"] == "624c8b7f0502abf6c5d453d501e96e3172367035" and pin["required_mode"] == "strong"
     assert pin["required_models"] == ["RIDGE", "SPLINE", "XGB"]

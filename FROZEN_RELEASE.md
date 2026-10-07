@@ -1,5 +1,5 @@
 CONDITIONAL EDGE RESEARCH ENGINE
-VERSION: see conditional-edge-engine/ENGINE_VERSION (v2.2.0 at the time of writing)
+VERSION: see conditional-edge-engine/ENGINE_VERSION (v2.3.0 at the time of writing)
 
 STATUS: FROZEN
 
