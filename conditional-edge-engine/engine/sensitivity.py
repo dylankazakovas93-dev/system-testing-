@@ -1,15 +1,15 @@
 """Event-parameter sensitivity = ROBUSTNESS, never discovery.
 
 Runs only AFTER a development candidate (>= 2 of 3 models pass at a TARGET x SIDE) exists, using the
-base event's candidate only. At most 2 designated numeric parameters x {0.75, 1.25} = at most 4 probes,
+base event's candidate only. v2.3.0: EVERY probeable numeric base parameter (floats, integers >= 3) x {0.75, 1.25},
 one parameter at a time. Probes cannot create a candidate, cannot choose a better parameter and cannot
 replace the base parameter: they can only CONFIRM or VETO. A probe that performs better is merely reported.
 
-Probe rules (mirroring the 2-of-3 model agreement, written in ACCEPTANCE_RULES.yaml):
-  * a probe REVERSES the uplift sign if fewer than 2 of the 3 models have positive uplift in the
-    candidate state;
-  * a probe fails FREQUENCY if fewer than 2 of the 3 models keep selected SELECTION HOLDOUT frequency >= 1.0/week.
-A candidate FAILS if more than one probe reverses the sign or any probe fails frequency.
+Probe rules (mirroring the 2-of-3 model agreement, written in ACCEPTANCE_RULES.yaml). A model is OK at a probe when
+  * its selected effect in the candidate state stays > 0,
+  * its standardized uplift keeps at least ``min_retained_uplift_fraction`` (0.5) of its BASE standardized uplift, and
+  * its selected frequency stays >= 1.0/week.
+A probe is OK when at least 2 of the 3 models are OK. The candidate FAILS if more than ``max_failing_probes`` (0) probes are not OK.
 """
 from __future__ import annotations
 
@@ -25,6 +25,15 @@ def probe_value(base_value, multiplier: float):
     if isinstance(base_value, int) and not isinstance(base_value, bool):
         return max(1, int(np.floor(v + 0.5)))
     return float(v)
+
+
+def is_probeable(value) -> bool:
+    """x0.75 and x1.25 give different values: floats (non-zero) and integers >= 3 (see event_contract)."""
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, int):
+        return value >= 3
+    return value != 0
 
 
 def probe_grid(spec: dict, frozen: Frozen) -> list[dict]:
@@ -43,11 +52,14 @@ def probe_grid(spec: dict, frozen: Frozen) -> list[dict]:
 
 def judge_group(probes: list[dict], acc: dict) -> dict:
     s = acc["sensitivity"]
-    reversing = [p for p in probes if p["models_positive_uplift"] < acc["model_agreement"]["min_models_passing"]]
-    freq_fail = [p for p in probes if p["models_frequency_ok"] < acc["model_agreement"]["min_models_passing"]]
-    failed = len(reversing) > s["max_reversing_probes"] or len(freq_fail) > 0
-    return {"verdict": "FAILED" if failed else "PASSED", "n_reversing_probes": len(reversing),
-            "n_frequency_failures": len(freq_fail), "probes": probes}
+    need = acc["model_agreement"]["min_models_passing"]
+    failing = [p for p in probes if p["models_ok"] < need]
+    reversing = [p for p in probes if p["models_positive_effect"] < need]
+    weakened = [p for p in probes if p["models_retained_uplift"] < need]
+    freq_fail = [p for p in probes if p["models_frequency_ok"] < need]
+    failed = len(failing) > s["max_failing_probes"]
+    return {"verdict": "FAILED" if failed else "PASSED", "n_failing_probes": len(failing), "n_effect_not_positive": len(reversing),
+            "n_uplift_below_retention": len(weakened), "n_frequency_failures": len(freq_fail), "probes": probes}
 
 
 def run_sensitivity(module, spec: dict, bars_dev: pd.DataFrame, frozen: Frozen, pending_rows: pd.DataFrame) -> dict:
@@ -58,6 +70,9 @@ def run_sensitivity(module, spec: dict, bars_dev: pd.DataFrame, frozen: Frozen, 
     if not grid:
         return {"status": "SKIPPED_NO_PARAMETERS",
                 "groups": {f"{t}|{s}": {"verdict": "SKIPPED_NO_PARAMETERS", "probes": []} for t, s in groups}}
+    acc_s = frozen.acceptance["sensitivity"]
+    base_uplift = {(r.target, r.state, r.model): float(r.standardized_uplift) for r in pending_rows.itertuples()
+                   if hasattr(r, "model") and hasattr(r, "standardized_uplift")}
     by_group: dict[tuple, list[dict]] = {g: [] for g in groups}
     targets_needed = sorted({t for t, _ in groups})
     for probe in grid:
@@ -72,14 +87,26 @@ def run_sensitivity(module, spec: dict, bars_dev: pd.DataFrame, frozen: Frozen, 
                 p = panels.get((target, m))
                 st = p.stats[state] if p else None
                 per_model.append({"model": m,
+                                  "selected_effect": float(st["selected_effect"]) if st else float("nan"),
+                                  "base_standardized_uplift": base_uplift.get((target, state, m), float("nan")),
                                   "uplift": float(st["uplift"]) if st else float("nan"),
                                   "standardized_uplift": float(st["standardized_uplift"]) if st else float("nan"),
                                   "selected_frequency": float(st["selected_frequency"]) if st else float("nan"),
                                   "n_selected": int(st["n_selected"]) if st else 0})
+            def eff_ok(x):
+                return np.isfinite(x["selected_effect"]) and x["selected_effect"] > acc_s["selected_effect_must_exceed"]
+
+            def keep_ok(x):
+                b, u = x["base_standardized_uplift"], x["standardized_uplift"]
+                return bool(np.isfinite(b) and np.isfinite(u) and b > 0 and u >= acc_s["min_retained_uplift_fraction"] * b)
+
+            def freq_ok(x):
+                return np.isfinite(x["selected_frequency"]) and x["selected_frequency"] >= acc_s["min_probe_frequency_per_week"]
             by_group[(target, state)].append({
                 **probe, "n_events": int(len(events)),
                 "models": per_model,
-                "models_positive_uplift": int(sum(1 for x in per_model if np.isfinite(x["uplift"]) and x["uplift"] > 0)),
-                "models_frequency_ok": int(sum(1 for x in per_model if np.isfinite(x["selected_frequency"])
-                                               and x["selected_frequency"] >= frozen.acceptance["sensitivity"]["min_probe_frequency_per_week"]))})
+                "models_positive_effect": int(sum(eff_ok(x) for x in per_model)),
+                "models_retained_uplift": int(sum(keep_ok(x) for x in per_model)),
+                "models_frequency_ok": int(sum(freq_ok(x) for x in per_model)),
+                "models_ok": int(sum(eff_ok(x) and keep_ok(x) and freq_ok(x) for x in per_model))})
     return {"status": "RUN", "groups": {f"{t}|{s}": judge_group(pr, frozen.acceptance) for (t, s), pr in by_group.items()}}

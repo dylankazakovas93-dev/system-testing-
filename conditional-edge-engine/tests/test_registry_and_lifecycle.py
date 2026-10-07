@@ -186,7 +186,8 @@ def test_spec_validation_rules(ws):
     bad(lambda s: s["direction_definition"].update(values=[1, -1]), "ONE direction per experiment")
     bad(lambda s: s.update(filter_ladder=["CONDITION_1", "FINAL_EVENT"]), "filter_ladder")
     bad(lambda s: s.update(filter_ladder=["BASE_TRIGGER", "FINAL_EVENT", "BASE_TRIGGER"]), "filter_ladder")
-    bad(lambda s: s.update(sensitivity_parameters=["pivot_left", "pivot_right", "x"]), "at most")
+    bad(lambda s: s.update(sensitivity_parameters=[f"p{i}" for i in range(13)]), "at most")
+    bad(lambda s: s["base_parameters"].update(buffer=0.25), "every probeable base parameter")            # v2.3.0: a new numeric parameter must be probed
     bad(lambda s: s.update(sensitivity_parameters=["nope"]), "not in base_parameters")
     bad(lambda s: s["base_parameters"].update(pivot_left=2), "must be >= 3")
     bad(lambda s: s["eligible_session"].update(start="09:30"), "eligible_session must satisfy")

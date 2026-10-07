@@ -575,3 +575,34 @@ def test_direct_final_selection_skips_the_holdout_and_cpcv_uses_development_only
         assert reg.read_final_configs(ws).iloc[0]["selection_holdout_used"] == "no"
     a, b = direct_selection["clean"]["cpcv"], direct_selection["poisoned"]["cpcv"]
     assert a["summary"] == b["summary"] and a["records"] == b["records"]    # wrecking every row after development_end changes nothing: those rows are never read
+
+
+def test_monetisation_study_uses_development_rows_only_and_changes_nothing(after_final_config, tmp_path):
+    """v2.3.0: the bracket study for the ONE final config. Rows at/after development_end (selection holdout + lockbox) are wrecked in the
+    second data file; the study must be identical, and no registry row / status may change."""
+    import numpy as np
+    ws, exp, ws_dir = after_final_config["ws"], after_final_config["exp"], after_final_config["ws_dir"]
+    status = reg.experiment_row(ws, exp)["status"]
+    run = lambda data: cli("scripts/run_monetisation_study.py", "--experiment", exp, "--data", data, "--workspace", ws_dir, check=False)
+    res_path = experiment_dir(ws, exp) / "results" / "MONETISATION_STUDY.json"
+    if status == "CPCV_REJECTED":
+        p = run(after_final_config["data"])
+        assert p.returncode != 0 and "only after the final configuration passed CPCV" in (p.stdout + p.stderr) and not res_path.exists()
+        return
+    before = (reg.read_trials(ws).to_csv(), reg.read_final_configs(ws).to_csv(), reg.experiment_row(ws, exp)["status"])
+    p = run(after_final_config["data"])
+    assert p.returncode == 0, p.stdout + p.stderr
+    a = json.loads(res_path.read_text())
+    assert a["data_used"] == "DEVELOPMENT only" and a["selection_holdout_accessed"] is False and a["final_lockbox_accessed"] is False
+    assert a["decision"] in ("BRACKET_FOUND", "NO_STABLE_BRACKET") and a["n_cells"] == 2 * 3 * 3 * 4 and a["label"].startswith("MONETISATION STUDY")
+    assert (experiment_dir(ws, exp) / "results" / "MONETISATION_STUDY.md").exists()
+    df = pd.read_parquet(after_final_config["data"])
+    late = (pd.to_datetime(df["timestamp"], utc=True) >= pd.Timestamp(PARTS["development_end"], tz="UTC")).to_numpy()
+    rng = np.random.default_rng(5)
+    df.loc[late, ["open", "high", "low", "close"]] = rng.uniform(1, 1e6, size=(int(late.sum()), 4))
+    bad = tmp_path / "NQ_poisoned_after_development.parquet"
+    df.to_parquet(bad)
+    assert run(bad).returncode == 0
+    b = json.loads(res_path.read_text())
+    assert a["cells"] == b["cells"] and a["chosen"] == b["chosen"] and a["decision"] == b["decision"]
+    assert (reg.read_trials(ws).to_csv(), reg.read_final_configs(ws).to_csv(), reg.experiment_row(ws, exp)["status"]) == before

@@ -135,6 +135,12 @@ Automated diagnostics / verifier / sensitivity do not need separate approval onc
 12. **Statuses.** `DRAFT, FROZEN, IS_REJECTED, IS_SHORTLIST_ELIGIBLE, NEAR_TIE_REVIEW_REQUIRED, AWAITING_HUMAN_SELECTION_HOLDOUT_APPROVAL (alias), SELECTION_HOLDOUT_FROZEN, SELECTION_HOLDOUT_SPENT, AWAITING_HUMAN_FINAL_CONFIG_SELECTION, SELECTION_HOLDOUT_SKIPPED, FINAL_CONFIG_FROZEN, CPCV_REJECTED, CPCV_CONFIRMED, AWAITING_FINAL_LOCKBOX_APPROVAL, LOCKBOX_REJECTED, LOCKBOX_CONFIRMED`
     (plus `IS_PROVISIONAL_CANDIDATE`, `HUMAN_DECLINED`, `SELECTION_HOLDOUT_CONTAMINATED`, `NO_FINAL_CONFIG`). The two `LOCKBOX_*` statuses exist but are never entered by the engine.
 
+## 5c. Monetisation (bracket) study (v2.3.0) — separate stage, development data only, not a selection trial
+
+`scripts/run_monetisation_study.py` runs only for the ONE final configuration of an experiment that passed CPCV (`CPCV_CONFIRMED` / `AWAITING_FINAL_LOCKBOX_APPROVAL`; never after `CPCV_REJECTED`). Spec: `frozen/v1/MONETISATION_SPEC.yaml`. Events = those selected by ≥ 2 of the 3 models in the out-of-fold DEVELOPMENT_CV predictions; bars = development rows only (the selection holdout and lockbox are not loaded).
+Grid: stop ∈ {1, 2, 3} × ATR, target ∈ {1, 2, 3} × ATR, ATR(14, Wilder) of 1-minute or 5-minute bars (latest completed bar at the event time), optional time limits {15, 30, 60, 120} bars (always also cut at the RTH close). Entry = open of the first forward bar; a bar touching both levels counts as a stop; touched levels fill at the level; cost = 3 ticks round trip.
+Pick rule (written before any result): a cell is **stable** if it has ≥ 100 trades, a positive net expectancy, ≥ 70% positive eligible years, and all 8 neighbours (stop/target scaled ×0.75 / ×1.25, together or separately) are positive and keep ≥ 50% of the centre's net expectancy. The chosen cell is the stable one with the best worst-neighbourhood net expectancy. If no cell is stable the result is `NO_STABLE_BRACKET` — never a fallback to the best single cell. The output is development-data evidence only; the chosen bracket must still be tested on data it has not seen. It changes no status, rank or registry row.
+
 ## 5b. Forward-path and monetisation diagnostics (v1.1.0) — DIAGNOSTIC ONLY
 
 `frozen/v1/PATH_DIAGNOSTICS.yaml` (hashed into every manifest) freezes horizons (5/15/30/60/120 bars), all formulas, the exact percentiles (linear interpolation; no others), the sigma unit
@@ -170,7 +176,7 @@ rows and its `future_label_poisoning` / `future_feature_poisoning` checks are "n
 5. **The CPCV group rule (≥ 2 of 3 models) mirrors model agreement;** you specified the per-model pass rule only.
 6. **PBO configurations** = the (target, side, model) configs of the one final configuration (3 highly dependent configs); the diagnostic is descriptive only.
 7. **Permutation statistic** = uplift, one-sided; `p = (1+#≥)/(B+1)`; bootstrap CI = percentile interval over resampled weeks.
-8. **Sensitivity verdict** mirrors model agreement (a probe reverses the sign if < 2 of 3 models keep positive uplift; fails frequency if < 2 of 3 keep ≥ 1/week; fail if > 1 probe reverses or any fails frequency).
+8. **Sensitivity verdict (v2.3.0)** probes EVERY probeable numeric base parameter of the event/filter (floats, integers ≥ 3), one at a time, at ×0.75 and ×1.25 (the event spec must list them all). A model is OK at a probe when its selected effect stays > 0, its standardized uplift keeps ≥ 50% of the base uplift and its selected frequency stays ≥ 1/week; a probe is OK when ≥ 2 of 3 models are OK; the candidate fails if any probe is not OK (`max_failing_probes: 0`). Probes only confirm or veto; a better probe never replaces the base parameter.
 9. **Static event scan** rejects numeric literals other than `0`/`1` in `event.py` (heuristic). **Causality pre-check** re-runs the event at 8 cutoffs on truncated and future-mutated bars.
 10. **The verifier holdout rule (§6) is an engine staging choice, not a research gate;** the fraction/minimum are in `VERIFIER_PIN.yaml` and are for the human to confirm.
 11. **Synthetic lifecycle tests inject verification and sensitivity verdicts at table level** (the real verifier and the bar-level sensitivity stage are exercised separately); the lifecycle itself is the real code.
@@ -188,4 +194,4 @@ rows and its `future_label_poisoning` / `future_feature_poisoning` checks are "n
 9. **Float reproducibility.** Batch shape can change reductions by ≤ 1 ulp (invariance tests use `rtol=1e-12`; the verifier compares at `atol=1e-9`).
 10. Everything was validated on **synthetic** data with known structure; **no real NQ data has been run.** Real data will exercise gap handling, zero-volume windows and roll provenance.
 11. Missing continuous-contract roll provenance keeps the verifier's *global* verdict INCOMPLETE (exit 2); reported separately and never treated as a pass.
-12. Static scans and the causality pre-check are heuristic evidence, not proof of causality. Costs, sizing, brackets, prop-firm simulation and the final lockbox confirmation are intentionally absent.
+12. Static scans and the causality pre-check are heuristic evidence, not proof of causality. Sizing, prop-firm simulation and the final lockbox confirmation are intentionally absent; costs and brackets exist only in the separate development-data monetisation study (section 5c).

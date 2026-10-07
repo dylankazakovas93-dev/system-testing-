@@ -28,7 +28,7 @@ base_parameters:
   pivot_left: 30
   pivot_right: 15
   direction: 1                     # +1 long / -1 short: one direction per experiment
-sensitivity_parameters: [pivot_left, pivot_right]   # at most 2; robustness only, never discovery
+sensitivity_parameters: [pivot_left, pivot_right]   # EVERY probeable numeric base parameter (floats, integers >= 3), x0.75 / x1.25; robustness only, never discovery
 expected_information_time:
   rule: "event_time = completion time of the pivot_right-th bar AFTER the pivot bar (not the plotted pivot bar)"
   confirmation_delay_bars: pivot_right

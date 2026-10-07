@@ -1,0 +1,38 @@
+# FROZEN MONETISATION (BRACKET) STUDY SPEC v1 (added in v2.3.0).
+# A SEPARATE stage that runs only after a human has chosen a final configuration. It is NOT a selection trial: it never changes a status, rank
+# or p-value. It uses DEVELOPMENT rows only (the out-of-fold DEVELOPMENT_CV selected events of the final configuration). It does not read the
+# SELECTION HOLDOUT or the final lockbox. Its output is a development-data bracket system plus its stability evidence; it is never confirmation.
+version: v1
+label: "MONETISATION STUDY - DEVELOPMENT DATA ONLY - NOT CONFIRMATION"
+promotion_eligible: false
+selection_trials_affected: 0
+
+entry: open_of_first_forward_bar               # same information clock as the targets (first bar whose open >= event_time)
+direction: event_direction_of_the_final_configuration
+atr:
+  period: 14
+  smoothing: wilder_rma                        # alpha = 1/period, seeded after `period` bars (earlier values are NaN -> event dropped)
+  bases: [1m, 5m]                              # ATR of 1-minute bars and of 5-minute bars; the latest COMPLETED bar at event_time (no look-ahead)
+grid:
+  stop_atr: [1.0, 2.0, 3.0]                    # stop distance = multiple x ATR
+  target_atr: [1.0, 2.0, 3.0]                  # target distance = multiple x ATR  (reward:risk from 1:3 to 3:1)
+  expiry_bars: [15, 30, 60, 120]               # OPTIONAL time limits; an empty list means "no time limit" (expire at the RTH close only)
+  # every expiry is also truncated at the RTH close of the event's session (no overnight holding, as for the targets)
+neighbours:
+  multipliers: [0.75, 1.25]                    # stop and target scaled together or separately: 3 x 3 - 1 = 8 neighbours per cell
+  min_retained_expectancy_fraction: 0.5        # every neighbour must keep at least this share of the centre cell's net expectancy
+  neighbours_must_stay_positive: true
+fills:
+  stop_and_target_same_bar: stop               # conservative: ambiguous bars count as a stop
+  fill_at_level: true                          # a touched stop/target fills AT its level (no gap slippage is modelled - optimistic on gaps)
+  expiry: close_of_the_last_allowed_bar
+costs:
+  round_trip_ticks: 3                          # per trade, in ticks of the instrument config
+pick:
+  rule: max_neighbourhood_minimum_net_expectancy_among_stable_cells
+  min_trades: 100
+  min_positive_year_fraction: 0.70             # of eligible years, for the chosen centre cell
+  min_events_for_eligible_year: 20
+  tie_break: [higher_centre_expectancy, atr_base_order_1m_then_5m, smaller_stop_atr, smaller_target_atr, shorter_expiry]
+  no_stable_cell: NO_STABLE_BRACKET            # never fall back to the best single cell
+forbidden_output_phrases: ["CONFIRMED", "VALIDATED", "GUARANTEED"]

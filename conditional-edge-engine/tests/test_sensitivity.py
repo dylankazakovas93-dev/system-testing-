@@ -20,9 +20,11 @@ def spec(**kw):
     return s
 
 
-def probe(pos, freq_ok, mult=1.25, param="pivot_left"):
+def probe(ok=3, eff=None, keep=None, freq=None, mult=1.25, param="pivot_left"):
+    """Counts of models (out of 3) that are OK / keep a positive effect / keep >= 50% of the base uplift / keep >= 1 trade a week."""
     return {"parameter": param, "multiplier": mult, "base": 30, "value": 38, "n_events": 1000, "models": [],
-            "models_positive_uplift": pos, "models_frequency_ok": freq_ok}
+            "models_ok": ok, "models_positive_effect": ok if eff is None else eff,
+            "models_retained_uplift": ok if keep is None else keep, "models_frequency_ok": ok if freq is None else freq}
 
 
 def test_probe_values_and_grid_size():
@@ -30,13 +32,26 @@ def test_probe_values_and_grid_size():
     assert probe_value(15, 0.75) == 11 and probe_value(15, 1.25) == 19
     assert probe_value(0.5, 0.75) == pytest.approx(0.375) and isinstance(probe_value(0.5, 1.25), float)
     g = probe_grid(spec(), F)
-    assert len(g) == 4 == F.trial_policy["sensitivity"]["max_probes"]
+    assert len(g) == 4 and F.trial_policy["sensitivity"]["max_probes"] == 24
     assert [(p["parameter"], p["multiplier"]) for p in g] == [("pivot_left", 0.75), ("pivot_left", 1.25),
                                                              ("pivot_right", 0.75), ("pivot_right", 1.25)]
     assert len(probe_grid(spec(sensitivity_parameters=["pivot_left"]), F)) == 2
     assert probe_grid(spec(sensitivity_parameters=[]), F) == []
-    with pytest.raises(Exception):
-        probe_grid(spec(sensitivity_parameters=["a", "b", "c"], base_parameters={"a": 4, "b": 4, "c": 4}), F)
+    assert len(probe_grid(spec(sensitivity_parameters=list("abcd"), base_parameters={k: 4 for k in "abcd"}), F)) == 8   # no longer capped at 2
+    with pytest.raises(Exception):                                                                        # the policy cap is 12 parameters
+        names = [f"p{i}" for i in range(13)]
+        probe_grid(spec(sensitivity_parameters=names, base_parameters={n: 4 for n in names}), F)
+
+
+def test_every_probeable_parameter_must_be_listed():
+    from engine.event_contract import validate_spec
+    ok = spec(base_parameters={"pivot_left": 30, "pivot_right": 15, "buffer": 0.25, "direction": 1},
+              sensitivity_parameters=["pivot_left", "pivot_right", "buffer"])
+    assert not [e for e in validate_spec(ok, F) if "sensitivity" in e]                              # direction = 1 is not probeable
+    bad = spec(base_parameters={"pivot_left": 30, "pivot_right": 15, "buffer": 0.25, "direction": 1},
+               sensitivity_parameters=["pivot_left", "pivot_right"])
+    errs = [e for e in validate_spec(bad, F) if "sensitivity" in e]
+    assert errs and "buffer" in errs[0] and "every probeable" in errs[0]
 
 
 def test_probes_are_one_at_a_time():
@@ -46,28 +61,30 @@ def test_probes_are_one_at_a_time():
         assert changed == {p["parameter"]}
 
 
-def test_verdict_rule_more_than_one_reversing_probe_fails():
-    ok = lambda: probe(3, 3)
-    bad = lambda: probe(1, 3)                     # fewer than 2 of 3 models keep a positive uplift -> sign reversed
+def test_verdict_rule_any_failing_probe_fails():
+    ok = lambda: probe(3)
+    bad = lambda: probe(ok=1)                       # fewer than 2 of 3 models are OK at this probe
     assert judge_group([ok(), ok(), ok(), ok()], ACC)["verdict"] == "PASSED"
-    assert judge_group([bad(), ok(), ok(), ok()], ACC)["verdict"] == "PASSED"           # exactly one reversal is tolerated
-    v = judge_group([bad(), bad(), ok(), ok()], ACC)
-    assert v["verdict"] == "FAILED" and v["n_reversing_probes"] == 2
+    assert judge_group([probe(2), ok()], ACC)["verdict"] == "PASSED"                  # 2 of 3 models OK is enough (mirrors model agreement)
+    v = judge_group([bad(), ok(), ok(), ok()], ACC)
+    assert v["verdict"] == "FAILED" and v["n_failing_probes"] == 1                    # v2.3.0: ONE failing probe vetoes (max_failing_probes = 0)
 
 
-def test_verdict_rule_any_probe_below_one_per_week_fails():
-    v = judge_group([probe(3, 3), probe(3, 1), probe(3, 3), probe(3, 3)], ACC)       # <2 of 3 models keep >= 1/week
-    assert v["verdict"] == "FAILED" and v["n_frequency_failures"] == 1
-    assert judge_group([probe(3, 2), probe(3, 3)], ACC)["verdict"] == "PASSED"
+def test_probe_fails_on_each_condition_separately():
+    # effect not positive, uplift below 50% of base, frequency below 1/week: each counted and each fails the group
+    for kw, key in ((dict(ok=1, eff=1), "n_effect_not_positive"), (dict(ok=1, keep=1), "n_uplift_below_retention"),
+                    (dict(ok=1, freq=1), "n_frequency_failures")):
+        v = judge_group([probe(3), probe(**kw)], ACC)
+        assert v["verdict"] == "FAILED" and v[key] == 1, kw
 
 
 def test_better_probe_performance_cannot_replace_or_improve_the_base():
-    # a probe with far stronger uplift changes nothing: the verdict only looks at sign and frequency counts
-    strong = probe(3, 3); strong["models"] = [{"model": "RIDGE", "standardized_uplift": 5.0}]
-    weak = probe(3, 3)
+    # a probe with far stronger uplift changes nothing: the verdict only looks at the OK counts
+    strong = probe(3); strong["models"] = [{"model": "RIDGE", "standardized_uplift": 5.0}]
+    weak = probe(3)
     assert judge_group([strong], ACC) == {**judge_group([weak], ACC), "probes": [strong]}
     out = judge_group([strong], ACC)
-    assert set(out) == {"verdict", "n_reversing_probes", "n_frequency_failures", "probes"}     # no "best"/"chosen_parameter"
+    assert set(out) == {"verdict", "n_failing_probes", "n_effect_not_positive", "n_uplift_below_retention", "n_frequency_failures", "probes"}
     sig = inspect.signature(run_sensitivity)
     assert "base_parameters" not in sig.parameters and "params" not in sig.parameters
 
@@ -103,5 +120,6 @@ def test_zero_designated_parameters_skips_the_stage():
 
 def test_frozen_sensitivity_policy_values():
     s = F.trial_policy["sensitivity"]
-    assert (s["max_parameters"], s["multipliers"], s["max_probes"]) == (2, [0.75, 1.25], 4)
-    assert ACC["sensitivity"]["max_reversing_probes"] == 1 and ACC["sensitivity"]["min_probe_frequency_per_week"] == 1.0
+    assert (s["max_parameters"], s["multipliers"], s["max_probes"]) == (12, [0.75, 1.25], 24)
+    a = ACC["sensitivity"]
+    assert (a["max_failing_probes"], a["min_retained_uplift_fraction"], a["selected_effect_must_exceed"], a["min_probe_frequency_per_week"]) == (0, 0.5, 0.0, 1.0)

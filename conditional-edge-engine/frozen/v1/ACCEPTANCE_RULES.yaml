@@ -32,7 +32,12 @@ verification:
   required_mode: strong
   accepted_labels: [VERIFIED, RESEARCH_FAMILIES_PASS_GLOBAL_INCOMPLETE]
 sensitivity:
-  max_reversing_probes: 1      # FAIL if MORE than this many probes reverse the uplift sign
+  # v2.3.0: a probe (one parameter at x0.75 or x1.25) is OK for a model when its selected effect stays > 0, its standardized uplift keeps at
+  # least min_retained_uplift_fraction of the base uplift, and its selected frequency stays >= min_probe_frequency_per_week.
+  # A probe is OK when at least 2 of the 3 models are OK. The candidate FAILS if more than max_failing_probes probes are not OK.
+  max_failing_probes: 0
+  min_retained_uplift_fraction: 0.5
+  selected_effect_must_exceed: 0.0
   min_probe_frequency_per_week: 1.0
   agreement_rule: probe_ok_if_at_least_2_of_3_models_satisfy   # mirrors model agreement
 decision_priority:

@@ -364,7 +364,7 @@ def build_is_report(ws: reg.Workspace, experiment_id: str, bundle: dict, trials:
     L.append("## T. Sensitivity diagnostics\n")
     L.append(f"status {bundle['sensitivity']['status']}; verdicts per candidate group: {sens or 'none'}\n")
     for g, v in bundle["sensitivity"]["groups"].items():
-        L.append(f"* {g}: **{v['verdict']}**" + "".join(f"; {p['parameter']}×{p['multiplier']}→{p['value']}: models uplift>0 {p['models_positive_uplift']}/3, freq ok {p['models_frequency_ok']}/3"
+        L.append(f"* {g}: **{v['verdict']}**" + "".join(f"; {p['parameter']}×{p['multiplier']}→{p['value']}: models OK {p['models_ok']}/3 (effect>0 {p['models_positive_effect']}/3, uplift kept {p['models_retained_uplift']}/3, freq ok {p['models_frequency_ok']}/3)"
                                                    for p in v.get("probes", [])))
     L.append("\nProbes can only confirm or veto; a better probe never replaces the base parameter.\n")
     L.append("### External verification (model paths)\n")

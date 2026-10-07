@@ -35,9 +35,11 @@ state_definition:
   ties: excluded_from_both_states
 base_event_frequency_floor_per_week: 2.0
 sensitivity:
-  max_parameters: 2
+  # v2.3.0: EVERY probeable numeric base parameter of the event/filter is probed one at a time (was: at most 2 designated parameters).
+  # A parameter is probeable when x0.75 and x1.25 give different values (floats, or integers >= 3); an event spec must list all of them.
+  max_parameters: 12
   multipliers: [0.75, 1.25]
-  max_probes: 4
+  max_probes: 24                     # 12 parameters x 2 multipliers
 single_direction_events_only: true   # all events of one v1 experiment share one direction; mixed -> separate _LONG / _SHORT experiments
 shortlist:
   top_groups_reported: 5

@@ -134,6 +134,10 @@ def validate_spec(spec: dict, frozen: Frozen, *, experiment_id: str | None = Non
                 errs.append(f"sensitivity parameter {name!r} is not in base_parameters")
             elif isinstance(params[name], int) and params[name] < 3:
                 errs.append(f"integer sensitivity parameter {name!r} must be >= 3 so that x0.75 and x1.25 differ")
+        from engine.sensitivity import is_probeable                       # v2.3.0: every probeable base parameter must be probed
+        missing = [n for n, v in params.items() if n not in sens and is_probeable(v)]
+        if missing:
+            errs.append(f"sensitivity_parameters must list every probeable base parameter (floats, integers >= 3); missing: {missing}")
     eit = spec["expected_information_time"]
     if not (isinstance(eit, dict) and isinstance(eit.get("rule"), str) and eit["rule"].strip()
             and "confirmation_delay_bars" in eit):
